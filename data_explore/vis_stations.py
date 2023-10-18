@@ -4,6 +4,16 @@ Plot stations
 MaxMinTemp, mean_temp
 min_years = 1984-2019
 max_years = 1986-2019
+
+# folder = 'MaxMinTemp'
+# var = 'mean_temp'
+
+# folder = 'Precipitation'
+# var = 'precipitation'
+
+# folder = 'ScreenObs'
+# var = 'dry_bulb'
+
 """
 
 #%%
@@ -17,68 +27,34 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import seaborn as sns
 
-#%% 
+from visualisation.stations import ProcessStations
 
-folder = 'MaxMinTemp'
-var = 'mean_temp'
+#%%
 
-folder = 'Precipitation'
-var = 'precipitation'
-
-path = f'data/nz/{folder}'
-# data = xr.open_mfdataset(f'{path}/*.nc')
-all_stations = os.listdir(path)
+var = 'temperature'
+ps = ProcessStations()
+all_stations = ps.get_list_all_stations(var)
+print(len(all_stations))
 
 #%% example
 
 i = 200
 f = all_stations[i]
-ds = xr.open_dataset(f'{path}/{f}')
+ds = xr.open_dataset(f'{ps.var_path(var)}/{f}')
+da = ps.get_da_from_ds(ds, var)
 
-#%% example plots
-
-n = 400
-
-attribute_units = {
-    'precipitation': 'mm per period',
-    'frequency': 'reporting frequency, H=hourly, S=synoptic, D=daily',
-    'period': 'hour',
-    }
-
-attr = 'mean_period'
-da = ds[attr]
 print(da)
-sns.histplot(da[:n].values)
-plt.title(attr)
+sns.histplot(da[:400].values)
+#plt.title(attr)
 plt.show()
 
 
-#%% min max years and coords
+#%% 
 
-dict_md = {}
-for f in tqdm(all_stations):
-    try:
-        ds = xr.open_dataset(f'{path}/{f}')
-        #lon = ds.longitude.values
-        #lat = ds.latitude.values
-        da = ds[var]
-        years = np.unique([i.year for i in pd.DatetimeIndex(da.time.values)])
-        start = years[0]
-        end = years[-1]
-        duration = int(end)-int(start)
-        dict_md[f] = {
-            'start': start, 
-            'end':end, 
-            'duration':duration,
-            'lon': ds.longitude.values, 
-            'lat':ds.latitude.values,
-            }
-    except:
-        pass
-
-df_md = pd.DataFrame(dict_md).T
+dict_md = ps.get_info_dict(var)  # min max years and coords
 
 #%% plot metadata 
+df_md = ps.dict_md_to_df(dict_md)
 
 sns.histplot(df_md['start'])
 plt.xlabel('Start date')
@@ -94,12 +70,7 @@ plt.show()
 
 #%% get station coords only
 
-dict_coord = {}
-for f in tqdm(all_stations):
-    ds = xr.open_dataset(f'{path}/{f}')
-    lon = ds.longitude.values
-    lat = ds.latitude.values
-    dict_coord[f] = {'lon': lon, 'lat':lat}
+dict_coord = ps.get_coord_dict(var)
 
 #%% plot stations - from lon lat dictionary
 
