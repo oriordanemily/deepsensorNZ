@@ -1,8 +1,7 @@
-"""
-Plot ERA5
-"""
+#%% 
+import logging
+logging.captureWarnings(True)
 
-#%%
 import os
 
 import xarray as xr
@@ -12,9 +11,26 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cf
 import seaborn as sns
+
+import deepsensor.torch
+from deepsensor.data.loader import TaskLoader
+from deepsensor.data.processor import DataProcessor
+from deepsensor.model.convnp import ConvNP
+from deepsensor.active_learning.algorithms import GreedyAlgorithm
+from deepsensor.active_learning.acquisition_fns import Stddev
+from deepsensor.train.train import train_epoch, set_gpu_default_device
+from deepsensor.data.utils import construct_x1x2_ds
+
 from data_process.era5 import ProcessERA5
 
 crs = ccrs.PlateCarree()
+
+#%% 
+
+
+use_gpu = True
+if use_gpu:
+    set_gpu_default_device()
 
 #%% 
 
@@ -36,33 +52,14 @@ era5 = ProcessERA5()
 #ds = era5.get_ds('temperature')
 ds = era5.get_ds_year(var, 2000)
 da = era5.ds_to_da(ds, var)
-da = da.rename({'longitude': 'lon','latitude': 'lat'})
 #era5_raw_ds = da.coarsen(latitude=5, longitude=5, boundary="trim").mean()
 #era5_raw_ds = era5_raw_ds.load()
 
 #%% 
 
-minlon = np.array(da['lon'].min())
-maxlon = np.array(da['lon'].max())
-minlat = np.array(da['lat'].min())
-maxlat = np.array(da['lat'].max())
-
-#print(da)
-fig, ax = plt.subplots(1, 1, subplot_kw=dict(projection=crs), figsize=(10, 12))
-#fig = plt.figure(figsize=(10, 12))
-proj = ccrs.PlateCarree()
-#ax = fig.add_subplot(1, 1, 1, projection=proj)
-ax.coastlines()
-ax.set_xlim(minlon, maxlon)
-ax.set_ylim(minlat, maxlat)
-da.isel(time=0).plot()
+print(da)
+fig, ax = plt.subplots(1, 1, subplot_kw=dict(projection=crs))
+da.isel(time=0).load().plot()
 #ax.add_feature(cf.BORDERS)
-
-
-#%% 
-
-da = xr.open_dataarray('data/ftp.bodekerscientific.com/Greg/ForRisa2/2m_temperature/2000/ERA5_Land_2m_temperature_01.nc')
-
-da = xr.open_mfdataset('data/ftp.bodekerscientific.com/Greg/ForRisa2/2m_temperature/2000/*.nc')['t2m']
-
+ax.coastlines()
 
