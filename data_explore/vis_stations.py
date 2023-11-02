@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import seaborn as sns
 
-from visualisation.stations import ProcessStations
+from data_process.stations import ProcessStations
 
 #%%
 
@@ -40,14 +40,13 @@ print(len(all_stations))
 
 i = 200
 f = all_stations[i]
-ds = xr.open_dataset(f'{ps.var_path(var)}/{f}')
+ds = xr.open_dataset(f'{ps.get_var_path(var)}/{f}')
 da = ps.get_da_from_ds(ds, var)
 
 print(da)
 sns.histplot(da[:400].values)
 #plt.title(attr)
 plt.show()
-
 
 #%% 
 
@@ -92,3 +91,7 @@ ax.gridlines(draw_labels=True, crs=proj)
 for k, v in dict.items():
     ax.scatter(v['lon'], v['lat'], color='red', marker='o', s=marker_size)
 plt.show()
+
+#%% open mfdataset
+
+ds = xr.open_dataset(f'{ps.get_var_path(var)}/*.nc')

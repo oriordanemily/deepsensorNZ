@@ -28,10 +28,12 @@ class ProcessStations:
         }
 
 
-    def var_path(self, 
+    def get_var_path(self, 
                  variable: Literal['temperature', 'precipitation'],
                  ):
-        return f'{self.path}/{self.names[variable]["folder"]}'
+        self.var = variable
+        self.var_path = f'{self.path}/{self.names[variable]["folder"]}'
+        return self.var_path
     
 
     def get_da_from_ds(self, 
@@ -44,10 +46,16 @@ class ProcessStations:
     def get_list_all_stations(self, 
                               variable: Literal['temperature', 'precipitation'],
                               ):
-
-        # data = xr.open_mfdataset(f'{path}/*.nc')
-        self.all_stations = os.listdir(self.var_path(variable))
+        self.all_stations = os.listdir(self.get_var_path(variable))
         return self.all_stations
+    
+
+    def get_station_ds(self,
+                       variable: Literal['temperature', 'precipitation'],
+                       station:str,
+                       ):
+        return xr.open_dataset(f'{self.get_var_path(variable)}/{station}')
+    
 
 
     def get_info_dict(self, 
@@ -60,7 +68,7 @@ class ProcessStations:
         dict_md = {}
         for f in tqdm(all_stations):
             try:
-                ds = xr.open_dataset(f'{self.var_path(variable)}/{f}')
+                ds = xr.open_dataset(f'{self.get_var_path(variable)}/{f}')
                 #lon = ds.longitude.values
                 #lat = ds.latitude.values
                 da = ds[self.names[variable]["var"]]
@@ -85,7 +93,7 @@ class ProcessStations:
         all_stations = self.get_list_all_stations(variable)
         dict_coord = {}
         for f in tqdm(all_stations):
-            ds = xr.open_dataset(f'{self.var_path(variable)}/{f}')
+            ds = xr.open_dataset(f'{self.get_var_path(variable)}/{f}')
             lon = ds.longitude.values
             lat = ds.latitude.values
             dict_coord[f] = {'lon': lon, 'lat':lat}
