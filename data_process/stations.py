@@ -52,11 +52,26 @@ class ProcessStations:
 
     def get_station_ds(self,
                        variable: Literal['temperature', 'precipitation'],
-                       station:str,
+                       station:str=None,
+                       i_station:int=None,
                        ):
-        return xr.open_dataset(f'{self.get_var_path(variable)}/{station}')
-    
+        if station is not None:
+            return xr.open_dataset(f'{self.get_var_path(variable)}/{station}')
+        elif i_station is not None:
+            all_stations = self.get_list_all_stations(variable)
+            return xr.open_dataset(f'{self.get_var_path(variable)}/{all_stations[i_station]}')
+        else:
+            raise ValueError('Provide station or i_station')
 
+
+    def get_station_da(self,
+                       variable: Literal['temperature', 'precipitation'],
+                       station:str=None,
+                       i_station:int=None,
+                       ):
+        ds = self.get_station_ds(variable, station, i_station)
+        return self.get_da_from_ds(ds, variable)
+    
 
     def get_info_dict(self, 
                        variable: Literal['temperature', 'precipitation'],
@@ -111,13 +126,38 @@ class ProcessStations:
         maxlat = -34
         marker_size = 60
 
-        # proj = ccrs.PlateCarree(central_longitude=cm)
-        proj = ccrs.PlateCarree()
+        df = self.dict_md_to_df(dict_md)
+        lon_lat_tuple = list(zip(df['lon'], df['lat']))
+        self.plot_points(lon_lat_tuple, (minlon, maxlon), (minlat, maxlat), marker_size)
+
+        # # proj = ccrs.PlateCarree(central_longitude=cm)
+        # proj = ccrs.PlateCarree()
+        # fig = plt.figure(figsize=(10, 12))
+        # ax = fig.add_subplot(1, 1, 1, projection=proj)
+        # ax.coastlines()
+        # ax.set_extent([minlon, maxlon, minlat, maxlat], ccrs.PlateCarree())
+        # ax.gridlines(draw_labels=True, crs=proj)
+        # for k, v in dict_md.items():
+        #     ax.scatter(v['lon'], v['lat'], color='red', marker='o', s=marker_size)
+        # plt.show()
+
+
+    def plot_points(self, 
+                    lon_lat_tuples,
+                    lon_lim=None,
+                    lat_lim=None,
+                    marker_size=30,
+                    ):
+
         fig = plt.figure(figsize=(10, 12))
+        proj = ccrs.PlateCarree()
         ax = fig.add_subplot(1, 1, 1, projection=proj)
         ax.coastlines()
-        ax.set_extent([minlon, maxlon, minlat, maxlat], ccrs.PlateCarree())
+        if lon_lim is not None and lat_lim is not None:
+            # ax.set_extent([lon_lim[0], lon_lim[1], lat_lim[0], lat_lim[1]], ccrs.PlateCarree())
+            ax.set_xlim(lon_lim)
+            ax.set_ylim(lat_lim)
         ax.gridlines(draw_labels=True, crs=proj)
-        for k, v in dict_md.items():
-            ax.scatter(v['lon'], v['lat'], color='red', marker='o', s=marker_size)
+        for lon, lat in lon_lat_tuples:
+            ax.scatter(lon, lat, color='red', marker='o', s=marker_size)
         plt.show()

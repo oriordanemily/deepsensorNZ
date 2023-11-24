@@ -1,5 +1,5 @@
 """
-Plot topography
+Process and plot topography
 """
 
 #%%

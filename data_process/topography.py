@@ -55,6 +55,7 @@ class ProcessTopography:
                       da: xr.DataArray, 
                       mask_value:float=-1e30,
                       ) -> xr.DataArray:
+        """ set to None "no data" points below mask_value (e.g. -1e30) """
         return da.where(da > mask_value).squeeze()
     
 
