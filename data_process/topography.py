@@ -1,23 +1,19 @@
+"""
+Process topography/elevation data 
+"""
+
 import os
 
-import cartopy.crs as ccrs
-import xarray as xr
 import numpy as np
-import pandas as pd
+import xarray as xr
 import matplotlib.pyplot as plt
-from tqdm import tqdm
-import seaborn as sns
-import rioxarray
-import rasterio
-import xarray
-from rasterio.warp import transform
-from rasterio.crs import CRS
-from rasterio.warp import calculate_default_transform, reproject, Resampling
+import cartopy.crs as ccrs
 
 
 class ProcessTopography:
-    def __init__(self, path:str) -> None:
-        self.path = path
+    def __init__(self) -> None:
+        self.path = 'data/topography'
+        self.filename = 'nz_elevation_25m.nc'
         self.extent = {
             'all': {
                 'minlon': 165,
@@ -34,107 +30,101 @@ class ProcessTopography:
         }
 
 
-    def set_source_path(self, path:str):
-        self.path = path
-
-
-    def get_all_tifs(self, 
-                     path:str=None,
-                     ) -> list:
-        if path is None: path = self.path
-        return [f for f in os.listdir(path) if '.tif' in f[-4:] and '.' not in f[:1]]
-
-
     def open_da(self, 
                 da_file:str,
                 ) -> xr.DataArray:
-        return rioxarray.open_rasterio(da_file).squeeze()
+        return xr.open_dataarray(da_file).squeeze()
+        #return rioxarray.open_rasterio(da_file).squeeze()
 
     
     def mask_da(self, 
-                      da: xr.DataArray, 
-                      mask_value:float=-1e30,
-                      ) -> xr.DataArray:
+                da: xr.DataArray, 
+                mask_value:float=-1e30,
+                ) -> xr.DataArray:
         """ set to None "no data" points below mask_value (e.g. -1e30) """
         return da.where(da > mask_value).squeeze()
     
 
     def coarsen_da(self, 
-                         da:xr.DataArray, 
-                         coarsen_by:int, 
-                         boundary:str='exact',
-                         ):
+                    da:xr.DataArray, 
+                    coarsen_by:int, 
+                    boundary:str='exact',
+                    ):
         """
         https://stackoverflow.com/questions/53886153/resample-xarray-object-to-lower-resolution-spatially
         """
-        return da.coarsen(x=coarsen_by, boundary=boundary).mean().coarsen(y=coarsen_by, boundary=boundary).mean().squeeze()
+        return da.coarsen(lon=coarsen_by, boundary=boundary).mean().coarsen(lat=coarsen_by, boundary=boundary).mean().squeeze()
 
 
-    def get_combined_da(self, path:str=None):
-        #names = [name.split('.tif')[0] for name in self.get_all_tifs(path)]
-        #all_tifs = {n: None for n in names}
-        # for i, file in enumerate(all_tif_files):
-        #     #print(file)
-        #     all_tifs[names[i]] = self.open_da(f'{path}/{file}')
-        # return xr.combine_by_coords(list(all_tifs))
-
-        if path is None: path = self.path
-        all_tifs = self.get_all_tifs(path)
-        da_list = []
-        for file in all_tifs:
-            da_list.append(self.open_da(f'{path}/{file}'))    
-        return xr.combine_by_coords(da_list).squeeze()
+    def rename_xarray_coords(self,
+                             da,
+                             rename_dict:dict,
+                             ):
+        return da.rename(rename_dict)
+        
 
 
-    def open_with_rasterio(self, file:str):
-        return rasterio.open(file)
+    def save_nc(self,
+                da, 
+                name='data/topography_100km/nz_elevation_100m.nc',
+                ):
+        da.to_netcdf(name)
 
-    
-    def plot_coastlines(self, fig):
+
+    def plot_hist_values(self,
+                         da,
+                         ):
+        # Flatten the DataArray to a 1D array
+        flat_data = da.values.flatten()
+
+        # Plot the histogram
+        plt.hist(flat_data, bins=30, color='blue', edgecolor='black')
+        plt.xlabel('Value')
+        plt.ylabel('Frequency')
+        plt.show()
+
+        #da_subset = da.sel(x=slice(170, 173), y=slice(-43, -40))
+
+
+    def plot_with_coastlines(self,
+                             da,
+                             longitude_coord_name:str='longitude',
+                             latitude_coord_name:str='latitude',
+                             ):
         """
-        cartopy projection https://scitools.org.uk/cartopy/docs/latest/reference/projections.html#platecarree
+        Plot elevation data with coastlines
+        Can take ~3-4 min for ~100m
         """
-        proj = ccrs.PlateCarree() #'EPSG:27200' # src.crs # 
-        #fig = plt.figure(figsize=(10, 12))
-        ax = fig.add_subplot(1, 1, 1, projection=proj)
+        minlon = np.array(da[longitude_coord_name].min())
+        maxlon = np.array(da[longitude_coord_name].max())
+        minlat = np.array(da[latitude_coord_name].min())
+        maxlat = np.array(da[latitude_coord_name].max())
+
+        proj = ccrs.PlateCarree()
+        fig, ax = plt.subplots(1, 1, subplot_kw=dict(projection=proj), figsize=(10, 12))
         ax.coastlines()
-        ax.gridlines(draw_labels=True, crs=proj)
-        #da.plot()
-        #plt.show()
-        return ax
-    
-
-    def save_da_as_tif(self, da, name):
-        da.rio.to_raster(name)
+        ax.set_xlim(minlon, maxlon)
+        ax.set_ylim(minlat, maxlat)
+        da.plot()
+        plt.show()
 
 
-    def change_crs(self, original_f, destination_f):
-        """not working"""
+if __name__ == '__main__':
 
-        ds = rasterio.open(original_f)
-        print(f'Original crs: {ds.crs}')  # CRS.from_epsg(27200)
-        print(ds.bounds)  # BoundingBox(left=2590000.0, bottom=6400000.0, right=2810000.0, top=6550000.0)
-        old_crs = ds.crs
-        new_crs = CRS.from_epsg(4326)
-        dst_crs = 'EPSG:4326'  # EPSG:4326, also known as the WGS84 projection
+    file_to_open = 'data/topography/nz_elevation_25m.nc'
+    save_as = 'data/topography/nz_elevation_100m2.nc'
+    coarsen_by = 4
+    boundary = 'pad'
+    coord_rename = {'lat': 'latitude','lon': 'longitude'}
+    plot = False
 
-        transform, width, height = calculate_default_transform(old_crs, new_crs, ds.width, ds.height, *ds.bounds)
+    # coarsen and save
+    top = ProcessTopography()
+    da = top.open_da(f'{file_to_open}')  
+    da_coarsened = top.coarsen_da(da, coarsen_by=coarsen_by, boundary=boundary)  # 1m20s
+    da_coarsened = top.rename_xarray_coords(da_coarsened, coord_rename)
+    if plot:
+        da_coarsened.plot()  # 2m11s
+    top.save_nc(da_coarsened, save_as)
+    print(f"Saved as {save_as}")
 
-        kwargs = ds.meta.copy()
-        kwargs.update({
-            'crs': dst_crs,
-            'transform': transform,
-            'width': width,
-            'height': height
-        })
-
-        with rasterio.open(destination_f, 'w', **kwargs) as dst:
-            test = reproject(
-                source=rasterio.band(ds, 1),
-                destination=rasterio.band(dst, 1),
-                src_transform=ds.transform,
-                src_crs=ds.crs,
-                dst_transform=transform,
-                dst_crs=new_crs,
-                resampling=Resampling.nearest,
-                )

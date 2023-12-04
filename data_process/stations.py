@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-import seaborn as sns
 
 
 class ProcessStations:
@@ -50,11 +49,23 @@ class ProcessStations:
         return self.all_stations
     
 
+    def get_path_all_stations(self,
+                              variable: Literal['temperature', 'precipitation'],
+                              ):
+        all_stations = self.get_list_all_stations(variable)
+        return [f"{self.get_var_path(variable)}/{s}" for s in all_stations]
+    
+
     def get_station_ds(self,
-                       variable: Literal['temperature', 'precipitation'],
+                       variable: Literal['temperature', 'precipitation']=None,
                        station:str=None,
                        i_station:int=None,
+                       filepath:str=None,
                        ):
+        
+        if filepath is not None:
+            return xr.open_dataset(filepath)
+        
         if station is not None:
             return xr.open_dataset(f'{self.get_var_path(variable)}/{station}')
         elif i_station is not None:
@@ -68,8 +79,9 @@ class ProcessStations:
                        variable: Literal['temperature', 'precipitation'],
                        station:str=None,
                        i_station:int=None,
+                       filepath:str=None,
                        ):
-        ds = self.get_station_ds(variable, station, i_station)
+        ds = self.get_station_ds(variable, station, i_station, filepath)
         return self.get_da_from_ds(ds, variable)
     
 
@@ -161,3 +173,7 @@ class ProcessStations:
         for lon, lat in lon_lat_tuples:
             ax.scatter(lon, lat, color='red', marker='o', s=marker_size)
         plt.show()
+
+
+if __name__ == '__main__':
+    pass
