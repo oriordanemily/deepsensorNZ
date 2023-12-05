@@ -9,11 +9,11 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 
+from nzdownscale.dataprocess.utils import DataProcess
 
-class ProcessTopography:
+
+class ProcessTopography(DataProcess):
     def __init__(self) -> None:
-        self.path = 'data/topography'
-        self.filename = 'nz_elevation_25m.nc'
         self.extent = {
             'all': {
                 'minlon': 165,
@@ -28,47 +28,6 @@ class ProcessTopography:
                 'maxlat': -34,
             },
         }
-
-
-    def open_da(self, 
-                da_file:str,
-                ) -> xr.DataArray:
-        return xr.open_dataarray(da_file).squeeze()
-        #return rioxarray.open_rasterio(da_file).squeeze()
-
-    
-    def mask_da(self, 
-                da: xr.DataArray, 
-                mask_value:float=-1e30,
-                ) -> xr.DataArray:
-        """ set to None "no data" points below mask_value (e.g. -1e30) """
-        return da.where(da > mask_value).squeeze()
-    
-
-    def coarsen_da(self, 
-                    da:xr.DataArray, 
-                    coarsen_by:int, 
-                    boundary:str='exact',
-                    ):
-        """
-        https://stackoverflow.com/questions/53886153/resample-xarray-object-to-lower-resolution-spatially
-        """
-        return da.coarsen(lon=coarsen_by, boundary=boundary).mean().coarsen(lat=coarsen_by, boundary=boundary).mean().squeeze()
-
-
-    def rename_xarray_coords(self,
-                             da,
-                             rename_dict:dict,
-                             ):
-        return da.rename(rename_dict)
-        
-
-
-    def save_nc(self,
-                da, 
-                name='data/topography_100km/nz_elevation_100m.nc',
-                ):
-        da.to_netcdf(name)
 
 
     def plot_hist_values(self,
@@ -111,20 +70,25 @@ class ProcessTopography:
 
 if __name__ == '__main__':
 
+    top = ProcessTopography()
     file_to_open = 'data/topography/nz_elevation_25m.nc'
-    save_as = 'data/topography/nz_elevation_100m2.nc'
-    coarsen_by = 4
+    save_as = 'data/topography/nz_elevation_800m_test.nc'
+    coarsen_by = 8
     boundary = 'pad'
     coord_rename = {'lat': 'latitude','lon': 'longitude'}
     plot = False
 
-    # coarsen and save
-    top = ProcessTopography()
-    da = top.open_da(f'{file_to_open}')  
+    # Coarsen and rename coords
+    da = top.open_da(f'{file_to_open}').squeeze()
     da_coarsened = top.coarsen_da(da, coarsen_by=coarsen_by, boundary=boundary)  # 1m20s
     da_coarsened = top.rename_xarray_coords(da_coarsened, coord_rename)
+
+    # Inspect
     if plot:
         da_coarsened.plot()  # 2m11s
+    print(da_coarsened)
+
+    # Save
     top.save_nc(da_coarsened, save_as)
-    print(f"Saved as {save_as}")
+    print(f"Saved: {save_as}")
 

@@ -4,8 +4,11 @@ import glob
 
 import xarray as xr
 
+from nzdownscale.dataprocess.utils import DataProcess
 
-class ProcessERA5:
+
+class ProcessERA5(DataProcess):
+    
     def __init__(self) -> None:
         self.path = 'data/ERA5-land'
         self.names = {
@@ -20,7 +23,7 @@ class ProcessERA5:
         }
 
 
-    def get_ds(self, 
+    def load_ds(self, 
                var:Literal['precipitation', 'temperature'],
                ):
         filenames = self.get_filenames(var)
@@ -34,7 +37,7 @@ class ProcessERA5:
         return ds[self.names[var]['var_name']]
     
 
-    def get_ds_year(self,
+    def load_ds_specific_year(self,
                     var:Literal['precipitation', 'temperature'],
                     year:int,
                     ):
@@ -58,6 +61,8 @@ class ProcessERA5:
                            var:Literal['precipitation', 'temperature'],
                            year:int,
                            ):
+        """ Get files for specific year """
+
         if var == 'temperature':
             filenames = glob.glob(f'{self.names[var]["folder"]}/{year}/*.nc')
         elif var == 'precipitation':

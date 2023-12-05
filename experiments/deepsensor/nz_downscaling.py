@@ -42,7 +42,7 @@ year = 2000
 
 era5 = ProcessERA5()
 #ds = era5.get_ds('temperature')
-ds_era = era5.get_ds_year(var, year)
+ds_era = era5.load_ds_specific_year(var, year)
 da_era = era5.ds_to_da(ds_era, var)
 #era5_raw_ds = da.coarsen(latitude=5, longitude=5, boundary="trim").mean()
 #era5_raw_ds = era5_raw_ds.load()

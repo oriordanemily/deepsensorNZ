@@ -6,8 +6,7 @@ data/
 data_local/
 data_remote/
 data_jasmin/
-bcml/.deprecated
-deepsensor/gallery_demos
+experiments/deepsensor/gallery_demos
 
 # misc
 **/.ipynb_checkpoints/
