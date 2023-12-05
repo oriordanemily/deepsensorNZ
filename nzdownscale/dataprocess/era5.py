@@ -1,76 +1,69 @@
 import os
-from typing import Literal
+from typing import Literal, List
 import glob
 
 import xarray as xr
 
 from nzdownscale.dataprocess.utils import DataProcess
+from nzdownscale.dataprocess.config import VARIABLE_OPTIONS, DATA_PATHS, DIR_ERA5
 
 
 class ProcessERA5(DataProcess):
-    
+
     def __init__(self) -> None:
-        self.path = 'data/ERA5-land'
-        self.names = {
-            'precipitation': {
-                'folder': f'{self.path}/total_precipitation_hourly',
-                'var_name': 'precipitation',
-            },
-            'temperature': {
-                'folder': f'{self.path}/2m_temperature',
-                'var_name': 't2m',
-            },
-        }
+        super().__init__()
 
 
     def load_ds(self, 
-               var:Literal['precipitation', 'temperature'],
-               ):
-        filenames = self.get_filenames(var)
+                var:Literal[tuple(VARIABLE_OPTIONS)],
+                year:int=None,
+                ) -> xr.Dataset:
+        """ 
+        Loads dataset
+        Args: 
+            var (str): variable
+            year (int): specific year, retrieves all if set to None
+        """
+        filenames = self.get_filenames(var, year)
         return xr.open_mfdataset(filenames)
 
     
     def ds_to_da(self,
-                 ds,
-                 var:Literal['precipitation', 'temperature'],
-                 ):
-        return ds[self.names[var]['var_name']]
+                 ds:xr.Dataset,
+                 var:Literal[tuple(VARIABLE_OPTIONS)],
+                 ) -> xr.DataArray:
+        """
+        Extracts dataarray from dataset (variable data only, loses some metadata)
+        Args: 
+            ds (xr.Dataset): dataset
+            var (str): variable
+        """
+        #return ds[self.names[var]['var_name']]
+        return ds[DIR_ERA5[var]['var_name']]
     
 
-    def load_ds_specific_year(self,
-                    var:Literal['precipitation', 'temperature'],
-                    year:int,
-                    ):
-        filenames = self.get_filenames_year(var, year)
-        return xr.open_mfdataset(filenames)
-
-
     def get_filenames(self,
-                      var:Literal['precipitation', 'temperature'],
-                      ):
-        if var == 'temperature':
-            filenames = glob.glob(f'{self.names[var]["folder"]}/*/*.nc')
-        elif var == 'precipitation':  
-            filenames = glob.glob(f'{self.names[var]["folder"]}/*.nc')
-        else:
-            raise ValueError(f'var={var} not recognised')
-        return filenames
+                      var:Literal[tuple(VARIABLE_OPTIONS)],
+                      year:int=None,
+                      ) -> List[str]:
 
 
-    def get_filenames_year(self,
-                           var:Literal['precipitation', 'temperature'],
-                           year:int,
-                           ):
-        """ Get files for specific year """
-
-        if var == 'temperature':
-            filenames = glob.glob(f'{self.names[var]["folder"]}/{year}/*.nc')
-        elif var == 'precipitation':
-            filenames = [f'{self.names[var]["folder"]}/{fname}' for fname in os.listdir(f'{self.names["precipitation"]["folder"]}') if str(year) in fname]
-        else:
-            raise ValueError(f'var={var} not recognised')
-        return filenames
+        parent_path = f'{DATA_PATHS["ERA5"]}/{DIR_ERA5[var]["subdir"]}'
         
+        if var == 'temperature':
+            if year is None:
+                filenames = glob.glob(f'{parent_path}/*/*.nc')
+            else:
+                filenames = glob.glob(f'{parent_path}/{year}/*.nc')
+        
+        elif var == 'precipitation':  
+            if year is None:
+                filenames = glob.glob(f'{parent_path}/*.nc')
+            else:
+                filenames = [f'{parent_path}/{fname}' for fname in os.listdir(parent_path) if str(year) in fname]
+        
+        return filenames
+
 
 if __name__ == '__main__':
     pass

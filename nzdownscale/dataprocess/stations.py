@@ -14,7 +14,7 @@ from tqdm import tqdm
 class ProcessStations:
     def __init__(self) -> None:
         
-        self.path = 'data/nz'
+        self.path = 'data/stations'
         self.names = {
             'precipitation': {
                 'folder': 'Precipitation',
