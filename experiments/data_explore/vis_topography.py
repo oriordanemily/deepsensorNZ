@@ -1,7 +1,4 @@
-"""
-Plot topography - use new elevation file nz_elevation_25m.nc
-"""
-
+# Plot topography
 #%%
 
 import os
@@ -21,8 +18,8 @@ from rasterio.warp import transform
 from rasterio.crs import CRS
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 
-from data_process.topography import ProcessTopography
-from data_process.stations import ProcessStations
+from nzdownscale.dataprocess.topography import ProcessTopography
+from nzdownscale.dataprocess.utils import PlotData
 
 #%% 
 
@@ -52,5 +49,9 @@ da = top.open_da(file)
 
 #%% plot
 
+nzplot = PlotData()
 # da.plot()  # ~2 min
-top.plot_with_coastlines(da)
+nzplot.nz_map_with_coastlines()
+da.plot()
+# plt.savefig('./tmp/fig.png')
+plt.show()

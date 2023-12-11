@@ -1,114 +1,87 @@
-
-
 import os
-from typing import Literal
+from typing import Literal, List
 
-import cartopy.crs as ccrs
 import xarray as xr
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 
+from nzdownscale.dataprocess.utils import DataProcess, PlotData
+from nzdownscale.dataprocess.config import VARIABLE_OPTIONS, DATA_PATHS, VAR_STATIONS
 
-class ProcessStations:
+
+class ProcessStations(DataProcess):
+
     def __init__(self) -> None:
-        
-        self.path = 'data/stations'
-        self.names = {
-            'precipitation': {
-                'folder': 'Precipitation',
-                'var': 'precipitation'
-            },
-            'temperature': {
-                'folder': 'ScreenObs',
-                'var': 'dry_bulb'
-            },
-        }
+        super().__init__()
 
 
-    def get_var_path(self, 
-                 variable: Literal['temperature', 'precipitation'],
-                 ):
-        self.var = variable
-        self.var_path = f'{self.path}/{self.names[variable]["folder"]}'
-        return self.var_path
-    
+    def get_parent_path(self,
+                        var: Literal[tuple(VARIABLE_OPTIONS)],
+                        ):
+        return f'{DATA_PATHS["stations"]["parent"]}/{VAR_STATIONS[var]["subdir"]}'
 
-    def get_da_from_ds(self, 
-                       ds,
-                       variable: Literal['temperature', 'precipitation'],
-                       ):
-        return ds[self.names[variable]['var']]
-        
 
-    def get_list_all_stations(self, 
-                              variable: Literal['temperature', 'precipitation'],
-                              ):
-        self.all_stations = os.listdir(self.get_var_path(variable))
-        return self.all_stations
-    
+    def ds_to_da(self,
+                 ds: xr.Dataset,
+                 var: Literal[tuple(VARIABLE_OPTIONS)],
+                 ) -> xr.DataArray:
+        """
+        Extracts dataarray from dataset (variable data only, loses some metadata)
+        Args: 
+            ds (xr.Dataset): dataset
+            var (str): variable
+        """
+        return ds[VAR_STATIONS[var]['var_name']]
+
 
     def get_path_all_stations(self,
-                              variable: Literal['temperature', 'precipitation'],
-                              ):
-        all_stations = self.get_list_all_stations(variable)
-        return [f"{self.get_var_path(variable)}/{s}" for s in all_stations]
+                              var: Literal[tuple(VARIABLE_OPTIONS)],
+                              ) -> List[str]:
+        """ Get list of filepaths for all stations for variable var """
+        all_stations = os.listdir(self.get_parent_path(var))
+        return [f"{self.get_parent_path(var)}/{s}" for s in all_stations]
     
 
-    def get_station_ds(self,
-                       variable: Literal['temperature', 'precipitation']=None,
-                       station:str=None,
-                       i_station:int=None,
-                       filepath:str=None,
-                       ):
+    def load_station(self,
+                     filepath:str=None,
+                     ) -> xr.Dataset:
+        return xr.open_dataset(filepath)
         
-        if filepath is not None:
-            return xr.open_dataset(filepath)
-        
-        if station is not None:
-            return xr.open_dataset(f'{self.get_var_path(variable)}/{station}')
-        elif i_station is not None:
-            all_stations = self.get_list_all_stations(variable)
-            return xr.open_dataset(f'{self.get_var_path(variable)}/{all_stations[i_station]}')
-        else:
-            raise ValueError('Provide station or i_station')
 
-
-    def get_station_da(self,
-                       variable: Literal['temperature', 'precipitation'],
-                       station:str=None,
-                       i_station:int=None,
-                       filepath:str=None,
-                       ):
-        ds = self.get_station_ds(variable, station, i_station, filepath)
-        return self.get_da_from_ds(ds, variable)
+    def get_lon_lat(self,
+                    ds: xr.Dataset,
+                    ) -> tuple:
+        return float(ds.longitude), float(ds.latitude)
     
 
-    def get_info_dict(self, 
-                       variable: Literal['temperature', 'precipitation'],
-                       ):
-        """ min max years and coords"""
+    def get_metadata_df(self,
+                        var: Literal[tuple(VARIABLE_OPTIONS)],
+                        ) -> pd.DataFrame: 
+        """ get station metadata in dataframe format """
+        dict_md = self.get_metadata_dict(var=var)
+        return self.dict_to_df(dict_md)
+    
 
-        all_stations = self.get_list_all_stations(variable)
-        
+    def get_metadata_dict(self, 
+                          var: Literal[tuple(VARIABLE_OPTIONS)],
+                          ) -> dict:
+        """ get dictionary of min max years and coords"""
+
+        station_paths = self.get_path_all_stations(var)        
         dict_md = {}
-        for f in tqdm(all_stations):
+        for f in tqdm(station_paths):
             try:
-                ds = xr.open_dataset(f'{self.get_var_path(variable)}/{f}')
-                #lon = ds.longitude.values
-                #lat = ds.latitude.values
-                da = ds[self.names[variable]["var"]]
-                years = np.unique([i.year for i in pd.DatetimeIndex(da.time.values)])
-                start = years[0]
-                end = years[-1]
-                duration = int(end)-int(start)
+                ds = self.load_station(f)
+                lon, lat = self.get_lon_lat(ds)
+                start_year, end_year = self.get_start_and_end_years(ds)
+                duration = end_year - start_year
+
                 dict_md[f] = {
-                    'start': start, 
-                    'end':end, 
-                    'duration':duration,
-                    'lon': ds.longitude.values, 
-                    'lat':ds.latitude.values,
+                    'start_year': int(start_year), 
+                    'end_year': int(end_year), 
+                    'duration_years': int(duration),
+                    'lon': lon, 
+                    'lat':lat,
                     }
             except:
                 pass
@@ -116,63 +89,44 @@ class ProcessStations:
         return dict_md
     
 
-    def get_coord_dict(self, variable):
-        all_stations = self.get_list_all_stations(variable)
-        dict_coord = {}
-        for f in tqdm(all_stations):
-            ds = xr.open_dataset(f'{self.get_var_path(variable)}/{f}')
-            lon = ds.longitude.values
-            lat = ds.latitude.values
-            dict_coord[f] = {'lon': lon, 'lat':lat}
-        return dict_coord
-
-
-    def dict_md_to_df(self, dict_md):
-        return pd.DataFrame(dict_md).T
+    def get_start_and_end_years(self, ds: xr.Dataset):
+        """ Get tuple of start year and end year of dataset e.g. (1991, 2019) """
+        return tuple(int(t.year) for t in pd.DatetimeIndex([ds['time'][0].values, ds['time'][-1].values]))
     
 
-    def plot_stations_on_map(self, dict_md):
-        minlon = 165
-        maxlon = 179
-        minlat = -48
-        maxlat = -34
-        marker_size = 60
+    def get_coord_df(self, 
+                     var: Literal[tuple(VARIABLE_OPTIONS)],
+                     ) -> pd.DataFrame:
+        station_paths = self.get_path_all_stations(var)
+        dict_coord = {}
+        for f in tqdm(station_paths):
+            ds = self.load_station(f)
+            lon, lat = self.get_lon_lat(ds)
+            dict_coord[f] = {
+                'lon': lon, 
+                'lat':lat,
+                }
+        df = self.dict_to_df(dict_coord)
+        return df
 
-        df = self.dict_md_to_df(dict_md)
-        lon_lat_tuple = list(zip(df['lon'], df['lat']))
-        self.plot_points(lon_lat_tuple, (minlon, maxlon), (minlat, maxlat), marker_size)
 
-        # # proj = ccrs.PlateCarree(central_longitude=cm)
-        # proj = ccrs.PlateCarree()
-        # fig = plt.figure(figsize=(10, 12))
-        # ax = fig.add_subplot(1, 1, 1, projection=proj)
-        # ax.coastlines()
-        # ax.set_extent([minlon, maxlon, minlat, maxlat], ccrs.PlateCarree())
-        # ax.gridlines(draw_labels=True, crs=proj)
+    def dict_to_df(self, 
+                   d: dict,
+                   ) -> pd.DataFrame:
+        return pd.DataFrame.from_dict(d, orient='index')
+
+
+    def plot_stations_on_map(self,
+                             df: pd.DataFrame,
+                             # dict_md: dict,
+                             ):
+        nzplot = PlotData()
+        ax = nzplot.nz_map_with_coastlines()
+        for lon, lat in zip(df['lon'].values, df['lat'].values):
+            ax.scatter(lon, lat, color='red', marker='o', s=60)
         # for k, v in dict_md.items():
-        #     ax.scatter(v['lon'], v['lat'], color='red', marker='o', s=marker_size)
-        # plt.show()
-
-
-    def plot_points(self, 
-                    lon_lat_tuples,
-                    lon_lim=None,
-                    lat_lim=None,
-                    marker_size=30,
-                    ):
-
-        fig = plt.figure(figsize=(10, 12))
-        proj = ccrs.PlateCarree()
-        ax = fig.add_subplot(1, 1, 1, projection=proj)
-        ax.coastlines()
-        if lon_lim is not None and lat_lim is not None:
-            # ax.set_extent([lon_lim[0], lon_lim[1], lat_lim[0], lat_lim[1]], ccrs.PlateCarree())
-            ax.set_xlim(lon_lim)
-            ax.set_ylim(lat_lim)
-        ax.gridlines(draw_labels=True, crs=proj)
-        for lon, lat in lon_lat_tuples:
-            ax.scatter(lon, lat, color='red', marker='o', s=marker_size)
-        plt.show()
+        #     ax.scatter(v['lon'], v['lat'], color='red', marker='o', s=60)
+        return ax
 
 
 if __name__ == '__main__':

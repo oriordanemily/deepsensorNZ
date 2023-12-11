@@ -4,6 +4,10 @@ import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
+import seaborn as sns
+
+
+from nzdownscale.dataprocess.config import PLOT_EXTENT
 
 
 class DataProcess:
@@ -86,17 +90,44 @@ class PlotData:
         plt.show()
 
 
+    def nz_map_with_coastlines(self):
+        minlon = PLOT_EXTENT['all']['minlon']
+        maxlon = PLOT_EXTENT['all']['maxlon']
+        minlat = PLOT_EXTENT['all']['minlat']
+        maxlat = PLOT_EXTENT['all']['maxlat']
+
+        proj = ccrs.PlateCarree()
+        fig = plt.figure(figsize=(10, 12))
+        ax = fig.add_subplot(1, 1, 1, projection=proj)
+        ax.coastlines()
+        ax.set_extent([minlon, maxlon, minlat, maxlat], proj)
+        ax.gridlines(draw_labels=True, crs=proj)
+        return ax
+
+
     def plot_hist_values(self,
                          da: xr.DataArray,
+                         n: int=None,
                          ):
-        """ Plot values in data array as histogram """
+        """ 
+        Plot values in data array as histogram 
+        Args:
+            da (xr.DataArray): data array
+            n (int): number of random values to plot (for speed)
+        """
 
         # Flatten the DataArray to a 1D array
-        flat_data = da.values.flatten()
+        values = da.values.flatten()
+        if n is not None:
+            values = np.random.choice(values, size=n, replace=False)
 
         # Plot histogram
-        plt.hist(flat_data, bins=30, color='blue', edgecolor='black')
+        sns.histplot(values)
         plt.xlabel('Value')
-        plt.ylabel('Frequency')
         plt.show()
+
+        # plt.hist(values, bins=30, color='blue', edgecolor='black')
+        # plt.xlabel('Value')
+        # plt.ylabel('Frequency')
+        # plt.show()
 

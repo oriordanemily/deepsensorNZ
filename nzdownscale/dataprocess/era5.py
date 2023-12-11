@@ -5,7 +5,7 @@ import glob
 import xarray as xr
 
 from nzdownscale.dataprocess.utils import DataProcess
-from nzdownscale.dataprocess.config import VARIABLE_OPTIONS, DATA_PATHS, DIR_ERA5
+from nzdownscale.dataprocess.config import VARIABLE_OPTIONS, DATA_PATHS, VAR_ERA5
 
 
 class ProcessERA5(DataProcess):
@@ -15,8 +15,8 @@ class ProcessERA5(DataProcess):
 
 
     def load_ds(self, 
-                var:Literal[tuple(VARIABLE_OPTIONS)],
-                year:int=None,
+                var: Literal[tuple(VARIABLE_OPTIONS)],
+                year: int=None,
                 ) -> xr.Dataset:
         """ 
         Loads dataset
@@ -29,8 +29,8 @@ class ProcessERA5(DataProcess):
 
     
     def ds_to_da(self,
-                 ds:xr.Dataset,
-                 var:Literal[tuple(VARIABLE_OPTIONS)],
+                 ds: xr.Dataset,
+                 var: Literal[tuple(VARIABLE_OPTIONS)],
                  ) -> xr.DataArray:
         """
         Extracts dataarray from dataset (variable data only, loses some metadata)
@@ -38,17 +38,23 @@ class ProcessERA5(DataProcess):
             ds (xr.Dataset): dataset
             var (str): variable
         """
-        #return ds[self.names[var]['var_name']]
-        return ds[DIR_ERA5[var]['var_name']]
+        return ds[VAR_ERA5[var]['var_name']]
+    
+
+
+    def get_parent_path(self,
+                        var: Literal[tuple(VARIABLE_OPTIONS)],
+                        ):
+        return f'{DATA_PATHS["ERA5"]["parent"]}/{VAR_ERA5[var]["subdir"]}'
     
 
     def get_filenames(self,
-                      var:Literal[tuple(VARIABLE_OPTIONS)],
-                      year:int=None,
+                      var: Literal[tuple(VARIABLE_OPTIONS)],
+                      year: int=None,
                       ) -> List[str]:
 
 
-        parent_path = f'{DATA_PATHS["ERA5"]}/{DIR_ERA5[var]["subdir"]}'
+        parent_path = self.get_parent_path(var)
         
         if var == 'temperature':
             if year is None:

@@ -1,23 +1,30 @@
 VARIABLE_OPTIONS = ['temperature', 'precipitation']
 
 DATA_PATHS = {
-    'ERA5': 'data/ERA5-land',
-    'topography': 'data/topography',
-    'stations': 'data/stations',
+    'ERA5': {
+        'parent': 'data/ERA5-land',
+    },    
+    'topography': {
+        'parent': 'data/topography',
+        'file': 'data/topography/nz_elevation_100m.nc',
+    },    
+    'stations': {
+        'parent': 'data/stations',
+    },
 }
 
-DIR_STATIONS = {
+VAR_STATIONS = {
             'precipitation': {
                 'subdir': 'Precipitation',
-                'var': 'precipitation'
+                'var_name': 'precipitation'
             },
             'temperature': {
                 'subdir': 'ScreenObs',
-                'var': 'dry_bulb'
+                'var_name': 'dry_bulb'
             },
-        }
+}
 
-DIR_ERA5 = {
+VAR_ERA5 = {
             'precipitation': {
                 'subdir': 'total_precipitation_hourly',
                 'var_name': 'precipitation',
@@ -26,7 +33,7 @@ DIR_ERA5 = {
                 'subdir': '2m_temperature',
                 'var_name': 't2m',
             },
-        }
+}
 
 
 PLOT_EXTENT = {

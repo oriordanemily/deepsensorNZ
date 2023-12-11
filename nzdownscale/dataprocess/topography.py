@@ -2,13 +2,6 @@
 Process topography/elevation data 
 """
 
-import os
-
-import numpy as np
-import xarray as xr
-import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-
 from nzdownscale.dataprocess.utils import DataProcess
 from nzdownscale.dataprocess.config import DATA_PATHS
 
@@ -19,10 +12,13 @@ class ProcessTopography(DataProcess):
         super().__init__()
 
 
+    
+
+
 if __name__ == '__main__':
 
-    file_to_open = f'{DATA_PATHS["topography"]}/nz_elevation_25m.nc'
-    save_as = f'{DATA_PATHS["topography"]}/nz_elevation_800m_test.nc'
+    file_to_open = f'{DATA_PATHS["topography"]["parent"]}/nz_elevation_25m.nc'
+    save_as = f'{DATA_PATHS["topography"]["parent"]}/nz_elevation_800m_test.nc'
     coarsen_by = 8
     boundary = 'pad'
     coord_rename = {'lat': 'latitude','lon': 'longitude'}

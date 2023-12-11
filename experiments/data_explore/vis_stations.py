@@ -1,20 +1,4 @@
-"""
-Plot stations
-
-MaxMinTemp, mean_temp
-min_years = 1984-2019
-max_years = 1986-2019
-
-# folder = 'MaxMinTemp'
-# var = 'mean_temp'
-
-# folder = 'Precipitation'
-# var = 'precipitation'
-
-# folder = 'ScreenObs'
-# var = 'dry_bulb'
-
-"""
+# Plot stations
 
 #%%
 import os
@@ -27,71 +11,52 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import seaborn as sns
 
-from data_process.stations import ProcessStations
+from nzdownscale.dataprocess.stations import ProcessStations
+from nzdownscale.dataprocess.utils import PlotData
 
-#%%
+#%% get station file paths
 
-var = 'temperature'
-ps = ProcessStations()
-all_stations = ps.get_list_all_stations(var)
+var = 'precipitation'
+# var = 'temperature'
+stations = ProcessStations()
+all_stations = stations.get_path_all_stations(var)
 print(len(all_stations))
 
-#%% example
+#%% load example station
 
-i = 200
-f = all_stations[i]
-ds = xr.open_dataset(f'{ps.get_var_path(var)}/{f}')
-da = ps.get_da_from_ds(ds, var)
+f = all_stations[200]
+ds = stations.load_station(f)
+print(ds)
+da = stations.ds_to_da(ds, var)
 
-print(da)
-sns.histplot(da[:400].values)
-#plt.title(attr)
-plt.show()
+#%% plot histogram of data for example station
 
-#%% 
+plotdata = PlotData()
+plotdata.plot_hist_values(da, n=500)
 
-dict_md = ps.get_info_dict(var)  # min max years and coords
+#%% get station metadata 
+
+df = stations.get_metadata_df(var)
 
 #%% plot metadata 
-df_md = ps.dict_md_to_df(dict_md)
 
-sns.histplot(df_md['start'])
+sns.histplot(df['start_year'])
 plt.xlabel('Start date')
 plt.show()
 
-sns.histplot(df_md['end'])
+sns.histplot(df['end_year'])
 plt.xlabel('End date')
 plt.show()
 
-sns.histplot(df_md['duration'])
+sns.histplot(df['duration_years'])
 plt.xlabel('Duration')
 plt.show()
 
-#%% get station coords only
+#%% plot stations on map 
 
-dict_coord = ps.get_coord_dict(var)
-
-#%% plot stations - from lon lat dictionary
-
-dict = dict_md
-
-minlon = 165
-maxlon = 179
-minlat = -48
-maxlat = -34
-marker_size = 60
-
-# proj = ccrs.PlateCarree(central_longitude=cm)
-proj = ccrs.PlateCarree()
-fig = plt.figure(figsize=(10, 12))
-ax = fig.add_subplot(1, 1, 1, projection=proj)
-ax.coastlines()
-ax.set_extent([minlon, maxlon, minlat, maxlat], ccrs.PlateCarree())
-ax.gridlines(draw_labels=True, crs=proj)
-for k, v in dict.items():
-    ax.scatter(v['lon'], v['lat'], color='red', marker='o', s=marker_size)
+ax = stations.plot_stations_on_map(df)
+plt.title(f'Stations: {var}')
+plt.savefig('./tmp/fig.png')
 plt.show()
 
-#%% open mfdataset
-
-ds = xr.open_dataset(f'{ps.get_var_path(var)}/*.nc')
+#%% 

@@ -23,8 +23,10 @@ from deepsensor.train.train import train_epoch, set_gpu_default_device
 from deepsensor.data.utils import construct_x1x2_ds
 from tqdm import tqdm
 
-from data_process.era5 import ProcessERA5
-from data_process.stations import ProcessStations
+from nzdownscale.dataprocess.era5 import ProcessERA5
+from nzdownscale.dataprocess.stations import ProcessStations
+from nzdownscale.dataprocess.utils import DataProcess, PlotData
+from nzdownscale.dataprocess.config import DATA_PATHS
 
 crs = ccrs.PlateCarree()
 
@@ -32,7 +34,7 @@ use_gpu = True
 if use_gpu:
     set_gpu_default_device()
 
-f_topography = 'data/topography/nz_elevation_100m.nc'
+f_topography = DATA_PATHS['topography']['file']
 
 #%% load ERA5
 
