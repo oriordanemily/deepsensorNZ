@@ -15,12 +15,26 @@ class DataProcess:
         pass
 
 
+    def open_ds(self,
+                file: str,
+                ) -> xr.Dataset:
+        return xr.open_dataset(file)
+
+
     def open_da(self, 
                 da_file: str,
                 ) -> xr.DataArray:
         """ Open as dataarray """
         #return rioxarray.open_rasterio(da_file)
         return xr.open_dataarray(da_file)
+    
+
+    def ds_to_da(self,
+                 ds: xr.Dataset,
+                 var: str,
+                 ) -> xr.DataArray:
+        """ Get data array from dataset """
+        return ds[var]
 
     
     def mask_da(self, 
@@ -36,13 +50,14 @@ class DataProcess:
     def coarsen_da(self, 
                     da: xr.DataArray, 
                     coarsen_by: int, 
-                    boundary: str='exact',
+                    boundary: str = 'trim',
                     ):
         """
         Reduce resolution of data array by factor coarsen_by. e.g. coarsen_by=4 will reduce 25m resolution to 100m resolution.
         https://stackoverflow.com/questions/53886153/resample-xarray-object-to-lower-resolution-spatially
         """
-        return da.coarsen(lon=coarsen_by, boundary=boundary).mean().coarsen(lat=coarsen_by, boundary=boundary).mean().squeeze()
+        #return da.coarsen(longitude=coarsen_by, boundary=boundary).mean().coarsen(latitude=coarsen_by, boundary=boundary).mean().squeeze()
+        return da.coarsen(latitude=coarsen_by, longitude=coarsen_by, boundary=boundary).mean()
 
 
     def rename_xarray_coords(self,

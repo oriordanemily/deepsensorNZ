@@ -25,6 +25,7 @@ from tqdm import tqdm
 
 from nzdownscale.dataprocess.era5 import ProcessERA5
 from nzdownscale.dataprocess.stations import ProcessStations
+from nzdownscale.dataprocess.topography import ProcessTopography
 from nzdownscale.dataprocess.utils import DataProcess, PlotData
 from nzdownscale.dataprocess.config import DATA_PATHS
 
@@ -34,90 +35,62 @@ use_gpu = True
 if use_gpu:
     set_gpu_default_device()
 
-f_topography = DATA_PATHS['topography']['file']
-
-#%% load ERA5
+#%% settings
 
 var = 'temperature'
 #var = 'precipitation'
 year = 2000
 
-era5 = ProcessERA5()
-#ds = era5.get_ds('temperature')
-ds_era = era5.load_ds_specific_year(var, year)
-da_era = era5.ds_to_da(ds_era, var)
-#era5_raw_ds = da.coarsen(latitude=5, longitude=5, boundary="trim").mean()
-#era5_raw_ds = era5_raw_ds.load()
+dataprocess = DataProcess()
 
-## * get list of lon lat of stations that have year (2000)
+#%% load elevation 
+
+top = ProcessTopography()
+ds_elev = top.open_ds()
+
+#%% load ERA5
+
+era5 = ProcessERA5()
+ds_era = era5.load_ds(var, year)
+da_era = era5.ds_to_da(ds_era, var)
+
+#%% load stations (covering year 2000)
 
 stations = ProcessStations()
 station_paths = stations.get_path_all_stations(var)
+df = stations.get_metadata_df(var)
 
-#all_stations = stations.get_list_all_stations(var)
-#print(len(all_stations))
-
-#year = '2000'
-lons = []
-lats = []
-stations_available_for_year = []
-p = station_paths[0]
-lon_lat_tuples = []
-
-#%% 
-
-for p in tqdm(station_paths):
-    ds_station = stations.get_station_ds(filepath=p)
-    da_station = stations.get_da_from_ds(ds_station, var)
-    try:
-        da_station = da_station.sel(time=str(year))
-        stations_available_for_year.append(p)
-        lon_lat_tuples.append((ds_station.longitude.values, ds_station.latitude.values))
-        # lons.append(ds_station.longitude.values)
-        # lats.append(ds_station.latitude.values)
-    except:
-        pass
-
-# stations_available_for_year
-# 1,8,10,11,12 15 20,22, 
-# ['data/nz/ScreenObs/1002.nc','data/nz/ScreenObs/10617.nc','data/nz/ScreenObs/1087.nc']
-
-# load example station
-example_st = ['data/nz/ScreenObs/1002.nc','data/nz/ScreenObs/10617.nc','data/nz/ScreenObs/1087.nc']
-ds_station = stations.get_station_ds(variable=var, filepath=example_st[0])
-da_station = stations.get_da_from_ds(ds_station, var)
-da_station = da_station.sel(time=str(year))
+df_filtered = df[(df['start_year']<year) & (df['end_year']>=year)]
+station_paths_filtered = list(df_filtered.index)
+print(len(station_paths_filtered))
 
 #%% plot era5 snapshot with stations
 
-minlon = np.array(ds_era['longitude'].min())
-maxlon = np.array(ds_era['longitude'].max())
-minlat = np.array(ds_era['latitude'].min())
-maxlat = np.array(ds_era['latitude'].max())
-
-lon_lim=(minlon, maxlon)
-lat_lim=(minlat, maxlat)
-
-marker_size = 30
-fig, ax = plt.subplots(1, 1, subplot_kw=dict(projection=crs), figsize=(10, 12))
-proj = ccrs.PlateCarree()
-ax.coastlines()
-ax.set_xlim(minlon, maxlon)
-ax.set_ylim(minlat, maxlat)
+nzplot = PlotData()
+ax = nzplot.nz_map_with_coastlines()
 da_era.isel(time=0).plot()
-for lon, lat in lon_lat_tuples:
-    ax.scatter(lon, lat, color='red', marker='o', s=marker_size)
+ax = stations.plot_stations(df, ax)
+plt.plot()
 
-#%% 
+#%% Coarsen ERA5 and topography
 
-# coarsen era5
-da_era_coarse = da_era.coarsen(latitude=5, longitude=5, boundary="trim").mean()
-print(da_era_coarse.shape)
+coarsen_factor = 5
+da_era_coarse = era5.coarsen_da(da_era, coarsen_factor)
 
-# load elevation 
-ds_elev = xr.load_dataset(f_topography)
-ds_elev_coarse = ds_elev.coarsen(latitude=5, longitude=5, boundary="trim").mean()
-print(ds_elev_coarse)
+nzplot = PlotData()
+ax = nzplot.nz_map_with_coastlines()
+da_era_coarse.isel(time=0).plot()
+plt.plot()
+
+#da_elev_coarse = top.coarsen_da(da_elev, coarsen_factor)
+#da_elev = top.ds_to_da(ds_elev)
+ds_elev_coarse = top.coarsen_da(ds_elev, coarsen_factor)
+da_elev_coarse = top.ds_to_da(ds_elev_coarse)
+
+nzplot = PlotData()
+ax = nzplot.nz_map_with_coastlines()
+da_elev_coarse.plot()
+plt.show()
 
 #%% 
 

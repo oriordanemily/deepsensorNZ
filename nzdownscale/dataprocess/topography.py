@@ -2,6 +2,8 @@
 Process topography/elevation data 
 """
 
+import xarray as xr
+
 from nzdownscale.dataprocess.utils import DataProcess
 from nzdownscale.dataprocess.config import DATA_PATHS
 
@@ -11,9 +13,22 @@ class ProcessTopography(DataProcess):
     def __init__(self) -> None:
         super().__init__()
 
-
+    def open_ds(self, 
+                file: str=DATA_PATHS['topography']['file'],
+                ) -> xr.Dataset:
+        return super().open_ds(file)
     
 
+    def ds_to_da(self, 
+                 ds: xr.Dataset, 
+                 var: str='elevation',
+                 ) -> xr.DataArray:
+        return super().ds_to_da(ds, var)
+    
+
+    def coarsen_da(self, da: xr.DataArray, coarsen_by: int, boundary: str = 'trim'):
+        return super().coarsen_da(da, coarsen_by, boundary)
+    
 
 if __name__ == '__main__':
 

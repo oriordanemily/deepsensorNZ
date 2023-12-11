@@ -116,16 +116,30 @@ class ProcessStations(DataProcess):
         return pd.DataFrame.from_dict(d, orient='index')
 
 
+    def plot_stations(self, 
+                      df: pd.DataFrame, 
+                      ax,
+                      markersize=40,
+                      color='red',
+                      ):
+        for lon, lat in zip(df['lon'].values, df['lat'].values):
+            ax.scatter(lon, lat, color=color, marker='o', s=markersize)
+        return ax
+
+
     def plot_stations_on_map(self,
                              df: pd.DataFrame,
                              # dict_md: dict,
                              ):
         nzplot = PlotData()
         ax = nzplot.nz_map_with_coastlines()
-        for lon, lat in zip(df['lon'].values, df['lat'].values):
-            ax.scatter(lon, lat, color='red', marker='o', s=60)
+        ax = self.plot_stations(df, ax)
+
+        # for lon, lat in zip(df['lon'].values, df['lat'].values):
+        #     ax.scatter(lon, lat, color='red', marker='o', s=60)
         # for k, v in dict_md.items():
         #     ax.scatter(v['lon'], v['lat'], color='red', marker='o', s=60)
+
         return ax
 
 

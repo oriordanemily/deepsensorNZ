@@ -56,7 +56,7 @@ plt.show()
 
 ax = stations.plot_stations_on_map(df)
 plt.title(f'Stations: {var}')
-plt.savefig('./tmp/fig.png')
+#plt.savefig('./tmp/fig.png')
 plt.show()
 
 #%% 

@@ -41,6 +41,9 @@ class ProcessERA5(DataProcess):
         return ds[VAR_ERA5[var]['var_name']]
     
 
+    def coarsen_da(self, da: xr.DataArray, coarsen_by: int, boundary: str = 'trim'):
+        return super().coarsen_da(da, coarsen_by, boundary)
+
 
     def get_parent_path(self,
                         var: Literal[tuple(VARIABLE_OPTIONS)],
