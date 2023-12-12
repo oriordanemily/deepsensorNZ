@@ -1,4 +1,5 @@
 import os
+from typing import Literal
 
 import numpy as np
 import xarray as xr
@@ -18,6 +19,7 @@ class DataProcess:
     def open_ds(self,
                 file: str,
                 ) -> xr.Dataset:
+        """ Open file as xarray dataset """
         return xr.open_dataset(file)
 
 
@@ -76,6 +78,13 @@ class DataProcess:
         da.to_netcdf(name)
 
 
+    def resolution(self,
+                   ds: xr.Dataset,
+                   coord: str,
+                   ) -> float:
+        """ Calculate resolution of coodinate in dataset """
+        return np.round(np.abs(np.diff(ds.coords[coord].values)[0]), 5)
+
 
 class PlotData:
     def __init__(self) -> None:
@@ -106,6 +115,7 @@ class PlotData:
 
 
     def nz_map_with_coastlines(self):
+        """ Get figure axis with coastlines for NZ """
         minlon = PLOT_EXTENT['all']['minlon']
         maxlon = PLOT_EXTENT['all']['maxlon']
         minlat = PLOT_EXTENT['all']['minlat']

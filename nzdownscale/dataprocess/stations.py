@@ -60,7 +60,7 @@ class ProcessStations(DataProcess):
         """ get station metadata in dataframe format """
         dict_md = self.get_metadata_dict(var=var)
         return self.dict_to_df(dict_md)
-    
+        
 
     def get_metadata_dict(self, 
                           var: Literal[tuple(VARIABLE_OPTIONS)],

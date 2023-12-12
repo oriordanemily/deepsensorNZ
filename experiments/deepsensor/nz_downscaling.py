@@ -23,42 +23,47 @@ from deepsensor.train.train import train_epoch, set_gpu_default_device
 from deepsensor.data.utils import construct_x1x2_ds
 from tqdm import tqdm
 
-from nzdownscale.dataprocess.era5 import ProcessERA5
-from nzdownscale.dataprocess.stations import ProcessStations
-from nzdownscale.dataprocess.topography import ProcessTopography
-from nzdownscale.dataprocess.utils import DataProcess, PlotData
-from nzdownscale.dataprocess.config import DATA_PATHS
+from nzdownscale.dataprocess import era5, stations, topography, utils, config
 
-crs = ccrs.PlateCarree()
+# from nzdownscale.dataprocess.era5 import ProcessERA5
+# from nzdownscale.dataprocess.stations import ProcessStations
+# from nzdownscale.dataprocess.topography import ProcessTopography
+# from nzdownscale.dataprocess.utils import DataProcess, PlotData
+# from nzdownscale.dataprocess.config import DATA_PATHS
 
-use_gpu = True
-if use_gpu:
-    set_gpu_default_device()
+#%% Settings
 
-#%% settings
-
+# Variables
 var = 'temperature'
 #var = 'precipitation'
 year = 2000
 
-dataprocess = DataProcess()
+# plotting
+crs = ccrs.PlateCarree()
+
+# GPU 
+use_gpu = True
+if use_gpu:
+    set_gpu_default_device()
+
+dataprocess = utils.DataProcess()
 
 #%% load elevation 
 
-top = ProcessTopography()
-ds_elev = top.open_ds()
+process_top = topography.ProcessTopography()
+ds_elev = process_top.open_ds()
 
 #%% load ERA5
 
-era5 = ProcessERA5()
-ds_era = era5.load_ds(var, year)
-da_era = era5.ds_to_da(ds_era, var)
+process_era = era5.ProcessERA5()
+ds_era = process_era.load_ds(var, year)
+da_era = process_era.ds_to_da(ds_era, var)
 
 #%% load stations (covering year 2000)
 
-stations = ProcessStations()
-station_paths = stations.get_path_all_stations(var)
-df = stations.get_metadata_df(var)
+process_stations = stations.ProcessStations()
+station_paths = process_stations.get_path_all_stations(var)
+df = process_stations.get_metadata_df(var)
 
 df_filtered = df[(df['start_year']<year) & (df['end_year']>=year)]
 station_paths_filtered = list(df_filtered.index)
@@ -66,65 +71,107 @@ print(len(station_paths_filtered))
 
 #%% plot era5 snapshot with stations
 
-nzplot = PlotData()
+nzplot = utils.PlotData()
 ax = nzplot.nz_map_with_coastlines()
 da_era.isel(time=0).plot()
-ax = stations.plot_stations(df, ax)
+ax = process_stations.plot_stations(df, ax)
 plt.plot()
 
-#%% Coarsen ERA5 and topography
+#%% Coarsen and plot (ERA5 and topography)
 
 coarsen_factor = 5
-da_era_coarse = era5.coarsen_da(da_era, coarsen_factor)
+da_era_coarse = process_era.coarsen_da(da_era, coarsen_factor)
+latres = dataprocess.resolution(da_era_coarse, 'latitude')
+lonres = dataprocess.resolution(da_era_coarse, 'longitude')
 
-nzplot = PlotData()
+nzplot = utils.PlotData()
 ax = nzplot.nz_map_with_coastlines()
 da_era_coarse.isel(time=0).plot()
+plt.title(f'Coarsened ERA5\nLat res: {latres:.4f} degrees, lon res: {lonres:.4f} degrees')
 plt.plot()
 
 #da_elev_coarse = top.coarsen_da(da_elev, coarsen_factor)
 #da_elev = top.ds_to_da(ds_elev)
-ds_elev_coarse = top.coarsen_da(ds_elev, coarsen_factor)
-da_elev_coarse = top.ds_to_da(ds_elev_coarse)
+coarsen_factor = 5
+ds_elev_coarse = process_top.coarsen_da(ds_elev, coarsen_factor)
+da_elev_coarse = process_top.ds_to_da(ds_elev_coarse)
+latres = dataprocess.resolution(ds_elev_coarse, 'latitude')
+lonres = dataprocess.resolution(ds_elev_coarse, 'longitude')
 
-nzplot = PlotData()
+nzplot = utils.PlotData()
 ax = nzplot.nz_map_with_coastlines()
 da_elev_coarse.plot()
+plt.title(f'Coarsened topography\nLat res: {latres:.4f} degrees, lon res: {lonres:.4f} degrees')
 plt.show()
 
 #%% 
 
-hires_aux_raw_ds = ds_elev_coarse
+highres_aux_raw_ds = ds_elev_coarse
 
 # Compute Topographic Position Index from elevation data
 
-# Resolutions in coordinate values along the spatial row and column dimensions
-#   Here we assume the elevation is on a regular grid, so the first difference
-#   is equal to all others.
-coord_names = list(hires_aux_raw_ds.dims)
+# Resolutions in coordinate values along the spatial row and column dimensions. Here we assume the elevation is on a regular grid, so the first difference is equal to all others.
+
+coord_names = list(highres_aux_raw_ds.dims)
 resolutions = np.array(
-    [np.abs(np.diff(hires_aux_raw_ds.coords[coord].values)[0]) for coord in coord_names])
+    [np.abs(np.diff(highres_aux_raw_ds.coords[coord].values)[0]) for coord in coord_names])
 
 for window_size in [.1, .05, .025]:
-    smoothed_elev_da = hires_aux_raw_ds['elevation'].copy(deep=True)
+    smoothed_elev_da = highres_aux_raw_ds['elevation'].copy(deep=True)
 
     # Compute gaussian filter scale in terms of grid cells
     scales = window_size / resolutions
 
     smoothed_elev_da.data = scipy.ndimage.gaussian_filter(smoothed_elev_da.data, sigma=scales, mode='nearest')
 
-    TPI_da = hires_aux_raw_ds['elevation'] - smoothed_elev_da
+    TPI_da = highres_aux_raw_ds['elevation'] - smoothed_elev_da
     
-    hires_aux_raw_ds[f"TPI_{window_size}"] = TPI_da
+    highres_aux_raw_ds[f"TPI_{window_size}"] = TPI_da
 
     fig, ax = plt.subplots(1, 1, subplot_kw=dict(projection=crs))
     TPI_da.plot(ax=ax)
     ax.add_feature(cf.BORDERS)
     ax.coastlines()
+    plt.show()
 
 #%% 
 
+coarsen_factor = 20
+aux_raw_ds = process_top.coarsen_da(ds_elev_coarse, coarsen_factor)
+aux_raw_ds = process_top.ds_to_da(aux_raw_ds)
+latres = dataprocess.resolution(aux_raw_ds, 'latitude')
+lonres = dataprocess.resolution(aux_raw_ds, 'longitude')
 
+nzplot = utils.PlotData()
+ax = nzplot.nz_map_with_coastlines()
+aux_raw_ds.plot()
+plt.title(f'Low-res topography\nLat res: {latres:.4f} degrees, lon res: {lonres:.4f} degrees')
+plt.show()
 
+#%% 
+
+# Print resolution of lowres and highres elevation data
+print(f"Lowres lat resolution: {dataprocess.resolution(aux_raw_ds, 'latitude'):.4f} degrees")
+print(f"Lowres lon resolution: {dataprocess.resolution(aux_raw_ds, 'longitude'):.4f} degrees")
+print(f"Highres lat resolution: {dataprocess.resolution(highres_aux_raw_ds, 'latitude'):.4f} degrees")
+print(f"Highres lon resolution: {dataprocess.resolution(highres_aux_raw_ds, 'longitude'):.4f} degrees")
+print(f"Original lat resolution: {dataprocess.resolution(ds_elev, 'latitude'):.4f} degrees")
+print(f"Original lon resolution: {dataprocess.resolution(ds_elev, 'longitude'):.4f} degrees")
+
+#%% 
+
+# Slice era5 data to elevation data's spatial extent
+
+top_ds = aux_raw_ds
+era_ds = da_era_coarse
+
+top_min_lat =  top_ds['latitude'].min()
+top_max_lat = top_ds['latitude'].max()
+top_min_lon = top_ds['longitude'].min()
+top_max_lon = top_ds['longitude'].max()
+
+era5_raw_ds = era_ds.sel(latitude=slice(top_max_lat, top_min_lat), longitude=slice(top_min_lon, top_max_lon))
+
+era5_raw_ds.isel(time=0).plot()
 
 #%% 
