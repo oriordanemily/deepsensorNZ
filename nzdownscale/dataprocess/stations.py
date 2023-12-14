@@ -43,10 +43,27 @@ class ProcessStations(DataProcess):
     
 
     def load_station(self,
-                     filepath:str=None,
+                     filepath: str,
                      ) -> xr.Dataset:
         return xr.open_dataset(filepath)
-        
+
+
+    def load_station_df(self,
+                        filepath: str,
+                        var: str,
+                        daily: bool = False,
+                        ) -> pd.DataFrame:
+        ds = self.load_station(filepath)
+        da = self.ds_to_da(ds, var)
+        df_station = da.to_dataframe()
+        if daily: 
+            df_station = df_station.reset_index().resample('D', on='time').mean()[[VAR_STATIONS[var]['var_name']]]
+        lon, lat = self.get_lon_lat(ds)
+        df_station['longitude'] = lon
+        df_station['latitude'] = lat
+
+        return df_station
+
 
     def get_lon_lat(self,
                     ds: xr.Dataset,

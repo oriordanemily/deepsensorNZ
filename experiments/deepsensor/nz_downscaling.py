@@ -175,3 +175,31 @@ era5_raw_ds = era_ds.sel(latitude=slice(top_max_lat, top_min_lat), longitude=sli
 era5_raw_ds.isel(time=0).plot()
 
 #%% 
+
+station_paths = station_paths_filtered
+df_list = []
+path = station_paths[0]
+for path in tqdm(station_paths):
+    df = process_stations.load_station_df(path, var, daily=True)
+    df_list.append(df)
+df = pd.concat(df_list)
+station_raw_df = df.reset_index().set_index(['time', 'latitude', 'longitude']).sort_index()
+print(station_raw_df)
+
+#%%
+
+data_processor = DataProcessor(x1_name="latitude", x1_map=(era5_raw_ds["latitude"].min(), era5_raw_ds["latitude"].max()), x2_name="longitude", x2_map=(era5_raw_ds["longitude"].min(), era5_raw_ds["longitude"].max()))
+era5_ds, station_df = data_processor([era5_raw_ds, station_raw_df])
+aux_ds, hires_aux_ds = data_processor([aux_raw_ds, highres_aux_raw_ds], method="min_max")
+print(data_processor)
+
+#%% 
+
+# Generate auxiliary dataset of x1/x2 coordinates to break translation equivariance in the model's CNN
+# to enable learning non-stationarity
+x1x2_ds = construct_x1x2_ds(aux_ds)
+aux_ds['x1_arr'] = x1x2_ds['x1_arr']
+aux_ds['x2_arr'] = x1x2_ds['x2_arr']
+aux_ds
+
+#%% 
