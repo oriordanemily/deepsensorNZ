@@ -59,7 +59,10 @@ class ProcessStations(DataProcess):
                         ) -> pd.DataFrame: 
         """ get station metadata in dataframe format """
         dict_md = self.get_metadata_dict(var=var)
-        return self.dict_to_df(dict_md)
+        df = self.dict_to_df(dict_md)
+        df['station_id'] = df.index
+        df['station_id'] = df['station_id'].apply(lambda row: row.split('.nc')[0].split('/')[-1])
+        return df
         
 
     def get_metadata_dict(self, 

@@ -75,7 +75,12 @@ print(len(station_paths_filtered))
 
 #%% Extract data from these stations
 
+i = 0
 
+ds = process_stations.load_station(station_paths_filtered[i])
+da = process_stations.ds_to_da(ds, var)
+df = da.to_dataframe()
+#df.index = 
 
 
 #%% 
