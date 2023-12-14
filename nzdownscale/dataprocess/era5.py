@@ -16,15 +16,15 @@ class ProcessERA5(DataProcess):
 
     def load_ds(self, 
                 var: Literal[tuple(VARIABLE_OPTIONS)],
-                year: int=None,
+                years: List=None,
                 ) -> xr.Dataset:
         """ 
         Loads dataset
         Args: 
             var (str): variable
-            year (int): specific year, retrieves all if set to None
+            years (list): specific years, retrieves all if set to None
         """
-        filenames = self.get_filenames(var, year)
+        filenames = self.get_filenames(var, years)
         return xr.open_mfdataset(filenames)
 
     
@@ -53,23 +53,27 @@ class ProcessERA5(DataProcess):
 
     def get_filenames(self,
                       var: Literal[tuple(VARIABLE_OPTIONS)],
-                      year: int=None,
+                      years: List=None,
                       ) -> List[str]:
-
+        """ Get list of ERA5 filenames for variable and list of years (if specified) """ 
 
         parent_path = self.get_parent_path(var)
         
         if var == 'temperature':
-            if year is None:
+            if years is None:
                 filenames = glob.glob(f'{parent_path}/*/*.nc')
             else:
-                filenames = glob.glob(f'{parent_path}/{year}/*.nc')
+                filenames = []
+                for year in years:
+                    filenames = filenames + glob.glob(f'{parent_path}/{year}/*.nc')
         
         elif var == 'precipitation':  
-            if year is None:
+            if years is None:
                 filenames = glob.glob(f'{parent_path}/*.nc')
             else:
-                filenames = [f'{parent_path}/{fname}' for fname in os.listdir(parent_path) if str(year) in fname]
+                filenames = []
+                for year in years:
+                    filenames = filenames + [f'{parent_path}/{fname}' for fname in os.listdir(parent_path) if str(year) in fname]
         
         return filenames
 
