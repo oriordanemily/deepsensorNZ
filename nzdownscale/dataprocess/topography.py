@@ -13,6 +13,7 @@ class ProcessTopography(DataProcess):
     def __init__(self) -> None:
         super().__init__()
 
+
     def open_ds(self, 
                 file: str=DATA_PATHS['topography']['file'],
                 ) -> xr.Dataset:

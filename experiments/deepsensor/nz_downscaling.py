@@ -187,6 +187,13 @@ for path in tqdm(station_paths):
     df_list.append(df)
 df = pd.concat(df_list)
 station_raw_df = df.reset_index().set_index(['time', 'latitude', 'longitude']).sort_index()
+
+### filter years
+station_raw_df_ = station_raw_df.reset_index()
+station_raw_df_ = station_raw_df_[(station_raw_df_['time']>=str(years[0])) & (station_raw_df_['time']<=f'{str(years[-1])}-12-31')]
+station_raw_df = station_raw_df_.set_index(['time', 'latitude', 'longitude']).sort_index()
+###
+
 print(station_raw_df)
 
 #%% Normalise and preprocess data
@@ -245,16 +252,22 @@ fig = deepsensor.plot.context_encoding(model, train_tasks[0], task_loader)
 
 #%%
 
-# fig, ax = plt.subplots(1, 1, figsize=(7, 7), subplot_kw=dict(projection=crs))
-# ax.coastlines()
-# ax.add_feature(cf.BORDERS)
-ax = nzplot.nz_map_with_coastlines()
+fig, ax = plt.subplots(1, 1, figsize=(7, 7), subplot_kw=dict(projection=crs))
+ax.coastlines()
+ax.add_feature(cf.BORDERS)
+
+minlon = config.PLOT_EXTENT['all']['minlon']
+maxlon = config.PLOT_EXTENT['all']['maxlon']
+minlat = config.PLOT_EXTENT['all']['minlat']
+maxlat = config.PLOT_EXTENT['all']['maxlat']
+ax.set_extent([minlon, maxlon, minlat, maxlat], crs)
+# ax = nzplot.nz_map_with_coastlines()
+
 deepsensor.plot.offgrid_context(ax, task, data_processor, task_loader, plot_target=True, add_legend=True, linewidths=0.5)
 plt.show()
-fig.savefig("train_stations.png", bbox_inches="tight")
+# fig.savefig("train_stations.png", bbox_inches="tight")
 
-
-#%% Train 
+#%% Train
 
 import lab as B
 def compute_val_loss(model, val_tasks):
@@ -262,10 +275,6 @@ def compute_val_loss(model, val_tasks):
     for task in val_tasks:
         val_losses.append(B.to_numpy(model.loss_fn(task, normalise=True)))
     return np.mean(val_losses)
-
-#%% 
-
-from tqdm import tqdm
 
 n_epochs = 30
 train_losses = []
@@ -290,3 +299,7 @@ for epoch in tqdm(range(n_epochs)):
         torch.save(model.model.state_dict(), folder + f"model.pt")
 
     # print(f"Epoch {epoch} train_loss: {train_loss:.2f}, val_loss: {val_loss:.2f}")
+
+#%%
+
+
