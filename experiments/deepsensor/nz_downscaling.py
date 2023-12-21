@@ -32,6 +32,7 @@ from nzdownscale.dataprocess import era5, stations, topography, utils, config
 # from nzdownscale.dataprocess.utils import DataProcess, PlotData
 # from nzdownscale.dataprocess.config import DATA_PATHS
 
+
 #%% Settings
 
 # Variables
@@ -80,7 +81,7 @@ plt.plot()
 
 #%% Coarsen and plot (ERA5 and topography)
 
-coarsen_factor = 5
+coarsen_factor = 10
 da_era_coarse = process_era.coarsen_da(da_era, coarsen_factor)
 latres = dataprocess.resolution(da_era_coarse, 'latitude')
 lonres = dataprocess.resolution(da_era_coarse, 'longitude')
@@ -107,7 +108,7 @@ plt.show()
 
 #%% 
 # Compute Topographic Position Index from elevation data
-PLOT = False
+PLOT = True
 
 # Resolutions in coordinate values along the spatial row and column dimensions. Here we assume the elevation is on a regular grid, so the first difference is equal to all others.
 
@@ -200,6 +201,7 @@ print(station_raw_df)
 
 data_processor = DataProcessor(x1_name="latitude", x1_map=(era5_raw_ds["latitude"].min(), era5_raw_ds["latitude"].max()), x2_name="longitude", x2_map=(era5_raw_ds["longitude"].min(), era5_raw_ds["longitude"].max()))
 era5_ds, station_df = data_processor([era5_raw_ds, station_raw_df])
+
 aux_ds, hires_aux_ds = data_processor([aux_raw_ds, highres_aux_raw_ds], method="min_max")
 print(data_processor)
 
@@ -210,19 +212,13 @@ aux_ds['x1_arr'] = x1x2_ds['x1_arr']
 aux_ds['x2_arr'] = x1x2_ds['x2_arr']
 aux_ds
 
+# should we add 2d circular day of year variable?
+# see collapsed cell https://tom-andersson.github.io/deepsensor/user-guide/convnp.html#initialising-a-convnp
+
 #%% Set up task loader
 
 task_loader = TaskLoader(context=[era5_ds, aux_ds], target=station_df, aux_at_targets=hires_aux_ds)
 print(task_loader)
-
-# Set up model
-model = ConvNP(data_processor, task_loader, unet_channels=(64,)*4, points_per_unit=150, likelihood="gnp")
-
-
-print("Loading Dask arrays...")
-tic = time.time()
-task_loader.load_dask()
-print(f"Done in {time.time() - tic:.2f}s")
 
 train_start = '2000-01-01'
 train_end = '2000-12-31'
@@ -233,22 +229,41 @@ train_dates = era5_raw_ds.sel(time=slice(train_start, train_end)).time.values
 val_dates = era5_raw_ds.sel(time=slice(val_start, val_end)).time.values
 
 train_tasks = []
-for date in tqdm(train_dates[::2]):
+for date in tqdm(train_dates[::2], desc="Loading train tasks..."):
     task = task_loader(date, context_sampling="all", target_sampling="all")
     train_tasks.append(task)
 
 val_tasks = []
-for date in tqdm(val_dates):
+for date in tqdm(val_dates, desc="Loading val tasks..."):
     task = task_loader(date, context_sampling="all", target_sampling="all")
     val_tasks.append(task)
+
+print("Loading Dask arrays...")
+tic = time.time()
+task_loader.load_dask()
+print(f"Done in {time.time() - tic:.2f}s")
 
 #%% Inspect train task
 
 train_tasks[0]
+#%%
+
+# Set up model
+model = ConvNP(data_processor, task_loader, unet_channels=(64,)*4, 
+                likelihood="gnp", internal_density=100)
+
+# Print number of parameters to check model is not too large for GPU memory
+_ = model(val_tasks[0])
+print(f"Model has {deepsensor.backend.nps.num_params(model.model):,} parameters")
+
 
 #%% Plot context encoding
 
 fig = deepsensor.plot.context_encoding(model, train_tasks[0], task_loader)
+
+#%%
+fig = deepsensor.plot.task(train_tasks[0], task_loader)
+plt.show()
 
 #%%
 
@@ -263,7 +278,7 @@ maxlat = config.PLOT_EXTENT['all']['maxlat']
 ax.set_extent([minlon, maxlon, minlat, maxlat], crs)
 # ax = nzplot.nz_map_with_coastlines()
 
-deepsensor.plot.offgrid_context(ax, task, data_processor, task_loader, plot_target=True, add_legend=True, linewidths=0.5)
+deepsensor.plot.offgrid_context(ax, val_tasks[0], data_processor, task_loader, plot_target=True, add_legend=True, linewidths=0.5)
 plt.show()
 # fig.savefig("train_stations.png", bbox_inches="tight")
 
