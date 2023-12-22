@@ -83,6 +83,7 @@ plt.plot()
 
 coarsen_factor = 10
 da_era_coarse = process_era.coarsen_da(da_era, coarsen_factor)
+# da_era_coarse = da_era_coarse.fillna(0)
 latres = dataprocess.resolution(da_era_coarse, 'latitude')
 lonres = dataprocess.resolution(da_era_coarse, 'longitude')
 
@@ -291,7 +292,8 @@ def compute_val_loss(model, val_tasks):
     val_losses = []
     for task in val_tasks:
         val_losses.append(B.to_numpy(model.loss_fn(task, normalise=True)))
-    return np.mean(val_losses)
+        val_losses_not_nan = [arr for arr in val_losses if~ np.isnan(arr)]
+    return np.mean(val_losses_not_nan)
 
 n_epochs = 30
 train_losses = []
@@ -301,7 +303,8 @@ val_loss_best = np.inf
 
 for epoch in tqdm(range(n_epochs)):
     batch_losses = train_epoch(model, train_tasks)
-    train_loss = np.mean(batch_losses)
+    batch_losses_not_nan = [arr for arr in batch_losses if~ np.isnan(arr)]
+    train_loss = np.mean(batch_losses_not_nan)
     train_losses.append(train_loss)
 
     val_loss = compute_val_loss(model, val_tasks)
@@ -313,10 +316,175 @@ for epoch in tqdm(range(n_epochs)):
         val_loss_best = val_loss
         folder = "models/downscaling/"
         if not os.path.exists(folder): os.makedirs(folder)
-        torch.save(model.model.state_dict(), folder + f"model.pt")
+        torch.save(model.model.state_dict(), folder + f"model_nosea.pt")
 
-    # print(f"Epoch {epoch} train_loss: {train_loss:.2f}, val_loss: {val_loss:.2f}")
+    print(f"Epoch {epoch} train_loss: {train_loss:.2f}, val_loss: {val_loss:.2f}")
+
+
+#%% Use this for a trained model
+    
+model.model.load_state_dict(torch.load(folder + f"model_nosea.pt"))
+    
+
+#%% Look at some of the validation data
+
+date = "2001-06-25"
+test_task = task_loader(date, ["all", "all"], seed_override=42)
+pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
+
+
+fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=ccrs.PlateCarree())
 
 #%%
 
 
+def gen_test_fig(era5_raw_ds=None, mean_ds=None, std_ds=None, samples_ds=None, add_colorbar=False, var_clim=None, std_clim=None, var_cbar_label=None, std_cbar_label=None, fontsize=None, figsize=(15, 5)):
+    if var_clim is None:
+        vmin = np.array(mean_ds.min())
+        vmax = np.array(mean_ds.max())
+    else:
+        vmin, vmax = var_clim
+
+    if std_clim is None and std_ds is not None:
+        std_vmin = np.array(std_ds.min())
+        std_vmax = np.array(std_ds.max())
+    elif std_clim is not None:
+        std_vmin, std_vmax = std_clim
+    else:
+        std_vmin = None
+        std_vmax = None
+
+    ncols = 0
+    if era5_raw_ds is not None:
+        ncols += 1
+    if mean_ds is not None:
+        ncols += 1
+    if std_ds is not None:
+        ncols += 1
+    if samples_ds is not None:
+        ncols += samples_ds.shape[0]
+
+    fig, axes = plt.subplots(1, ncols, subplot_kw=dict(projection=crs), figsize=figsize)
+
+    axis_i = 0
+    if era5_raw_ds is not None:
+        ax = axes[axis_i]
+        # era5_raw_ds.sel(lat=slice(mean_ds["lat"].min(), mean_ds["lat"].max()), lon=slice(mean_ds["lon"].min(), mean_ds["lon"].max())).plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=False)
+        era5_raw_ds.plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=add_colorbar, cbar_kwargs=dict(label=var_cbar_label))
+        ax.set_title("ERA5", fontsize=fontsize)
+
+    if mean_ds is not None:
+        axis_i += 1
+        ax = axes[axis_i]
+        mean_ds.plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=add_colorbar, cbar_kwargs=dict(label=var_cbar_label))
+        ax.set_title("ConvNP mean", fontsize=fontsize)
+
+    if samples_ds is not None:
+        for i in range(samples_ds.shape[0]):
+            axis_i += 1
+            ax = axes[axis_i]
+            samples_ds.isel(sample=i).plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=add_colorbar, cbar_kwargs=dict(label=var_cbar_label))
+            ax.set_title(f"ConvNP sample {i+1}", fontsize=fontsize)
+
+    if std_ds is not None:
+        axis_i += 1
+        ax = axes[axis_i]
+        std_ds.plot(ax=ax, cmap="Greys", add_colorbar=add_colorbar, vmin=std_vmin, vmax=std_vmax, cbar_kwargs=dict(label=std_cbar_label))
+        ax.set_title("ConvNP std dev", fontsize=fontsize)
+
+    for ax in axes:
+        ax.add_feature(cf.BORDERS)
+        ax.coastlines()
+    return fig, axes
+
+pred_db = pred['dry_bulb']
+
+fig, axes = gen_test_fig(
+    era5_raw_ds.isel(time=0), 
+    pred_db["mean"],
+    pred_db["std"],
+    add_colorbar=True,
+    var_cbar_label="2m temperature [°C]",
+    std_cbar_label="std dev [°C]",
+    std_clim=(None, 2),
+    figsize=(20, 20/3)
+)
+
+
+
+# %%
+
+X_t = np.array([[-41.2924, 174.7787]]).T #wellington
+dates = pd.date_range("2001-09-01", "2001-10-31")
+station_raw_df
+# %%
+locs = set(zip(station_raw_df.reset_index()["latitude"], station_raw_df.reset_index()["longitude"]))
+locs
+# %%
+# Find closest station to desired target location
+X_station_closest = min(locs, key=lambda loc: np.linalg.norm(np.array(loc) - X_t.T))
+X_t = np.array(X_station_closest).reshape(2, 1)
+X_t
+# %%
+# As above but zooming in
+fig, axes = gen_test_fig(
+    era5_raw_ds.isel(time=0).sel(latitude=slice(-39, -43), longitude=slice(173, 176)),
+    pred_db["mean"].sel(latitude=slice(-39, -43), longitude=slice(173, 176)),
+    pred_db["std"].sel(latitude=slice(-39, -43), longitude=slice(173, 176)),
+    add_colorbar=True,
+    # var_clim=(10, -5),
+    var_cbar_label="2m temperature [°C]",
+    std_cbar_label="std dev [°C]",
+    std_clim=(None, 2),
+)
+# Plot X_t
+for ax in axes:
+    ax.scatter(X_t[1], X_t[0], marker="s", color="black", transform=crs, s=10**2, facecolors='none', linewidth=2)
+
+# %%
+# Get station target data
+station_closest_df = station_raw_df.reset_index().set_index(["latitude", "longitude"]).loc[X_station_closest].set_index("time").loc[dates]
+station_closest_df
+# %%
+# Plot location of X_t on map using cartopy
+fig, ax = plt.subplots(1, 1, subplot_kw=dict(projection=crs), figsize=(20, 20))
+pred_db['mean'].plot(ax=ax, cmap="jet")
+ax.coastlines()
+ax.add_feature(cf.BORDERS)
+ax.scatter(X_t[1], X_t[0], transform=crs, color="red", marker="x")
+# Plot station locations
+ax.scatter([loc[1] for loc in locs], [loc[0] for loc in locs], transform=crs, color="black", marker="x")
+# ax.set_extent([6, 15, 47.5, 55])
+# %%
+
+era5_raw_df = era5_raw_ds.sel(latitude=-41.2924, longitude=174.7787, method="nearest").to_dataframe()
+era5_raw_df = era5_raw_df.loc[dates]
+era5_raw_df
+#%%
+test_tasks = task_loader(dates, "all")
+preds = model.predict(test_tasks, X_t=era5_raw_ds, resolution_factor=2)
+preds_db = preds['dry_bulb']
+
+
+#%%
+
+
+# Plot
+sns.set_style("white")
+fig, ax = plt.subplots(1, 1, figsize=(7*.9, 3*.9))
+convnp_mean = preds_db["mean"].values.astype('float')[:, 0, 0]
+ax.plot(convnp_mean, label="ConvNP", marker="o", markersize=3)
+stddev = preds_db["std"].values.astype('float')
+# Make 95% confidence interval
+# ax.fill_between(range(len(convnp_mean)), convnp_mean - 2 * stddev, convnp_mean + 2 * stddev, alpha=0.25)#, label="ConvNP 95% CI")
+era5_vals = era5_raw_df["t2m"].values.astype('float')
+ax.plot(era5_vals, label="ERA5", marker="o", markersize=3)
+# Plot true station data
+ax.plot(station_closest_df["dry_bulb"].values.astype('float'), label="Station", marker="o", markersize=3)
+# Add legend
+ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02, 1, 0.2), ncol=3, mode="expand", borderaxespad=0)
+ax.set_xlabel("Time")
+ax.set_ylabel("2m temperature [°C]")
+ax.set_xticks(range(len(era5_raw_df))[::14])
+ax.set_xticklabels(era5_raw_df.index[::14].strftime("%Y-%m-%d"), rotation=15)
+# %%
