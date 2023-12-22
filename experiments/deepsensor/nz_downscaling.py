@@ -125,7 +125,7 @@ for window_size in [.1, .05, .025]:
     # Compute gaussian filter scale in terms of grid cells
     scales = window_size / resolutions
 
-    smoothed_elev_da.data = scipy.ndimage.gaussian_filter(smoothed_elev_da.data, sigma=scales, mode='nearest')
+    smoothed_elev_da.data = scipy.ndimage.gaussian_filter(smoothed_elev_da.data, sigma=scales, mode='constant', cval=0)
 
     TPI_da = highres_aux_raw_ds['elevation'] - smoothed_elev_da
     
@@ -250,7 +250,7 @@ train_tasks[0]
 
 # Set up model
 model = ConvNP(data_processor, task_loader, unet_channels=(64,)*4, 
-                likelihood="gnp", internal_density=100)
+                likelihood="gnp")
 
 # Print number of parameters to check model is not too large for GPU memory
 _ = model(val_tasks[0])
