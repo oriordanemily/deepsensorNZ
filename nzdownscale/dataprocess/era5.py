@@ -34,11 +34,15 @@ class ProcessERA5(DataProcess):
                  ) -> xr.DataArray:
         """
         Extracts dataarray from dataset (variable data only, loses some metadata)
+        If variable is temperature, converts from Kelvin to Celsius
         Args: 
             ds (xr.Dataset): dataset
             var (str): variable
         """
-        return ds[VAR_ERA5[var]['var_name']]
+        da = ds[VAR_ERA5[var]['var_name']]
+        if var == 'temperature':
+            da = self.kelvin_to_celsius(da)
+        return da
     
 
     def coarsen_da(self, da: xr.DataArray, coarsen_by: int, boundary: str = 'trim'):
@@ -77,6 +81,8 @@ class ProcessERA5(DataProcess):
         
         return filenames
 
+    def kelvin_to_celsius(self, da: xr.DataArray):
+        return da - 273.15
 
 if __name__ == '__main__':
     pass
