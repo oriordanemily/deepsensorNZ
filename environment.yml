@@ -83,7 +83,7 @@ dependencies:
     - contourpy==1.1.1
     - cycler==0.12.1
     - dask==2023.10.0
-    - deepsensor==0.3.2
+    - deepsensor==0.3.5
     - distributed==2023.10.0
     - fdm==0.4.1
     - filelock==3.12.4
