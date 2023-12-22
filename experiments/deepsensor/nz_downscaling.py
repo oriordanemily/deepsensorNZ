@@ -96,6 +96,8 @@ plt.plot()
 #da_elev = top.ds_to_da(ds_elev)
 coarsen_factor = 5
 ds_elev_coarse = process_top.coarsen_da(ds_elev, coarsen_factor)
+#fill all nan values with 0 to avoid training error
+ds_elev_coarse = ds_elev_coarse.fillna(0)
 da_elev_coarse = process_top.ds_to_da(ds_elev_coarse)
 latres = dataprocess.resolution(ds_elev_coarse, 'latitude')
 lonres = dataprocess.resolution(ds_elev_coarse, 'longitude')
@@ -249,8 +251,8 @@ train_tasks[0]
 #%%
 
 # Set up model
-model = ConvNP(data_processor, task_loader, unet_channels=(64,)*4, 
-                likelihood="gnp")
+model = ConvNP(data_processor, task_loader, unet_channels=(64,)*4, likelihood="gnp", internal_density=50) #internal density edited to make model fit into memory - may want to adjust down the line
+
 
 # Print number of parameters to check model is not too large for GPU memory
 _ = model(val_tasks[0])
