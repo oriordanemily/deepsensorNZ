@@ -43,8 +43,8 @@ if __name__ == '__main__':
     # Coarsen and rename coords
     top = ProcessTopography()
     da = top.open_da(f'{file_to_open}').squeeze()
+    da = top.rename_xarray_coords(da, coord_rename)
     da_coarsened = top.coarsen_da(da, coarsen_by=coarsen_by, boundary=boundary)  # 1m20s
-    da_coarsened = top.rename_xarray_coords(da_coarsened, coord_rename)
 
     # Inspect
     if plot:
