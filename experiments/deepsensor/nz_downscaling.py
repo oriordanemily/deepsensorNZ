@@ -322,7 +322,8 @@ for epoch in tqdm(range(n_epochs)):
 
 
 #%% Use this for a trained model
-    
+import torch
+folder = "models/downscaling/"
 model.model.load_state_dict(torch.load(folder + f"model_nosea.pt"))
     
 
@@ -336,6 +337,7 @@ pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
 fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=ccrs.PlateCarree())
 
 #%%
+
 
 
 def gen_test_fig(era5_raw_ds=None, mean_ds=None, std_ds=None, samples_ds=None, add_colorbar=False, var_clim=None, std_clim=None, var_cbar_label=None, std_cbar_label=None, fontsize=None, figsize=(15, 5)):
@@ -472,7 +474,7 @@ preds_db = preds['dry_bulb']
 # Plot
 sns.set_style("white")
 fig, ax = plt.subplots(1, 1, figsize=(7*.9, 3*.9))
-convnp_mean = preds_db["mean"].values.astype('float')[:, 0, 0]
+convnp_mean = preds_db["mean"].sel(latitude=X_t[0, 0], longitude=X_t[1, 0], method='nearest').values.astype('float')
 ax.plot(convnp_mean, label="ConvNP", marker="o", markersize=3)
 stddev = preds_db["std"].values.astype('float')
 # Make 95% confidence interval
