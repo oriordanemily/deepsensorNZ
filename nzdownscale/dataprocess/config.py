@@ -11,8 +11,8 @@ DATA_PATHS = {
         'file': 'data/topography/nz_elevation_200m.nc',
     },    
     'stations': {
-        # 'parent': 'data/stations',
-        'parent': '/mnt/datasets/NationalClimateDatabase/NetCDFFilesByVariableAndSite/Hourly',
+        'parent': 'data/stations',
+        #'parent': '/mnt/datasets/NationalClimateDatabase/NetCDFFilesByVariableAndSite/Hourly',
     },
 }
 

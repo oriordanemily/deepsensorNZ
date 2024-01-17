@@ -1,5 +1,6 @@
 import os
 from typing import Literal
+import pickle
 
 import numpy as np
 import xarray as xr
@@ -7,8 +8,19 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import seaborn as sns
 
-
 from nzdownscale.dataprocess.config import PLOT_EXTENT
+
+
+def save_pickle(x, filename):
+    with open(filename, 'wb') as pickle_file:
+        pickle.dump(x, pickle_file)
+
+
+def open_pickle(filename):
+    with open(filename, 'rb') as pickle_file:
+        x = pickle.load(pickle_file)
+    return x
+
 
 
 class DataProcess:

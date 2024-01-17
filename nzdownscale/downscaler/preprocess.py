@@ -3,6 +3,7 @@ import logging
 logging.captureWarnings(True)
 import os
 import time
+from typing import Literal
 
 import xarray as xr
 import pandas as pd
@@ -32,7 +33,7 @@ from nzdownscale.dataprocess import era5, stations, topography, utils, config
 # from nzdownscale.dataprocess.utils import DataProcess, PlotData
 from nzdownscale.dataprocess.config import LOCATION_LATLON
 
-class GetData:
+class PreprocessForDownscaling:
 
     def __init__(self,
                  variable='temperature',
@@ -55,6 +56,9 @@ class GetData:
         self.process_era = era5.ProcessERA5()
         self.process_stations = stations.ProcessStations()
         self.nzplot = utils.PlotData()
+
+        self.station_metadata_all = None
+        self.station_metadata = None
 
         self.ds_elev = None
         self.ds_era = None
@@ -83,63 +87,27 @@ class GetData:
     
     def load_stations(self):
         print("Loading stations")
-        process_stations = self.process_stations
-        years = self.years
-        var = self.var
+        #station_paths = process_stations.get_path_all_stations(var)
+        self.station_metadata_all = self.process_stations.get_metadata_df(self.var)
 
-        station_paths = process_stations.get_path_all_stations(var)
-        df = process_stations.get_metadata_df(var)
-        self.df_station_all = df
-
-        # this was only using stations that have data across all years
-        # have changed to use stations covering any part of the years specified
-        # check this with Risa
-
-        df_filtered = df[(df['start_year']<years[-1]) & (df['end_year']>=years[0])]
-        station_paths_filtered = list(df_filtered.index)
-        print(f'Stations used: {len(station_paths_filtered)}')
-
-        station_paths = station_paths_filtered
-        df_list = []
-        for path in tqdm(station_paths):
-            df = process_stations.load_station_df(path, var, daily=True)
-            df_list.append(df)
-        # print('Concatenating station data...')
-        df = pd.concat(df_list)
-        station_raw_df = df.reset_index().set_index(['time', 
-                                                    'latitude', 
-                                                    'longitude']).sort_index()
-
-        ### filter years
-        station_raw_df_ = station_raw_df.reset_index()
-        station_raw_df_ = station_raw_df_[(station_raw_df_['time']>=str(years[0])) &
-                                (station_raw_df_['time']<=f'{str(years[-1])}-12-31')]
-        station_raw_df = station_raw_df_.set_index(['time', 
-                                                    'latitude', 
-                                                    'longitude']).sort_index()
-        
-        self.station_raw_df = station_raw_df
-        self.station_metadata_filtered = df_filtered
-    
 
     def preprocess_topography(self, 
                               highres_coarsen_factor=30,
                               lowres_coarsen_factor=10,
-                              verbose=False,
                               ):
+        """ Gets self.highres_aux_raw_ds, self.aux_raw_ds """
+
+        self.topography_highres_coarsen_factor = highres_coarsen_factor
+        self.topography_lowres_coarsen_factor = lowres_coarsen_factor
         
         assert self.ds_elev is not None, "Run load_topography() first"
 
         # Get highres topography
-        ds_elev_highres = self.get_highres_topography(self.ds_elev, highres_coarsen_factor)
-        highres_aux_raw_ds = self.compute_tpi(ds_elev_highres)
+        ds_elev_highres = self._get_highres_topography(self.ds_elev, highres_coarsen_factor)
+        highres_aux_raw_ds = self._compute_tpi(ds_elev_highres)
         
         # Get lowres topography 
-        aux_raw_ds = self.get_lowres_topography(ds_elev_highres, lowres_coarsen_factor)
-
-        # Print resolutions
-        if verbose:
-            self.print_top_resolutions(highres_aux_raw_ds, aux_raw_ds)
+        aux_raw_ds = self._get_lowres_topography(ds_elev_highres, lowres_coarsen_factor)
 
         self.highres_aux_raw_ds = highres_aux_raw_ds
         self.aux_raw_ds = aux_raw_ds
@@ -149,26 +117,35 @@ class GetData:
     def preprocess_era5(self,
                         coarsen_factor=10,
                         ):
-        
+        """ Gets self.era5_raw_ds """
+
         assert self.da_era is not None, "Run load_era5() first"
         assert self.highres_aux_raw_ds is not None, "Run preprocess_topography() first"
 
+        self.era5_coarsen_factor = coarsen_factor
+
         # Coarsen
-        self.da_era_coarse = self.coarsen_era(self.da_era, coarsen_factor)
+        self.da_era_coarse = self._coarsen_era(self.da_era, coarsen_factor)
 
         # Trim to topography extent
-        da_era_trimmed = self.trim_era5(self.da_era_coarse, self.highres_aux_raw_ds)
+        da_era_trimmed = self._trim_era5(self.da_era_coarse, self.highres_aux_raw_ds)
         
         self.era5_raw_ds = da_era_trimmed
         return self.era5_raw_ds
 
 
     def preprocess_stations(self):
-        assert self.station_raw_df is not None, "Run load_stations() first"
+        """ Gets self.station_raw_df """
+
+        assert self.station_metadata_all is not None, "Run load_stations() first"
+        
+        self.station_metadata = self._filter_stations(self.station_metadata_all)
+        self.station_raw_df = self._get_station_raw_df(self.station_metadata)
+        
         return self.station_raw_df
         
 
-    def get_highres_topography(self,
+    def _get_highres_topography(self,
                                ds_elev,
                                coarsen_factor=30,
                                plot=False,
@@ -202,7 +179,7 @@ class GetData:
         return ds_elev_highres
     
     
-    def get_lowres_topography(self,
+    def _get_lowres_topography(self,
                        ds_elev_highres,
                        coarsen_factor=10,
                        plot=False,
@@ -220,11 +197,10 @@ class GetData:
             plt.title(f'Low-res topography\nLat res: {latres:.4f} degrees, lon res: {lonres:.4f} degrees')
             plt.show()
 
-        self.aux_raw_ds = aux_raw_ds
         return aux_raw_ds
 
 
-    def compute_tpi(self, 
+    def _compute_tpi(self, 
                     ds_elev_highres,
                     plot=False,
                     ):
@@ -272,27 +248,10 @@ class GetData:
                 ax.set_title(f'TPI with window size {window_size}, scales = {scales}')
                 plt.show()
 
-        self.highres_aux_raw_ds = highres_aux_raw_ds
         return highres_aux_raw_ds
     
 
-    def print_top_resolutions(self,
-                              highres_aux_raw_ds,
-                              aux_raw_ds,
-                              ):
-
-        # Print resolution of lowres and highres elevation data
-        print(f"Lowres topo lat resolution: "
-            f"{self.dataprocess.resolution(aux_raw_ds, 'latitude'):.4f} degrees")
-        print(f"Lowres topo lon resolution: "
-            f"{self.dataprocess.resolution(aux_raw_ds, 'longitude'):.4f} degrees")
-        print(f"Highres topo lat resolution: "
-            f"{self.dataprocess.resolution(highres_aux_raw_ds, 'latitude'):.4f} degrees")
-        print(f"Highres topo lon resolution: "
-            f"{self.dataprocess.resolution(highres_aux_raw_ds, 'longitude'):.4f} degrees")
-
-
-    def coarsen_era(self,
+    def _coarsen_era(self,
                     da_era,
                     coarsen_factor_era=10,
                     plot=False,
@@ -326,7 +285,7 @@ class GetData:
         return da_era_coarse
 
 
-    def trim_era5(self,
+    def _trim_era5(self,
                   da_era,
                   highres_aux_raw_ds,
                   plot=False,
@@ -349,6 +308,52 @@ class GetData:
         return era5_raw_ds
 
 
+    def _filter_stations(self, df_station_metadata):
+        """ filter stations by years used in settings """
+
+        # this was only using stations that have data across all years
+        # have changed to use stations covering any part of the years specified
+        # check this with Risa
+
+        df = df_station_metadata
+        years = self.years
+
+        df_station_metadata_filtered = df[(df['start_year']<years[-1]) & (df['end_year']>=years[0])]
+        print(f'Number of stations after filtering: {len(df_station_metadata_filtered)}')
+        self.station_metadata_filtered = df_station_metadata_filtered
+
+        return self.station_metadata_filtered
+    
+
+    def _get_station_raw_df(self, df_station_metadata):
+
+        var = self.var
+        years = self.years
+
+        station_paths = list(df_station_metadata.index)
+
+        df_list = []
+        for path in tqdm(station_paths):
+            df = self.process_stations.load_station_df(path, var, daily=True)
+            df_list.append(df)
+        # print('Concatenating station data...')
+        df = pd.concat(df_list)
+        station_raw_df = df.reset_index().set_index(['time', 
+                                                    'latitude', 
+                                                    'longitude']).sort_index()
+
+        ### filter years
+        station_raw_df_ = station_raw_df.reset_index()
+        station_raw_df_ = station_raw_df_[(station_raw_df_['time']>=str(years[0])) &
+                                (station_raw_df_['time']<=f'{str(years[-1])}-12-31')]
+        station_raw_df = station_raw_df_.set_index(['time', 
+                                                    'latitude', 
+                                                    'longitude']).sort_index()
+        
+        # self.station_raw_df = station_raw_df
+        return station_raw_df
+
+
     def process_all(self,
                     era5_raw_ds,
                     aux_raw_ds,
@@ -356,6 +361,11 @@ class GetData:
                     station_raw_df,
                     test_norm=False,
                     ):
+        """
+        Gets processed data for deepsensor input
+        Normalises all data and add necessary dims
+        """
+
         #changed the maps here to use the high res topo data as that seems to have the
         #largest extent
         data_processor = DataProcessor(x1_name="latitude", 
@@ -396,19 +406,93 @@ class GetData:
         self.highres_aux_ds = highres_aux_ds
         self.station_df = station_df
 
-        self.processed_data = {
-            'data_processor': data_processor,
-            'aux_ds': aux_ds,
-            'era5_ds': era5_ds,
-            'highres_aux_ds': highres_aux_ds,
-            'station_df': station_df,
-            'date_info': {
+
+    def get_processed_data_dict(self):
+
+        date_info = {
                 'years': self.years,
                 'start_year': self.start_year,
                 'end_year': self.end_year,
                 'train_start_year': self.train_start_year,
                 'val_start_year': self.val_start_year,
             }
+
+        data_settings = {
+            'era5_coarsen_factor': self.era5_coarsen_factor,
+            'topography_highres_coasen_factor': self.topography_highres_coarsen_factor,
+            'topography_lowres_coasen_factor': self.topography_lowres_coarsen_factor,
+            'resolutions': self._get_resolutions_dict()
         }
-        return self.processed_data
+
+        processed_data = {
+            'data_processor': self.data_processor,
+            'aux_ds': self.aux_ds,
+            'era5_ds': self.era5_ds,
+            'highres_aux_ds': self.highres_aux_ds,
+            'station_df': self.station_df,
+            
+            'data_settings': data_settings,
+            'date_info': date_info,
+        }
+        
+        self.processed_data = processed_data
+
+        return processed_data
+
+
+    def plot_dataset(self,
+                     type: Literal['era5', 'top_highres', 'top_lowres'],
+                     with_stations=True):
+        """
+        Plot heatmap of processed data (input for model training)
+        type options: ['era5', 'top_highres', 'top_lowres']
+        """
+
+        if type == 'top_highres':
+            ds = self.highres_aux_raw_ds
+            assert ds is not None
+            da_plot = self.process_top.ds_to_da(ds)
+        elif type == 'top_lowres':
+            ds = self.aux_raw_ds
+            assert ds is not None
+            da_plot = self.process_top.ds_to_da(ds)
+        elif type == 'era5':
+            ds = self.era5_raw_ds
+            assert ds is not None
+            da_plot = ds.isel(time=0)
+        else:
+            raise ValueError(f"type={type} not recognised, choose from ['era5', 'top_highres', 'top_lowres']")
+
+        ax = self.nzplot.nz_map_with_coastlines()
+        da_plot.plot()
+        if with_stations:
+            assert self.station_metadata is not None, 'Run process_stations() first or set with_stations=False'
+            ax = self.process_stations.plot_stations(self.station_metadata, ax)
+
+        res = self._lat_lon_dict(ds)
+        plt.title(f'Lat res: {res["lat"]:.4f} degrees, '
+                    f'lon res: {res["lon"]:.4f} degrees')
+        plt.show()
+
+
+    def _get_resolutions_dict(self):
+        resolutions = {
+            'topography_high_res': self._lat_lon_dict(self.aux_raw_ds),
+            'topography_low_res': self._lat_lon_dict(self.highres_aux_raw_ds),
+            'era5': self._lat_lon_dict(self.era5_raw_ds),
+        }
+        self.resolutions = resolutions
+        return resolutions
+
+
+    def _lat_lon_dict(self, ds):
+        return {
+            'lat': self.dataprocess.resolution(ds, 'latitude'),
+            'lon': self.dataprocess.resolution(ds, 'longitude'),
+            }
+    
+
+    def print_resolutions(self):
+        resolutions = self._get_resolutions_dict()
+        print(f"Topography highres:\n  lon={resolutions['topography_high_res']['lon']:.4f}, lat={resolutions['topography_high_res']['lat']:.4f} \nTopography lowres:\n  lon={resolutions['topography_low_res']['lon']:.4f}, lat={resolutions['topography_low_res']['lat']:.4f}\nERA5:\n  lon={resolutions['era5']['lon']:.4f}, lat={resolutions['era5']['lat']:.4f} ")
 
