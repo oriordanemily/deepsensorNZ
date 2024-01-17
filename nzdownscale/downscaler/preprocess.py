@@ -22,16 +22,22 @@ class PreprocessForDownscaling:
                  variable='temperature',
                  start_year=2000,
                  end_year=2001,
-                 train_start_year=2000,
+                 #train_start_year=2000,
                  val_start_year=2001,
+                 use_daily_data=True,
                  ) -> None:
+        
+        """
+        use_daily_data: if True, era5 and station data will be converted to daily data
+        """
         
         self.var = variable
         self.start_year = start_year
         self.end_year = end_year
-        self.train_start_year = train_start_year
+        #self.train_start_year = train_start_year
         self.val_start_year = val_start_year
         self.years = np.arange(start_year, end_year+1)
+        self.use_daily_data = use_daily_data
 
         self.dataprocess = utils.DataProcess()
 
@@ -53,6 +59,15 @@ class PreprocessForDownscaling:
         self.highres_aux_ds = None
         self.station_raw_df = None
         self.station_df = None
+
+        self._check_inputs()
+
+    
+    def _check_inputs(self):
+        # if self.use_daily_data is False:
+        #     raise NotImplementedError
+        if self.var == 'precipitation':
+            raise NotImplementedError
 
     
     def run_sequence(self):
@@ -105,10 +120,13 @@ class PreprocessForDownscaling:
         assert self.da_era is not None, "Run load_era5() first"
         assert self.highres_aux_raw_ds is not None, "Run preprocess_topography() first"
 
-        self.era5_coarsen_factor = coarsen_factor
+        # Convert hourly to daily data
+        if self.use_daily_data:
+            da_era = self._convert_era5_to_daily(self.da_era)
 
         # Coarsen
-        self.da_era_coarse = self._coarsen_era(self.da_era, coarsen_factor)
+        self.era5_coarsen_factor = coarsen_factor
+        self.da_era_coarse = self._coarsen_era5(da_era, self.era5_coarsen_factor)
 
         # Trim to topography extent
         da_era_trimmed = self._trim_era5(self.da_era_coarse, self.highres_aux_raw_ds)
@@ -234,7 +252,17 @@ class PreprocessForDownscaling:
         return highres_aux_raw_ds
     
 
-    def _coarsen_era(self,
+    def _convert_era5_to_daily(self, da_era):
+        if self.var == 'temperature':
+            function = 'mean'
+        elif self.var == 'precipitation':
+            function = 'sum'  # ? 
+            raise NotImplementedError
+        da = self.process_era.convert_hourly_to_daily(da_era, function)
+        return da
+    
+
+    def _coarsen_era5(self,
                     da_era,
                     coarsen_factor_era=10,
                     plot=False,
@@ -316,7 +344,7 @@ class PreprocessForDownscaling:
 
         df_list = []
         for path in tqdm(station_paths):
-            df = self.process_stations.load_station_df(path, var, daily=True)
+            df = self.process_stations.load_station_df(path, var, daily=self.use_daily_data)
             df_list.append(df)
         # print('Concatenating station data...')
         df = pd.concat(df_list)
@@ -392,11 +420,12 @@ class PreprocessForDownscaling:
     def get_processed_output_dict(self):
 
         date_info = {
-                'years': self.years,
+                #'years': self.years,
                 'start_year': self.start_year,
                 'end_year': self.end_year,
-                'train_start_year': self.train_start_year,
+                #'train_start_year': self.train_start_year,
                 'val_start_year': self.val_start_year,
+                'use_daily_data': self.use_daily_data,
             }
 
         data_settings = {

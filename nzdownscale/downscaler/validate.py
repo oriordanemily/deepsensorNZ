@@ -42,30 +42,48 @@ class ValidateV1:
         self.training_output_dict = training_output_dict
 
 
-    def initialise(self, load_model_path=None):
-        self.load_data_processor()
-        self.load_task_loader()
-        self.load_val_tasks()
-        if load_model_path is not None:
-            self.model = self.load_pretrained_model(load_model_path)
+    def get_model_setup_dict(self):
+
+        model_setup = Train(processed_output_dict=self.processed_output_dict)
+        model_setup.setup_task_loader()
+        model_setup.initialise_model()
+        model_setup_dict = model_setup.get_training_output_dict()
+        return model_setup_dict
+
+
+    def load_training_dict_data(self):
+        if self.training_output_dict is None:
+            training_dict = self.get_model_setup_dict()
         else:
-            self.model = self.load_model_from_training_sequence()
+            training_dict = self.training_output_dict
+        
+        self.data_processor = training_dict['data_processor']
+        self.task_loader = training_dict['task_loader']
+        self.val_tasks = training_dict['val_tasks']
+        
+        self.training_dict = training_dict
+        
+
+    def initialise(self, load_model_path=None):
+        
+        self.load_training_dict_data()
+
+        if load_model_path is not None:
+            self.model = self._load_pretrained_model(load_model_path)
+        else:
+            assert self.training_output_dict is not None, 'Need model from training_output_dict but training_output_dict=None'
+            self.model = self.training_output_dict['model']
 
 
-    def load_pretrained_model(self, model_path):
-        model = self.initialise_model()
+    def _load_pretrained_model(self, model_path):
+        model = self._initialise_model()
         model.model.load_state_dict(torch.load(model_path))
         return model
     
-    
-    def load_model_from_training_sequence(self):
-        assert self.training_output_dict is not None
-        return self.training_output_dict['model']
 
-
-    def initialise_model(self):
+    def _initialise_model(self):
         if self.training_output_dict is not None:
-            model = self.load_model_from_training_sequence()
+            model = self.training_output_dict['model']
         else:
             model = ConvNP(self.data_processor,
                         self.task_loader, 
@@ -73,47 +91,32 @@ class ValidateV1:
                         likelihood=self.convnp_settings['likelihood'], 
                         internal_density=self.convnp_settings['internal_density'],
                         ) 
-            
-            _ = model(self.val_tasks[0])   # ? 
+            _ = model(self.val_tasks[0])   # ? need ? 
         return model
     
-        
-    def load_data_processor(self):
-        self.data_processor = self.processed_output_dict['data_processor']
 
 
-    def load_task_loader(self):
-        if self.training_output_dict is not None:
-            self.task_loader = self.training_output_dict['task_loader']
-        else:
-            raise NotImplementedError
-            
-
-    def load_val_tasks(self):
-        if self.training_output_dict is not None:
-            self.val_tasks = self.training_output_dict['val_tasks']
-        else:
-            raise NotImplementedError
-
-
-    def initialise_plots(self):
+    def _initialise_plots(self):
         self.val_start_year = self.processed_output_dict['date_info']['val_start_year']
         self.era5_raw_ds = self.processed_output_dict['era5_raw_ds']
     
 
     # ! clean up below
 
-    def plot_example_prediction(self, task_loader, data_processor, model):
+    def plot_example_prediction(self):
 
-        self.initialise_plots()
+        ### initialise plots
+        task_loader = self.task_loader
+        data_processor = self.data_processor
+        model = self.model
+        era5_raw_ds = self.processed_output_dict['era5_raw_ds']
+        val_start_year = self.processed_output_dict['date_info']['val_start_year']
+        ###
 
-        crs = ccrs.PlateCarree()
-        X_t = self.era5_raw_ds
-        val_start_year = self.val_start_year
         date = f"{val_start_year}-06-25"
 
         test_task = task_loader(date, ["all", "all"], seed_override=42)
-        pred = model.predict(test_task, X_t=X_t, resolution_factor=2)
+        pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
 
         # Plot 1
         fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=ccrs.PlateCarree())
@@ -121,7 +124,7 @@ class ValidateV1:
         # Plot 2
         pred_db = pred['dry_bulb']
         fig, axes = self.gen_test_fig(
-            X_t.isel(time=0), 
+            era5_raw_ds.isel(time=0), 
             pred_db["mean"],
             pred_db["std"],
             add_colorbar=True,
@@ -195,20 +198,22 @@ class ValidateV1:
         return fig, axes
 
 
-    def emily_plots(self,
-                    station_raw_df,
-                    ):
+    def emily_plots(self):
 
-        self.initialise_plots()
-        val_start_year = self.val_start_year
-        era5_raw_ds = self.era5_raw_ds
+        ### initialise plots
+        val_start_year = self.processed_output_dict['date_info']['val_start_year']
+        era5_raw_ds = self.processed_output_dict['era5_raw_ds']
+        station_raw_df = self.processed_output_dict['station_raw_df']
+        
         task_loader = self.task_loader
         model = self.model
         crs = ccrs.PlateCarree()
+        #######
+        ### rest is Emily's code
 
         date = f"{val_start_year}-06-25"
         test_task = task_loader(date, ["all", "all"], seed_override=42)
-        pred = model.predict(test_task, X_t=X_t, resolution_factor=2)
+        pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
         pred_db = pred['dry_bulb']
         
         # %%

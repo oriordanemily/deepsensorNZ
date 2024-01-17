@@ -37,7 +37,7 @@ class Train:
             convnp_settings = {
                 'unet_channels': (64,)*4,
                 'likelihood': 'gnp',
-                'internal_density': 20,
+                'internal_density': 500,
             }
         if use_gpu:
             set_gpu_default_device()
@@ -53,9 +53,19 @@ class Train:
         self.station_df = processed_output_dict['station_df']
         self.data_processor = processed_output_dict['data_processor']
 
-        self.train_start_year = processed_output_dict['date_info']['train_start_year']
+        #self.train_start_year = processed_output_dict['date_info']['train_start_year']
+        self.start_year = processed_output_dict['date_info']['start_year']
+        self.end_year = processed_output_dict['date_info']['end_year']
         self.val_start_year = processed_output_dict['date_info']['val_start_year']
-        self.years = processed_output_dict['date_info']['years']
+        #self.years = processed_output_dict['date_info']['years']
+        self.years = np.arange(self.start_year, self.end_year+1)
+
+        self.model = None
+        self.train_losses = None
+        self.val_losses = None
+        self.train_tasks = None
+        self.val_tasks = None
+        self.task_loader = None
 
 
     def setup_task_loader(self, verbose=True):
@@ -64,7 +74,8 @@ class Train:
         highres_aux_ds = self.highres_aux_ds
         aux_ds = self.aux_ds
         station_df = self.station_df
-        train_start_year = self.train_start_year
+        start_year = self.start_year
+        #train_start_year = self.train_start_year
         val_start_year = self.val_start_year
         years = self.years
         
@@ -73,7 +84,7 @@ class Train:
                                 aux_at_targets=highres_aux_ds)
         print(task_loader)
 
-        train_start = f'{train_start_year}-01-01'
+        train_start = f'{start_year}-01-01'
         train_end = f'{val_start_year-1}-12-31'
         val_start = f'{val_start_year}-01-01'
         val_end = f'{years[-1]}-12-31'
@@ -228,6 +239,7 @@ class Train:
             'model': self.model,
             'train_losses': self.train_losses,
             'val_losses': self.val_losses,
+
             'train_tasks': self.train_tasks,
             'val_tasks': self.val_tasks,
             'task_loader': self.task_loader,
