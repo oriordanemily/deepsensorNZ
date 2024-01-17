@@ -407,7 +407,7 @@ class PreprocessForDownscaling:
         self.station_df = station_df
 
 
-    def get_processed_data_dict(self):
+    def get_processed_output_dict(self):
 
         date_info = {
                 'years': self.years,
@@ -424,7 +424,7 @@ class PreprocessForDownscaling:
             'resolutions': self._get_resolutions_dict()
         }
 
-        processed_data = {
+        processed_output_dict = {
             'data_processor': self.data_processor,
             'aux_ds': self.aux_ds,
             'era5_ds': self.era5_ds,
@@ -435,9 +435,9 @@ class PreprocessForDownscaling:
             'date_info': date_info,
         }
         
-        self.processed_data = processed_data
+        self.processed_output_dict = processed_output_dict
 
-        return processed_data
+        return processed_output_dict
 
 
     def plot_dataset(self,

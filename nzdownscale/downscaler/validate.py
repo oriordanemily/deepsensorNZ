@@ -15,6 +15,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cf
 import seaborn as sns
 from scipy.ndimage import gaussian_filter
+import torch
 
 import deepsensor.torch
 from deepsensor.data.loader import TaskLoader
@@ -35,9 +36,14 @@ from nzdownscale.dataprocess import era5, stations, topography, utils, config
 from nzdownscale.dataprocess.config import LOCATION_LATLON
 
 
+class ValidateV1:
+    def __init__(self) -> None:
+        pass
+
+
 #%% Use this for a trained model
 
-import torch
+
 folder = "models/downscaling/"
 model.model.load_state_dict(torch.load(folder + f"model_nosea_2.pt"))
 

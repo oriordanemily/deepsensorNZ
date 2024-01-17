@@ -69,7 +69,7 @@ era5_raw_ds = data.preprocess_era5(coarsen_factor=era5_coarsen_factor)
 station_raw_df = data.preprocess_stations()
 
 data.process_all(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
-processed_data = data.get_processed_data_dict()
+processed_output_dict = data.get_processed_output_dict()
 
 #%% 
 
@@ -81,7 +81,7 @@ data.plot_dataset('top_lowres')
 #%% 
 
 training = Train(
-    processed_data=processed_data,
+    processed_output_dict=processed_output_dict,
 )
 
 training.setup_task_loader()
