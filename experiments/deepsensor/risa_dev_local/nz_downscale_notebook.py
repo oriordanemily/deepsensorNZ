@@ -3,43 +3,26 @@ logging.captureWarnings(True)
 import os
 import time
 
-import xarray as xr
 import pandas as pd
 import numpy as np
-import scipy
 import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-import cartopy.feature as cf
 import seaborn as sns
-from scipy.ndimage import gaussian_filter
 
-import deepsensor.torch
-from deepsensor.data.loader import TaskLoader
-from deepsensor.data.processor import DataProcessor
-from deepsensor.model.convnp import ConvNP
-from deepsensor.active_learning.algorithms import GreedyAlgorithm
-from deepsensor.active_learning.acquisition_fns import Stddev
-from deepsensor.train.train import train_epoch, set_gpu_default_device
-from deepsensor.data.utils import construct_x1x2_ds
-from tqdm import tqdm
-
-from nzdownscale.dataprocess import era5, stations, topography, utils, config
-
-# from nzdownscale.dataprocess.era5 import ProcessERA5
-# from nzdownscale.dataprocess.stations import ProcessStations
-# from nzdownscale.dataprocess.topography import ProcessTopography
-# from nzdownscale.dataprocess.utils import DataProcess, PlotData
-from nzdownscale.dataprocess.config import LOCATION_LATLON
-#from nzdownscale import downscaler
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
+from nzdownscale.downscaler.validate import ValidateV1
 
+#%% 
+# ------------------------------------------
+# Settings
+# ------------------------------------------
 
 var = 'temperature'
 start_year = 2000
 end_year = 2001
 train_start_year = 2000
 val_start_year = 2001
+use_daily_data = True
 
 topography_highres_coarsen_factor = 30
 topography_lowres_coarsen_factor = 10
@@ -49,13 +32,16 @@ model_name_prefix = 'run_test'
 n_epochs = 2
 
 #%%
+# ------------------------------------------
+# Preprocess data
+# ------------------------------------------
 
 data = PreprocessForDownscaling(
-    variable = 'temperature',
+    variable = var,
     start_year = start_year,
     end_year = end_year,
-    train_start_year = train_start_year,
     val_start_year = val_start_year,
+    use_daily_data = use_daily_data,
 )
 
 data.load_topography()
@@ -69,21 +55,43 @@ station_raw_df = data.preprocess_stations()
 data.process_all(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
 processed_output_dict = data.get_processed_output_dict()
 
-#%% 
+# ------------------------------------------
+# Plot info
+# ------------------------------------------
 
 data.print_resolutions()
+
 data.plot_dataset('era5')
 data.plot_dataset('top_highres')
 data.plot_dataset('top_lowres')
 
-#%% 
+# ------------------------------------------
+# Train model
+# ------------------------------------------
 
-training = Train(
-    processed_output_dict=processed_output_dict,
-)
+training = Train(processed_output_dict=processed_output_dict,
+                convnp_settings='default',
+                )
 
 training.setup_task_loader()
 training.initialise_model()
 training.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix)
 
 training_output_dict = training.get_training_output_dict()
+
+# ------------------------------------------
+# Inspect trained model
+# ------------------------------------------
+
+validate = ValidateV1(
+    processed_output_dict=processed_output_dict,
+    #training_output_dict=training_output_dict,
+    training_output_dict=None,
+    )
+
+validate.initialise(load_model_path='models/downscaling/run1_model_1705453547.pt')
+
+#%% ! bug
+
+validate.plot_example_prediction()
+validate.emily_plots()

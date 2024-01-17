@@ -1,6 +1,6 @@
 import logging
 logging.captureWarnings(True)
-from typing import Literal
+from typing_extensions import Literal
 from tqdm import tqdm
 
 import xarray as xr

@@ -35,6 +35,7 @@ from nzdownscale.dataprocess.config import LOCATION_LATLON
 #from nzdownscale import downscaler
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
+from nzdownscale.downscaler.validate import ValidateV1
 
 # ------------------------------------------
 # Settings
@@ -44,12 +45,11 @@ from nzdownscale.downscaler.train import Train
 var = 'temperature'
 start_year = 2000
 end_year = 2001
-train_start_year = 2000
 val_start_year = 2001
 
 topography_highres_coarsen_factor = 30
-topography_lowres_coarsen_factor = 10
-era5_coarsen_factor = 10
+topography_lowres_coarsen_factor = 30
+era5_coarsen_factor = 30
 
 model_name_prefix = 'run_test'
 n_epochs = 2
@@ -62,8 +62,8 @@ data = PreprocessForDownscaling(
     variable = 'temperature',
     start_year = start_year,
     end_year = end_year,
-    train_start_year = train_start_year,
     val_start_year = val_start_year,
+    use_daily_data = True,
 )
 
 data.load_topography()
@@ -95,15 +95,78 @@ if False:
 # Train model
 # ------------------------------------------
 
-training = Train(
-    processed_output_dict=processed_output_dict,
-)
+training = Train(processed_output_dict=processed_output_dict,
+                 convnp_settings='default',
+                 )
 
 training.setup_task_loader()
 training.initialise_model()
 training.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix)
 
 training_output_dict = training.get_training_output_dict()
+
+#%% 
+
+# ------------------------------------------
+# Inspect trained model
+# ------------------------------------------
+
+validate = ValidateV1(
+    processed_output_dict=processed_output_dict,
+    #training_output_dict=training_output_dict,
+    training_output_dict=None,
+    )
+
+validate.initialise(load_model_path='models/downscaling/run1_model_1705453547.pt')
+
+#%% 
+
+# validate.processed_output_dict['era5_raw_ds']
+validate.plot_example_prediction()
+validate.emily_plots()
+
+
+#%% Debug ================================================
+
+self = validate
+
+### initialise plots
+task_loader = self.task_loader
+data_processor = self.data_processor
+model = self.model
+era5_raw_ds = self.processed_output_dict['era5_raw_ds']
+val_start_year = self.processed_output_dict['date_info']['val_start_year']
+###
+
+date = f"{val_start_year}-06-25"
+
+test_task = task_loader(date, ["all", "all"], seed_override=42)
+pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
+
+# Plot 1
+fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=ccrs.PlateCarree())
+
+# Plot 2
+pred_db = pred['dry_bulb']
+
+fig, axes = self.gen_test_fig(
+    era5_raw_ds.isel(time=0), 
+    pred_db["mean"],
+    pred_db["std"],
+    add_colorbar=True,
+    var_cbar_label="2m temperature [°C]",
+    std_cbar_label="std dev [°C]",
+    std_clim=(None, 2),
+    figsize=(20, 20/3)
+)
+
+#%% 
+
+model_setup = Train(processed_output_dict=processed_output_dict,)
+model_setup.setup_task_loader()
+model_setup.initialise_model()
+model_setup_dict = model_setup.get_training_output_dict()
+
 
 #%% 
 #%% ==============

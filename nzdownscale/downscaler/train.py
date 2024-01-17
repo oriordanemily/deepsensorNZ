@@ -245,8 +245,8 @@ class Train:
             'task_loader': self.task_loader,
             'data_processor': self.data_processor,
 
-            'model_settings': self.convnp_settings,
-            'metadata': self.metadata_dict,
+            'convnp_settings': self.convnp_settings,
+            'metadata_dict': self.metadata_dict,
         }
         return training_output_dict
     

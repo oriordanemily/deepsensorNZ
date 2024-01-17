@@ -40,9 +40,20 @@ class ValidateV1:
         
         self.processed_output_dict = processed_output_dict
         self.training_output_dict = training_output_dict
+        
+
+    def initialise(self, load_model_path=None):
+        
+        self._load_training_dict_data()
+
+        if load_model_path is not None:
+            self.model = self._load_pretrained_model(load_model_path)
+        else:
+            assert self.training_output_dict is not None, 'Need model from training_output_dict but training_output_dict=None'
+            self.model = self.training_output_dict['model']
 
 
-    def get_model_setup_dict(self):
+    def _get_model_setup_dict(self):
 
         model_setup = Train(processed_output_dict=self.processed_output_dict)
         model_setup.setup_task_loader()
@@ -51,28 +62,18 @@ class ValidateV1:
         return model_setup_dict
 
 
-    def load_training_dict_data(self):
+    def _load_training_dict_data(self):
         if self.training_output_dict is None:
-            training_dict = self.get_model_setup_dict()
+            training_dict = self._get_model_setup_dict()
         else:
             training_dict = self.training_output_dict
         
         self.data_processor = training_dict['data_processor']
         self.task_loader = training_dict['task_loader']
         self.val_tasks = training_dict['val_tasks']
+        self.convnp_settings = training_dict['convnp_settings']
         
         self.training_dict = training_dict
-        
-
-    def initialise(self, load_model_path=None):
-        
-        self.load_training_dict_data()
-
-        if load_model_path is not None:
-            self.model = self._load_pretrained_model(load_model_path)
-        else:
-            assert self.training_output_dict is not None, 'Need model from training_output_dict but training_output_dict=None'
-            self.model = self.training_output_dict['model']
 
 
     def _load_pretrained_model(self, model_path):
@@ -94,7 +95,6 @@ class ValidateV1:
             _ = model(self.val_tasks[0])   # ? need ? 
         return model
     
-
 
     def _initialise_plots(self):
         self.val_start_year = self.processed_output_dict['date_info']['val_start_year']
@@ -123,6 +123,7 @@ class ValidateV1:
 
         # Plot 2
         pred_db = pred['dry_bulb']
+        
         fig, axes = self.gen_test_fig(
             era5_raw_ds.isel(time=0), 
             pred_db["mean"],
@@ -135,7 +136,7 @@ class ValidateV1:
         )
         
 
-    def gen_test_fig(era5_raw_ds=None, mean_ds=None, std_ds=None, samples_ds=None, add_colorbar=False, var_clim=None, std_clim=None, var_cbar_label=None, std_cbar_label=None, fontsize=None, figsize=(15, 5)):
+    def gen_test_fig(era5_ds_plot=None, mean_ds=None, std_ds=None, samples_ds=None, add_colorbar=False, var_clim=None, std_clim=None, var_cbar_label=None, std_cbar_label=None, fontsize=None, figsize=(15, 5)):
         
         crs = ccrs.PlateCarree()
 
@@ -155,7 +156,7 @@ class ValidateV1:
             std_vmax = None
 
         ncols = 0
-        if era5_raw_ds is not None:
+        if era5_ds_plot is not None:
             ncols += 1
         if mean_ds is not None:
             ncols += 1
@@ -167,10 +168,10 @@ class ValidateV1:
         fig, axes = plt.subplots(1, ncols, subplot_kw=dict(projection=crs), figsize=figsize)
 
         axis_i = 0
-        if era5_raw_ds is not None:
+        if era5_ds_plot is not None:
             ax = axes[axis_i]
             # era5_raw_ds.sel(lat=slice(mean_ds["lat"].min(), mean_ds["lat"].max()), lon=slice(mean_ds["lon"].min(), mean_ds["lon"].max())).plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=False)
-            era5_raw_ds.plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=add_colorbar, cbar_kwargs=dict(label=var_cbar_label))
+            era5_ds_plot.plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=add_colorbar, cbar_kwargs=dict(label=var_cbar_label))
             ax.set_title("ERA5", fontsize=fontsize)
 
         if mean_ds is not None:
