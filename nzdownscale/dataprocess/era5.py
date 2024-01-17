@@ -17,6 +17,7 @@ class ProcessERA5(DataProcess):
     def load_ds(self, 
                 var: Literal[tuple(VARIABLE_OPTIONS)],
                 years: List=None,
+                daily: bool=False,
                 ) -> xr.Dataset:
         """ 
         Loads dataset
@@ -25,7 +26,13 @@ class ProcessERA5(DataProcess):
             years (list): specific years, retrieves all if set to None
         """
         filenames = self.get_filenames(var, years)
-        return xr.open_mfdataset(filenames)
+        ds = xr.open_mfdataset(filenames)
+        if daily:
+            ds = ds.resample(time="D").mean()
+            # ds['time'] = ds['time'].dt.strftime('%Y-%m-%d')
+            return ds
+        else:
+            return ds
 
     
     def ds_to_da(self,

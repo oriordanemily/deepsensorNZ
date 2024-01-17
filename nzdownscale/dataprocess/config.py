@@ -4,7 +4,8 @@ VARIABLE_OPTIONS = ['temperature', 'precipitation']
 
 DATA_PATHS = {
     'ERA5': {
-        'parent': 'data/ERA5-land',
+        # 'parent': '/mnt/datasets/ERA5/NZ_land/',
+        'parent': '/mnt/datasets/ERA5/NZ_2D/ecmwf/'
     },    
     'topography': {
         'parent': 'data/topography',
