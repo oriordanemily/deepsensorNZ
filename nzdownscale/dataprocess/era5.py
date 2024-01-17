@@ -43,6 +43,20 @@ class ProcessERA5(DataProcess):
         if var == 'temperature':
             da = self.kelvin_to_celsius(da)
         return da
+
+
+    def convert_hourly_to_daily(self, 
+                                ds, 
+                                function:Literal['mean', 'sum']='mean'):
+        if function == 'mean':
+            ds = ds.resample(time='D').mean()
+        elif function == 'sum':
+            ds = ds.resample(time='D').sum()
+        else:
+            raise ValueError(f'function={function} not recognised')
+        # ! below line causes error in convNP run
+        #ds['time'] = ds['time'].dt.strftime('%Y-%m-%d')
+        return ds
     
 
     def coarsen_da(self, da: xr.DataArray, coarsen_by: int, boundary: str = 'trim'):
@@ -81,8 +95,10 @@ class ProcessERA5(DataProcess):
         
         return filenames
 
+
     def kelvin_to_celsius(self, da: xr.DataArray):
         return da - 273.15
+    
 
 if __name__ == '__main__':
     pass
