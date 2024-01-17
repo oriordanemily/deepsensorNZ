@@ -58,9 +58,7 @@ class Train:
         self.years = processed_output_dict['date_info']['years']
 
 
-
-
-    def setup_task_loader(self):
+    def setup_task_loader(self, verbose=True):
 
         era5_ds = self.era5_ds
         highres_aux_ds = self.highres_aux_ds

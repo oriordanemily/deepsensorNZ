@@ -1,37 +1,20 @@
-#%% 
 import logging
 logging.captureWarnings(True)
-import os
-import time
 from typing import Literal
+from tqdm import tqdm
 
 import xarray as xr
 import pandas as pd
 import numpy as np
-import scipy
 import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
 import cartopy.feature as cf
-import seaborn as sns
 from scipy.ndimage import gaussian_filter
 
-import deepsensor.torch
-from deepsensor.data.loader import TaskLoader
 from deepsensor.data.processor import DataProcessor
-from deepsensor.model.convnp import ConvNP
-from deepsensor.active_learning.algorithms import GreedyAlgorithm
-from deepsensor.active_learning.acquisition_fns import Stddev
-from deepsensor.train.train import train_epoch, set_gpu_default_device
 from deepsensor.data.utils import construct_x1x2_ds
-from tqdm import tqdm
-
 from nzdownscale.dataprocess import era5, stations, topography, utils, config
-
-# from nzdownscale.dataprocess.era5 import ProcessERA5
-# from nzdownscale.dataprocess.stations import ProcessStations
-# from nzdownscale.dataprocess.topography import ProcessTopography
-# from nzdownscale.dataprocess.utils import DataProcess, PlotData
 from nzdownscale.dataprocess.config import LOCATION_LATLON
+
 
 class PreprocessForDownscaling:
 
@@ -304,7 +287,6 @@ class PreprocessForDownscaling:
             era5_raw_ds.isel(time=0).plot()
             ax.set_title('ERA5 with topography extent');
 
-        self.era5_raw_ds = era5_raw_ds
         return era5_raw_ds
 
 
@@ -430,6 +412,9 @@ class PreprocessForDownscaling:
             'era5_ds': self.era5_ds,
             'highres_aux_ds': self.highres_aux_ds,
             'station_df': self.station_df,
+
+            'station_raw_df': self.station_raw_df,
+            'era5_raw_ds': self.era5_raw_ds,
             
             'data_settings': data_settings,
             'date_info': date_info,
