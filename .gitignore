@@ -22,6 +22,10 @@ __pycache__
 
 # models
 *.pt
+*.txt
+
+# wandb
+*wandb*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
