@@ -1,5 +1,5 @@
 import os
-from typing import Literal
+from typing_extensions import Literal
 import pickle
 
 import numpy as np
