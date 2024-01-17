@@ -42,7 +42,7 @@ train_start_year = 2000
 val_start_year = 2001
 
 topography_highres_coarsen_factor = 30
-topography_lowres_coarsen_factor = 3
+topography_lowres_coarsen_factor = 10
 era5_coarsen_factor = 10
 
 model_name_prefix = 'run_test'
@@ -84,4 +84,6 @@ training = Train(
 
 training.setup_task_loader()
 training.initialise_model()
-training.train_model(n_epochs=n_epochs)
+training.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix)
+
+training_output_dict = training.get_training_output_dict()

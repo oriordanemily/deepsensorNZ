@@ -36,7 +36,11 @@ from nzdownscale.dataprocess.config import LOCATION_LATLON
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
 
+# ------------------------------------------
+# Settings
+# ------------------------------------------
 
+# End year is inclusive
 var = 'temperature'
 start_year = 2000
 end_year = 2001
@@ -44,13 +48,15 @@ train_start_year = 2000
 val_start_year = 2001
 
 topography_highres_coarsen_factor = 30
-topography_lowres_coarsen_factor = 3
-era5_coarsen_factor = 5
+topography_lowres_coarsen_factor = 10
+era5_coarsen_factor = 10
 
 model_name_prefix = 'run_test'
 n_epochs = 2
 
-#%%
+# ------------------------------------------
+# Preprocess data
+# ------------------------------------------
 
 data = PreprocessForDownscaling(
     variable = 'temperature',
@@ -73,12 +79,21 @@ processed_output_dict = data.get_processed_output_dict()
 
 #%% 
 
+# ------------------------------------------
+# Plot info
+# ------------------------------------------
+
 data.print_resolutions()
-data.plot_dataset('era5')
-data.plot_dataset('top_highres')
-data.plot_dataset('top_lowres')
+if False:
+    data.plot_dataset('era5')
+    data.plot_dataset('top_highres')
+    data.plot_dataset('top_lowres')
 
 #%% 
+
+# ------------------------------------------
+# Train model
+# ------------------------------------------
 
 training = Train(
     processed_output_dict=processed_output_dict,
@@ -86,7 +101,9 @@ training = Train(
 
 training.setup_task_loader()
 training.initialise_model()
-training.train_model(n_epochs=n_epochs)
+training.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix)
+
+training_output_dict = training.get_training_output_dict()
 
 #%% 
 #%% ==============

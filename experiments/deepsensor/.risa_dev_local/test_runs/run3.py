@@ -47,9 +47,11 @@ topography_lowres_coarsen_factor = 10
 era5_coarsen_factor = 5
 
 model_name_prefix = 'run3'
-epochs = 30
+n_epochs = 30
 
 #%%
+
+#%% 
 
 data = PreprocessForDownscaling(
     variable = 'temperature',
@@ -63,21 +65,24 @@ data.load_topography()
 data.load_era5()
 data.load_stations()
 
-highres_aux_raw_ds, aux_raw_ds = data.preprocess_topography(highres_coarsen_factor=topography_highres_coarsen_factor, lowres_coarsen_factor=topography_lowres_coarsen_factor)
+highres_aux_raw_ds, aux_raw_ds = data.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
 era5_raw_ds = data.preprocess_era5(coarsen_factor=era5_coarsen_factor)
 station_raw_df = data.preprocess_stations()
 
-processed_data = data.process_all(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
+data.process_all(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
+processed_output_dict = data.get_processed_output_dict()
 
-print(processed_data.keys())
+data.print_resolutions()
+# data.plot_dataset('era5')
+# data.plot_dataset('top_highres')
+# data.plot_dataset('top_lowres')
 
-#%% 
 
 training = Train(
-    processed_data=processed_data,
+    processed_output_dict=processed_output_dict,
 )
 
 training.setup_task_loader()
 training.initialise_model()
-training.train_model(n_epochs=epochs, model_name_prefix=model_name_prefix)
+training.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix)
 
