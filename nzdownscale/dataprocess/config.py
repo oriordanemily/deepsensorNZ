@@ -4,18 +4,18 @@ VARIABLE_OPTIONS = ['temperature', 'precipitation']
 
 DATA_PATHS = {
     'ERA5': {
-        # 'parent': 'data/ERA5-land',
-        'parent': '/mnt/datasets/ERA5/NZ_land',
+        'parent': 'data/ERA5-land',
+        #'parent': '/mnt/datasets/ERA5/NZ_land',
     },    
     'topography': {
-        # 'parent': 'data/topography',
-        # 'file': 'data/topography/nz_elevation_200m.nc',
-        'parent': 'experiments/deepsensor/data/data/topography',
-        'file': 'experiments/deepsensor/data/topography/nz_elevation_200m.nc',
+        'parent': 'data/topography',
+        'file': 'data/topography/nz_elevation_200m.nc',
+        #'parent': 'experiments/deepsensor/data/data/topography',
+        #'file': 'experiments/deepsensor/data/topography/nz_elevation_200m.nc',
     },    
     'stations': {
-        # 'parent': 'data/stations',
-        'parent': '/mnt/datasets/NationalClimateDatabase/NetCDFFilesByVariableAndSite/Hourly',
+        'parent': 'data/stations',
+        #'parent': '/mnt/datasets/NationalClimateDatabase/NetCDFFilesByVariableAndSite/Hourly',
     },
 }
 
@@ -81,4 +81,10 @@ LOCATION_LATLON = {
     'twizel': np.array([-44.2615, 170.0876]),
     'wellington': np.array([-41.2924, 174.7787]),
     'whangarei': np.array([-35.7275, 174.3166]),
+}
+
+CONVNP_KWARGS_DEFAULT = {
+    'unet_channels': (64,)*4,
+    'likelihood': 'gnp',
+    'internal_density': 500,
 }

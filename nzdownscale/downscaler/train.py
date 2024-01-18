@@ -20,12 +20,6 @@ from deepsensor.model.convnp import ConvNP
 from deepsensor.train.train import train_epoch, set_gpu_default_device
 from nzdownscale.dataprocess import config, utils
 
-CONVNP_KWARGS_DEFAULT = {
-    'unet_channels': (64,)*4,
-    'likelihood': 'gnp',
-    'internal_density': 500,
-}
-
 
 class Train:
     def __init__(self,
@@ -137,7 +131,7 @@ class Train:
         """
 
         if convnp_kwargs is None:
-            convnp_kwargs = CONVNP_KWARGS_DEFAULT
+            convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
     
         # Set up model
         model = ConvNP(self.data_processor,

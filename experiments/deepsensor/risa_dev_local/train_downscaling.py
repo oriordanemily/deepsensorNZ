@@ -5,22 +5,14 @@ import argparse
 
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
-from nzdownscale.downscaler.validate import ValidateV1
-
-
-CONVNP_KWARGS_DEFAULT = {
-    'unet_channels': (64,)*4,
-    'likelihood': 'gnp',
-    'internal_density': 50,
-}
+from nzdownscale.dataprocess import config
 
 
 def main():
     """
     Example:
 
-    python experiments/deepsensor/risa_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2001 --topography_highres_coarsen_factor=30 --topography_lowres_coarsen_factor=10 --era5_coarsen_factor=5 --model_name_prefix='test' --n_epochs=3
-
+    python experiments/deepsensor/risa_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=30 --topography_lowres_coarsen_factor=30 --era5_coarsen_factor=30 --model_name_prefix='test' --n_epochs=3  --internal_density=5
     """
 
     parser = argparse.ArgumentParser()
@@ -90,21 +82,75 @@ def main():
 
     parser.add_argument(
         "--unet_channels",
-        default=None,
-        help="ConvNP model argument",
+        default=tuple,
+        help="ConvNP model argument, uses default CONVNP_KWARGS_DEFAULT if not set",
     ),
     parser.add_argument(
         "--likelihood",
         default=None,
-        help="ConvNP model argument",
+        type=str,
+        help="ConvNP model argument, uses default CONVNP_KWARGS_DEFAULT if not set",
     ),
     parser.add_argument(
         "--internal_density",
+        type=int,
         default=None,
-        help="ConvNP model argument",
+        help="ConvNP model argument, uses default CONVNP_KWARGS_DEFAULT if not set",
     ),    
 
     args = parser.parse_args()
+
+    # ------------------------------------------
+    # Settings
+    # ------------------------------------------
+    var = args.var
+    start_year = args.start_year
+    end_year = args.end_year
+    val_start_year = args.val_start_year
+    val_end_year = args.val_end_year
+    use_daily_data = args.use_daily_data
+
+    topography_highres_coarsen_factor = args.topography_highres_coarsen_factor
+    topography_lowres_coarsen_factor = args.topography_lowres_coarsen_factor
+    era5_coarsen_factor = args.era5_coarsen_factor
+
+    model_name_prefix = args.model_name_prefix
+    n_epochs = args.n_epochs
+
+    convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
+    if args.unet_channels is not None:
+        convnp_kwargs['unet_channels'] = args.unet_channels
+    if args.likelihood is not None:
+        convnp_kwargs['likelihood'] = args.likelihood
+    if args.internal_density is not None:
+        convnp_kwargs['internal_density'] = args.internal_density
+
+    # ------------------------------------------
+    # Preprocess data
+    # ------------------------------------------
+    data = PreprocessForDownscaling(
+        variable = var,
+        start_year = start_year,
+        end_year = end_year,
+        val_start_year = val_start_year,
+        val_end_year = val_end_year,
+        use_daily_data = use_daily_data,
+    )
+    data.run_processing_sequence(
+        topography_highres_coarsen_factor,
+        topography_lowres_coarsen_factor, 
+        era5_coarsen_factor,
+        )
+    processed_output_dict = data.get_processed_output_dict()
+    data.print_resolutions()
+
+    # ------------------------------------------
+    # Train model
+    # ------------------------------------------
+
+    training = Train(processed_output_dict=processed_output_dict)
+
+    training.run_training_sequence(n_epochs, model_name_prefix, **convnp_kwargs)
 
 
 if __name__ == '__main__':
