@@ -26,13 +26,6 @@ from tqdm import tqdm
 
 from nzdownscale.dataprocess import era5, stations, topography, utils, config
 
-# from nzdownscale.dataprocess.era5 import ProcessERA5
-# from nzdownscale.dataprocess.stations import ProcessStations
-# from nzdownscale.dataprocess.topography import ProcessTopography
-# from nzdownscale.dataprocess.utils import DataProcess, PlotData
-# from nzdownscale.dataprocess.config import DATA_PATHS
-
-
 #%% Settings
 
 # Variables
