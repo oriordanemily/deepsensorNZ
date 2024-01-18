@@ -121,9 +121,7 @@ def main():
     # Train model
     # ------------------------------------------
 
-    training = Train(processed_output_dict=processed_output_dict,
-                    convnp_settings='default',
-                    )
+    training = Train(processed_output_dict=processed_output_dict)
 
     training.setup_task_loader()
     training.initialise_model()

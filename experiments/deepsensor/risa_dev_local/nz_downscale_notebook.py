@@ -1,3 +1,4 @@
+#%%
 import logging
 logging.captureWarnings(True)
 import os
@@ -11,9 +12,10 @@ import seaborn as sns
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
 from nzdownscale.downscaler.validate import ValidateV1
+from nzdownscale.dataprocess import utils
+
 
 #%% 
-# ------------------------------------------
 # Settings
 # ------------------------------------------
 
@@ -25,14 +27,19 @@ val_start_year = 2001
 use_daily_data = True
 
 topography_highres_coarsen_factor = 30
-topography_lowres_coarsen_factor = 10
-era5_coarsen_factor = 10
+topography_lowres_coarsen_factor = 30
+era5_coarsen_factor = 30
 
-model_name_prefix = 'run_test'
+model_name_prefix = 'new_test'
 n_epochs = 2
 
-#%%
-# ------------------------------------------
+convnp_kwargs = {
+    'unet_channels': (64,)*4,
+    'likelihood': 'gnp',
+    'internal_density': 10,
+}
+
+#%% 
 # Preprocess data
 # ------------------------------------------
 
@@ -55,7 +62,7 @@ station_raw_df = data.preprocess_stations()
 data.process_all(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
 processed_output_dict = data.get_processed_output_dict()
 
-# ------------------------------------------
+#%% 
 # Plot info
 # ------------------------------------------
 
@@ -65,23 +72,23 @@ data.plot_dataset('era5')
 data.plot_dataset('top_highres')
 data.plot_dataset('top_lowres')
 
-# ------------------------------------------
+#%% 
 # Train model
 # ------------------------------------------
 
-training = Train(processed_output_dict=processed_output_dict,
-                convnp_settings='default',
-                )
+training = Train(processed_output_dict=processed_output_dict)
 
 training.setup_task_loader()
-training.initialise_model()
+training.initialise_model(**convnp_kwargs)
 training.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix)
 
 training_output_dict = training.get_training_output_dict()
 
-# ------------------------------------------
+#%%
 # Inspect trained model
 # ------------------------------------------
+
+train_metadata = utils.open_pickle('models/downscaling/metadata/new_test_model_1705591929.pkl')
 
 validate = ValidateV1(
     processed_output_dict=processed_output_dict,

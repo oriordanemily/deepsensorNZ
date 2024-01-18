@@ -96,7 +96,7 @@ if False:
 # ------------------------------------------
 
 training = Train(processed_output_dict=processed_output_dict,
-                 convnp_settings='default',
+                 convnp_args='default',
                  )
 
 training.setup_task_loader()

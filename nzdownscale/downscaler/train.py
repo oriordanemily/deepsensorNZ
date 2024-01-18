@@ -20,29 +20,32 @@ from deepsensor.model.convnp import ConvNP
 from deepsensor.train.train import train_epoch, set_gpu_default_device
 from nzdownscale.dataprocess import config, utils
 
+CONVNP_KWARGS_DEFAULT = {
+    'unet_channels': (64,)*4,
+    'likelihood': 'gnp',
+    'internal_density': 500,
+}
+
 
 class Train:
     def __init__(self,
                  processed_output_dict,
-                 convnp_settings='default',
-                 save_model_path='models/downscaling',
-                 use_gpu=True,
+                 save_model_path: int = 'models/downscaling',
+                 use_gpu: bool = True,
                  ) -> None:
         """
-        processed_output_dict: 
-            output from nzdownscale.downscaler.getdata.GetData()
+        Args:
+            processed_output_dict (dict):
+                Output from nzdownscale.downscaler.getdata.GetData()
+            save_model_path (int):
+                Best models are saved in this directory
+            use_gpu (bool): 
+                Uses GPU if True       
         """
 
-        if convnp_settings == 'default':
-            convnp_settings = {
-                'unet_channels': (64,)*4,
-                'likelihood': 'gnp',
-                'internal_density': 500,
-            }
         if use_gpu:
             set_gpu_default_device()
 
-        self.convnp_settings = convnp_settings
         self.save_model_path = save_model_path
         self.processed_output_dict = processed_output_dict
         self.metadata_dict = {k: processed_output_dict[k] for k in ['data_settings', 'date_info']}
@@ -53,11 +56,10 @@ class Train:
         self.station_df = processed_output_dict['station_df']
         self.data_processor = processed_output_dict['data_processor']
 
-        #self.train_start_year = processed_output_dict['date_info']['train_start_year']
         self.start_year = processed_output_dict['date_info']['start_year']
         self.end_year = processed_output_dict['date_info']['end_year']
         self.val_start_year = processed_output_dict['date_info']['val_start_year']
-        #self.years = processed_output_dict['date_info']['years']
+
         self.years = np.arange(self.start_year, self.end_year+1)
 
         self.model = None
@@ -68,7 +70,7 @@ class Train:
         self.task_loader = None
 
 
-    def setup_task_loader(self, verbose=True):
+    def setup_task_loader(self, verbose=False):
 
         era5_ds = self.era5_ds
         highres_aux_ds = self.highres_aux_ds
@@ -82,7 +84,8 @@ class Train:
         task_loader = TaskLoader(context=[era5_ds, aux_ds],
                                 target=station_df, 
                                 aux_at_targets=highres_aux_ds)
-        print(task_loader)
+        if verbose:
+            print(task_loader)
 
         train_start = f'{start_year}-01-01'
         train_end = f'{val_start_year-1}-12-31'
@@ -103,10 +106,12 @@ class Train:
             task = task_loader(date, context_sampling="all", target_sampling="all")
             val_tasks.append(task)
 
-        print("Loading Dask arrays...")
+        if verbose:
+            print("Loading Dask arrays...")
         task_loader.load_dask()
         tic = time.time()
-        print(f"Done in {time.time() - tic:.2f}s")                
+        if verbose:
+            print(f"Done in {time.time() - tic:.2f}s")                
 
         self.task_loader = task_loader    
         self.train_tasks = train_tasks
@@ -115,23 +120,29 @@ class Train:
         return task_loader     
 
 
-    def initialise_model(self):
+    def initialise_model(self, **convnp_kwargs):
+        """
+        Args:
+            convnp_kwargs (dict):
+                Inputs to deepsensor.model.convnp.ConvNP(). Uses default CONVNP_KWARGS_DEFAULT if not provided.
+        """
 
+        if convnp_kwargs is None:
+            convnp_kwargs = CONVNP_KWARGS_DEFAULT
+    
         # Set up model
         model = ConvNP(self.data_processor,
                     self.task_loader, 
-                    unet_channels=self.convnp_settings['unet_channels'], 
-                    likelihood=self.convnp_settings['likelihood'], 
-                    internal_density=self.convnp_settings['internal_density'],
-                    ) 
-
-        #internal density edited to make model fit into memory -
-        # may want to adjust down the line
-
+                    **convnp_kwargs,
+                    )
+    
         # Print number of parameters to check model is not too large for GPU memory
         _ = model(self.val_tasks[0])
         print(f"Model has {deepsensor.backend.nps.num_params(model.model):,} parameters")
+        
+        self.convnp_kwargs = dict(convnp_kwargs)
         self.model = model
+        
 
 
     def plot_context_encodings(self):
@@ -219,7 +230,7 @@ class Train:
                     self.make_loss_plot(train_losses, 
                                     val_losses, 
                                     f"{self.save_model_path}/losses", 
-                                    f"model_{model_id}.png")
+                                    f"{model_name}.png")
 
         #     print(f"Epoch {epoch} train_loss: {train_loss:.2f}, val_loss: {val_loss:.2f}")
 
@@ -227,7 +238,7 @@ class Train:
             self.make_loss_plot(train_losses, 
                              val_losses, 
                              f"{self.save_model_path}/losses", 
-                             f"model_{model_id}.png")
+                             f"{model_name}.png")
 
         self.model = model
         self.train_losses = train_losses
@@ -245,7 +256,7 @@ class Train:
             'task_loader': self.task_loader,
             'data_processor': self.data_processor,
 
-            'convnp_settings': self.convnp_settings,
+            'convnp_kwargs': self.convnp_kwargs,
             'metadata_dict': self.metadata_dict,
         }
         return training_output_dict
