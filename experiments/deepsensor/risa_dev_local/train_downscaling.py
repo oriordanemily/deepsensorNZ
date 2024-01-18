@@ -35,8 +35,14 @@ def main():
     parser.add_argument(
         "--val_start_year",
         type=int,
-        default=2001,
+        default=2002,
         help='Validation start year'
+    ),
+    parser.add_argument(
+        "--val_end_year",
+        type=int,
+        default=2002,
+        help='Validation end year is inclusive'
     ),
     parser.add_argument(
         "--topography_highres_coarsen_factor",
@@ -47,6 +53,7 @@ def main():
         "--topography_lowres_coarsen_factor",
         type=int,
         default=10,
+        help='Note that the lowres topo is coarsened from the highres topo, so the lowres topo resolution is actually topography_highres_coarsen_factor * topography_lowres_coarsen_factor.'
     ),
     parser.add_argument(
         "--era5_coarsen_factor",
@@ -76,6 +83,7 @@ def main():
     start_year = args.start_year
     end_year = args.end_year
     val_start_year = args.val_start_year
+    val_end_year = args.val_end_year
 
     topography_highres_coarsen_factor = args.topography_highres_coarsen_factor
     topography_lowres_coarsen_factor = args.topography_lowres_coarsen_factor
@@ -93,6 +101,7 @@ def main():
         start_year = start_year,
         end_year = end_year,
         val_start_year = val_start_year,
+        val_end_year = val_end_year,
         use_daily_data = use_daily_data,
     )
 
