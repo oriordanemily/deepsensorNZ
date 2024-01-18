@@ -82,7 +82,8 @@ def main():
 
     parser.add_argument(
         "--unet_channels",
-        default=tuple,
+        default=None,
+        type=tuple,
         help="ConvNP model argument, uses default CONVNP_KWARGS_DEFAULT if not set",
     ),
     parser.add_argument(
