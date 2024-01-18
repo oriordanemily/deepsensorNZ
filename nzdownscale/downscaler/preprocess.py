@@ -60,18 +60,30 @@ class PreprocessForDownscaling:
         self.station_raw_df = None
         self.station_df = None
 
-        self._check_inputs()
+        self._check_args()
 
     
-    def _check_inputs(self):
+    def _check_args(self):
         # if self.use_daily_data is False:
         #     raise NotImplementedError
         if self.var == 'precipitation':
             raise NotImplementedError
 
     
-    def run_sequence(self):
-        pass
+    def run_processing_sequence(self,
+        topography_highres_coarsen_factor,
+        topography_lowres_coarsen_factor,
+        era5_coarsen_factor,
+        ):
+        
+        self.load_topography()
+        self.load_era5()
+        self.load_stations()
+
+        highres_aux_raw_ds, aux_raw_ds = self.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
+        era5_raw_ds = self.preprocess_era5(coarsen_factor=era5_coarsen_factor)
+        station_raw_df = self.preprocess_stations()
+        self.process_all_for_training(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
 
 
     def load_topography(self):
@@ -364,7 +376,7 @@ class PreprocessForDownscaling:
         return station_raw_df
 
 
-    def process_all(self,
+    def process_all_for_training(self,
                     era5_raw_ds,
                     aux_raw_ds,
                     highres_aux_raw_ds,
@@ -429,9 +441,10 @@ class PreprocessForDownscaling:
             }
 
         data_settings = {
+            'var': self.var,
             'era5_coarsen_factor': self.era5_coarsen_factor,
-            'topography_highres_coasen_factor': self.topography_highres_coarsen_factor,
-            'topography_lowres_coasen_factor': self.topography_lowres_coarsen_factor,
+            'topography_highres_coarsen_factor': self.topography_highres_coarsen_factor,
+            'topography_lowres_coarsen_factor': self.topography_lowres_coarsen_factor,
             'resolutions': self._get_resolutions_dict()
         }
 

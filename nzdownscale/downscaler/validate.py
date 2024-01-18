@@ -27,53 +27,122 @@ from deepsensor.train.train import train_epoch, set_gpu_default_device
 from deepsensor.data.utils import construct_x1x2_ds
 from tqdm import tqdm
 
+from nzdownscale.downscaler.train import Train
+from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.dataprocess import era5, stations, topography, utils, config
 from nzdownscale.dataprocess.config import LOCATION_LATLON
-from nzdownscale.downscaler.train import Train
 
 
 class ValidateV1:
     def __init__(self,
-                 processed_output_dict,
-                 training_output_dict=None,                 
+                 processed_output_dict: dict = None,
+                 training_output_dict: dict = None,
+                 training_metadata_path: str = None,
                  ) -> None:
+        """
+        Args:
+            processed_output_dict (dict, optional):
+                Dict output from nzdownscale.downscaler.preprocess.PreprocessForDownscaling.get_processed_output_dict()
+            training_output_dict (dict, optional): 
+                Dict output from nzdownscale.downscaler.train.Train.get_training_output_dict()
+            training_metadata_path (int, optional):
+                (If loading pretrained model) Path to dictionary pickle file for training metadata, saved with model e.g. 'models/downscaling/metadata/test_model_1705594143.pkl'
+        """
         
         self.processed_output_dict = processed_output_dict
         self.training_output_dict = training_output_dict
+        self.training_metadata_path = training_metadata_path
+
+        self._check_args()
+
+
+    def _check_args(self):
+        if self.training_output_dict is None and self.training_metadata_path is None:
+            raise ValueError('Either training_output_dict or training_metadata_path must be provided')
+        
+        if self.processed_output_dict is None and self.training_metadata_path is None:
+            raise ValueError('Either processed_output_dict or training_metadata_path must be provided')
         
 
-    def initialise(self, load_model_path=None):
+    def load_model(self, load_model_path=None):
+
+        self.model_metadata = self.get_metadata()
         
+        self._load_processed_dict_data()
         self._load_training_dict_data()
 
         if load_model_path is not None:
             self.model = self._load_pretrained_model(load_model_path)
         else:
-            assert self.training_output_dict is not None, 'Need model from training_output_dict but training_output_dict=None'
+            if self.training_output_dict is None: 
+                raise ValueError('training_output_dict is required if not loading pretrained model. Please provide load_model_path or training_output_dict during class instantiation')
             self.model = self.training_output_dict['model']
 
 
-    def _get_model_setup_dict(self):
+    def get_metadata(self):
+        if self.training_metadata_path is not None:
+            return utils.open_pickle(self.training_metadata_path)
+        elif self.training_output_dict is not None:
+            return self.training_output_dict['metadata_dict']
 
-        model_setup = Train(processed_output_dict=self.processed_output_dict)
-        model_setup.setup_task_loader()
-        model_setup.initialise_model()
-        model_setup_dict = model_setup.get_training_output_dict()
-        return model_setup_dict
+
+    def _load_processed_dict_data(self):
+        
+        if self.processed_output_dict is not None:
+            processed_dict = self.processed_output_dict
+        else:
+            processed_dict = self._get_processed_output_dict_from_metadata()
+        
+        self.processed_dict = processed_dict 
+
+
+    def _get_processed_output_dict_from_metadata(self):
+
+        if not hasattr(self, 'model_metadata'):
+            self.model_metadata = self.get_metadata()
+        
+        data = PreprocessForDownscaling(
+            variable = self.model_metadata['data_settings']['var'],
+            start_year = self.model_metadata['date_info']['start_year'],
+            end_year = self.model_metadata['date_info']['end_year'],
+            val_start_year = self.model_metadata['date_info']['val_start_year'],
+            use_daily_data = self.model_metadata['date_info']['use_daily_data'],
+        )
+        data.run_processing_sequence(
+            self.model_metadata['data_settings']['topography_highres_coarsen_factor'],
+            self.model_metadata['data_settings']['topography_lowres_coarsen_factor'], 
+            self.model_metadata['data_settings']['era5_coarsen_factor'],
+            )
+        processed_output_dict = data.get_processed_output_dict()
+        return processed_output_dict
 
 
     def _load_training_dict_data(self):
+
         if self.training_output_dict is None:
-            training_dict = self._get_model_setup_dict()
+            training_dict = self._get_training_output_dict_from_metadata()
         else:
             training_dict = self.training_output_dict
         
         self.data_processor = training_dict['data_processor']
         self.task_loader = training_dict['task_loader']
         self.val_tasks = training_dict['val_tasks']
-        self.convnp_settings = training_dict['convnp_settings']
-        
+
         self.training_dict = training_dict
+
+
+    def _get_training_output_dict_from_metadata(self):
+
+        if not hasattr(self, 'model_metadata'):
+            self.model_metadata = self.get_metadata()
+
+        model_setup = Train(processed_output_dict=self.processed_dict)
+        model_setup.setup_task_loader()
+        model_setup.initialise_model(**self.model_metadata['convnp_kwargs'])
+        training_output_dict = model_setup.get_training_output_dict()
+        training_output_dict['metadata_dict'] = self.model_metadata
+
+        return training_output_dict
 
 
     def _load_pretrained_model(self, model_path):
@@ -85,21 +154,16 @@ class ValidateV1:
     def _initialise_model(self):
         if self.training_output_dict is not None:
             model = self.training_output_dict['model']
+            self.training_dict['model'] = model
         else:
+            convnp_kwargs = self.training_dict['metadata_dict']['convnp_kwargs']
             model = ConvNP(self.data_processor,
                         self.task_loader, 
-                        unet_channels=self.convnp_settings['unet_channels'], 
-                        likelihood=self.convnp_settings['likelihood'], 
-                        internal_density=self.convnp_settings['internal_density'],
+                        **convnp_kwargs,
                         ) 
             _ = model(self.val_tasks[0])   # ? need ? 
         return model
-    
 
-    def _initialise_plots(self):
-        self.val_start_year = self.processed_output_dict['date_info']['val_start_year']
-        self.era5_raw_ds = self.processed_output_dict['era5_raw_ds']
-    
 
     # ! clean up below
 
@@ -109,8 +173,8 @@ class ValidateV1:
         task_loader = self.task_loader
         data_processor = self.data_processor
         model = self.model
-        era5_raw_ds = self.processed_output_dict['era5_raw_ds']
-        val_start_year = self.processed_output_dict['date_info']['val_start_year']
+        era5_raw_ds = self.processed_dict['era5_raw_ds']
+        val_start_year = self.processed_dict['date_info']['val_start_year']
         ###
 
         date = f"{val_start_year}-06-25"
@@ -202,9 +266,9 @@ class ValidateV1:
     def emily_plots(self):
 
         ### initialise plots
-        val_start_year = self.processed_output_dict['date_info']['val_start_year']
-        era5_raw_ds = self.processed_output_dict['era5_raw_ds']
-        station_raw_df = self.processed_output_dict['station_raw_df']
+        val_start_year = self.processed_dict['date_info']['val_start_year']
+        era5_raw_ds = self.processed_dict['era5_raw_ds']
+        station_raw_df = self.processed_dict['station_raw_df']
         
         task_loader = self.task_loader
         model = self.model

@@ -74,7 +74,7 @@ highres_aux_raw_ds, aux_raw_ds = data.preprocess_topography(topography_highres_c
 era5_raw_ds = data.preprocess_era5(coarsen_factor=era5_coarsen_factor)
 station_raw_df = data.preprocess_stations()
 
-data.process_all(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
+data.process_all_for_training(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
 processed_output_dict = data.get_processed_output_dict()
 
 #%% 
@@ -99,9 +99,11 @@ training = Train(processed_output_dict=processed_output_dict,
                  convnp_args='default',
                  )
 
-training.setup_task_loader()
-training.initialise_model()
-training.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix)
+training.run_training_sequence(n_epochs, model_name_prefix, **convnp_kwargs)
+
+# training.setup_task_loader()
+# training.initialise_model()
+# training.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix)
 
 training_output_dict = training.get_training_output_dict()
 
@@ -117,7 +119,7 @@ validate = ValidateV1(
     training_output_dict=None,
     )
 
-validate.initialise(load_model_path='models/downscaling/run1_model_1705453547.pt')
+validate.load_model(load_model_path='models/downscaling/run1_model_1705453547.pt')
 
 #%% 
 

@@ -3,6 +3,7 @@ import logging
 logging.captureWarnings(True)
 import os
 import time
+import importlib
 
 import pandas as pd
 import numpy as np
@@ -36,12 +37,14 @@ n_epochs = 2
 convnp_kwargs = {
     'unet_channels': (64,)*4,
     'likelihood': 'gnp',
-    'internal_density': 10,
+    'internal_density': 5,
 }
 
 #%% 
 # Preprocess data
 # ------------------------------------------
+
+from nzdownscale.downscaler import preprocess;importlib.reload(preprocess);from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 
 data = PreprocessForDownscaling(
     variable = var,
@@ -50,16 +53,11 @@ data = PreprocessForDownscaling(
     val_start_year = val_start_year,
     use_daily_data = use_daily_data,
 )
-
-data.load_topography()
-data.load_era5()
-data.load_stations()
-
-highres_aux_raw_ds, aux_raw_ds = data.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
-era5_raw_ds = data.preprocess_era5(coarsen_factor=era5_coarsen_factor)
-station_raw_df = data.preprocess_stations()
-
-data.process_all(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
+data.run_processing_sequence(
+    topography_highres_coarsen_factor,
+    topography_lowres_coarsen_factor, 
+    era5_coarsen_factor,
+    )
 processed_output_dict = data.get_processed_output_dict()
 
 #%% 
@@ -75,30 +73,49 @@ data.plot_dataset('top_lowres')
 #%% 
 # Train model
 # ------------------------------------------
+from nzdownscale.downscaler import train;importlib.reload(train);from nzdownscale.downscaler.train import Train
 
 training = Train(processed_output_dict=processed_output_dict)
 
-training.setup_task_loader()
-training.initialise_model(**convnp_kwargs)
-training.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix)
+training.run_training_sequence(n_epochs, model_name_prefix, **convnp_kwargs)
 
 training_output_dict = training.get_training_output_dict()
 
 #%%
-# Inspect trained model
+# Load trained model
 # ------------------------------------------
 
-train_metadata = utils.open_pickle('models/downscaling/metadata/new_test_model_1705591929.pkl')
+# Option 1: load from processed_output_dict and training_output_dict just created
+from nzdownscale.downscaler import validate;importlib.reload(validate);from nzdownscale.downscaler.validate import ValidateV1
 
 validate = ValidateV1(
     processed_output_dict=processed_output_dict,
-    #training_output_dict=training_output_dict,
-    training_output_dict=None,
+    training_output_dict=training_output_dict,
     )
+validate.load_model()
 
-validate.initialise(load_model_path='models/downscaling/run1_model_1705453547.pt')
+metadata = validate.get_metadata()
+print(metadata)
+model = validate.model
 
-#%% ! bug
+#%% 
+# Option 2: load from saved model
+
+train_metadata_path = 'models/downscaling/metadata/new_test_model_1705600368.pkl'
+model_path = 'models/downscaling/new_test_model_1705600368.pt'
+
+validate = ValidateV1(
+training_metadata_path=train_metadata_path)
+validate.load_model(load_model_path=model_path)
+
+metadata = validate.get_metadata()
+print(metadata)
+model = validate.model
+
+#%%
+# Inspect trained model
+# ------------------------------------------
+# ! bug
 
 validate.plot_example_prediction()
 validate.emily_plots()

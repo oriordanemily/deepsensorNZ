@@ -9,7 +9,6 @@ data_jasmin/
 experiments/deepsensor/gallery_demos
 tmp/
 models/
-#experiments/deepsensor/nz_downscaling.py
 
 # misc
 **/.ipynb_checkpoints/

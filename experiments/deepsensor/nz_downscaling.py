@@ -33,14 +33,15 @@ from nzdownscale.dataprocess import era5, stations, topography, utils, config
 # from nzdownscale.dataprocess.utils import DataProcess, PlotData
 from nzdownscale.dataprocess.config import LOCATION_LATLON
 
-
 #%% Settings
 
 # Variables
 var = 'temperature'
 # var = 'precipitation'
-years = [2000, 2001]  
-# years = [2000, 2001, 2002]  #  add in more years 
+years = [2000, 2001]
+
+train_start_year = 2000
+val_start_year = 2001
 
 # plotting
 crs = ccrs.PlateCarree()
@@ -52,18 +53,20 @@ if use_gpu:
 
 dataprocess = utils.DataProcess()
 
-#%% load elevation 
+#%% Load data
+
+# load elevation 
 
 process_top = topography.ProcessTopography()
 ds_elev = process_top.open_ds()
 
-#%% load ERA5
+# load ERA5
 
 process_era = era5.ProcessERA5()
 ds_era = process_era.load_ds(var, years)
 da_era = process_era.ds_to_da(ds_era, var)
 
-#%% load stations (covering specified years)
+# load stations (covering specified years)
 
 process_stations = stations.ProcessStations()
 station_paths = process_stations.get_path_all_stations(var)
@@ -72,19 +75,21 @@ df = process_stations.get_metadata_df(var)
 # this was only using stations that have data across all years
 # have changed to use stations covering any part of the years specified
 # check this with Risa
-# df_filtered = df[(df['start_year']<years[-1]) & (df['end_year']>=years[0])]
-df_filtered = df[(df['start_year']<years[0]) & (df['end_year']>=years[-1])]
+
+df_filtered = df[(df['start_year']<years[-1]) & (df['end_year']>=years[0])]
+#df_filtered = df[(df['start_year']<years[0]) & (df['end_year']>=years[-1])]
 station_paths_filtered = list(df_filtered.index)
 print(len(station_paths_filtered))
 
 #%% plot era5 snapshot with stations
 
-nzplot = utils.PlotData()
-ax = nzplot.nz_map_with_coastlines()
-da_era.isel(time=0).plot()
-ax = process_stations.plot_stations(df, ax)
-plt.title('ERA5 with stations');
-# plt.plot()
+if False:
+    nzplot = utils.PlotData()
+    ax = nzplot.nz_map_with_coastlines()
+    da_era.isel(time=0).plot()
+    ax = process_stations.plot_stations(df, ax)
+    plt.title('ERA5 with stations')
+    # plt.plot()
 
 #%% Coarsen and plot (ERA5 and topography)
 # note that this was just coarsened to make the model fit into memory 
@@ -112,7 +117,7 @@ plt.title(f'{str_coarsened}ERA5\n'
 plt.plot()
 
 # Topography = 0.002 degrees (~200m)
-coarsen_factor_topo = 5 #5
+coarsen_factor_topo = 30  #5
 if coarsen_factor_topo == 1:
     ds_elev_coarse = ds_elev
 else:
@@ -181,7 +186,7 @@ for window_size in [.1, .05, .025]:
 #%% Low resolution topography 
 # Q for Risa: why do we input this too - model learns difference in res?
 
-coarsen_factor = 20# int(latres_era/latres_topo) #changed this to match era5 resolution
+coarsen_factor = 10 # int(latres_era/latres_topo) #changed this to match era5 resolution
 aux_raw_ds = process_top.coarsen_da(ds_elev_coarse, coarsen_factor)
 aux_raw_ds = process_top.ds_to_da(aux_raw_ds)
 latres = dataprocess.resolution(aux_raw_ds, 'latitude')
@@ -193,8 +198,6 @@ aux_raw_ds.plot()
 plt.title(f'Low-res topography\nLat res: {latres:.4f} degrees, lon res: {lonres:.4f} degrees')
 plt.show()
 
-#%% 
-
 # Print resolution of lowres and highres elevation data
 print(f"Lowres topo lat resolution: "
       f"{dataprocess.resolution(aux_raw_ds, 'latitude'):.4f} degrees")
@@ -204,6 +207,7 @@ print(f"Highres topo lat resolution: "
       f"{dataprocess.resolution(highres_aux_raw_ds, 'latitude'):.4f} degrees")
 print(f"Highres topo lon resolution: "
       f"{dataprocess.resolution(highres_aux_raw_ds, 'longitude'):.4f} degrees")
+
 #%% 
 
 # Slice era5 data to elevation data's spatial extent
@@ -242,7 +246,7 @@ station_raw_df = station_raw_df_.set_index(['time',
                                             'longitude']).sort_index()
 ###
 
-station_raw_df
+# station_raw_df
 
 #%% Normalise and preprocess data
 
@@ -275,13 +279,13 @@ if TEST_NORM:
     pd.testing.assert_frame_equal(station_raw_df, station_df_unnormalised)
     print(f"Unnormalised station_df matches raw data")
 
-#%% 
 # Generate auxiliary dataset of x1/x2 coordinates to break translation 
 # equivariance in the model's CNN to enable learning non-stationarity
 x1x2_ds = construct_x1x2_ds(aux_ds)
 aux_ds['x1_arr'] = x1x2_ds['x1_arr']
 aux_ds['x2_arr'] = x1x2_ds['x2_arr']
-aux_ds
+
+#aux_ds
 
 # should we add 2d circular day of year variable? see collapsed cell 
 # https://tom-andersson.github.io/deepsensor/user-guide/convnp.html#initialising-a-convnp
@@ -293,10 +297,10 @@ task_loader = TaskLoader(context=[era5_ds, aux_ds],
                         aux_at_targets=hires_aux_ds)
 print(task_loader)
 
-train_start = '2000-01-01'
-train_end = '2000-12-31'
-val_start = '2001-01-01'
-val_end = '2001-12-31'
+train_start = f'{train_start_year}-01-01'
+train_end = f'{val_start_year-1}-12-31'
+val_start = f'{val_start_year}-01-01'
+val_end = f'{years[-1]}-12-31'
 
 train_dates = era5_raw_ds.sel(time=slice(train_start, train_end)).time.values
 val_dates = era5_raw_ds.sel(time=slice(val_start, val_end)).time.values
@@ -313,13 +317,14 @@ for date in tqdm(val_dates, desc="Loading val tasks..."):
     val_tasks.append(task)
 
 print("Loading Dask arrays...")
-tic = time.time()
 task_loader.load_dask()
+tic = time.time()
 print(f"Done in {time.time() - tic:.2f}s")
 
 #%% Inspect train task
 
 train_tasks[0]
+
 #%%
 
 # Set up model
@@ -327,25 +332,27 @@ model = ConvNP(data_processor,
                task_loader, 
                unet_channels=(64,)*4, 
                likelihood="gnp", 
-               internal_density=50) 
+               #internal_density=50,
+               internal_density=20,
+               ) 
+
 #internal density edited to make model fit into memory -
 # may want to adjust down the line
-
 
 # Print number of parameters to check model is not too large for GPU memory
 _ = model(val_tasks[0])
 print(f"Model has {deepsensor.backend.nps.num_params(model.model):,} parameters")
 
-
 #%% Plot context encoding
 
 fig = deepsensor.plot.context_encoding(model, train_tasks[0], task_loader)
+plt.show()
 
-#%%
+#
 fig = deepsensor.plot.task(train_tasks[0], task_loader)
 plt.show()
 
-#%%
+#
 
 fig, ax = plt.subplots(1, 1, figsize=(7, 7), subplot_kw=dict(projection=crs))
 ax.coastlines()
@@ -361,7 +368,8 @@ ax.set_extent([minlon, maxlon, minlat, maxlat], crs)
 
 deepsensor.plot.offgrid_context(ax, val_tasks[0], data_processor, task_loader, plot_target=True, add_legend=True, linewidths=0.5)
 plt.show()
-# fig.savefig("train_stations.png", bbox_inches="tight")
+
+# fig.savefig("tmp/train_stations.png", bbox_inches="tight")
 
 #%% Train
 
@@ -373,7 +381,7 @@ def compute_val_loss(model, val_tasks):
         val_losses_not_nan = [arr for arr in val_losses if~ np.isnan(arr)]
     return np.mean(val_losses_not_nan)
 
-n_epochs = 30
+n_epochs = 2
 train_losses = []
 val_losses = []
 
@@ -398,25 +406,27 @@ for epoch in tqdm(range(n_epochs)):
 
 #     print(f"Epoch {epoch} train_loss: {train_loss:.2f}, val_loss: {val_loss:.2f}")
 
+plt.figure()
+plt.plot(train_losses, label='Train loss')
+plt.plot(val_losses, label='Val loss')
+plt.show()
+fig.savefig("tmp/losses.png", bbox_inches="tight")
 
 #%% Use this for a trained model
+
 import torch
 folder = "models/downscaling/"
 model.model.load_state_dict(torch.load(folder + f"model_nosea_2.pt"))
-    
 
 #%% Look at some of the validation data
 
-date = "2001-06-25"
+date = f"{val_start_year}-06-25"
 test_task = task_loader(date, ["all", "all"], seed_override=42)
 pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
-
 
 fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=ccrs.PlateCarree())
 
 #%%
-
-
 
 def gen_test_fig(era5_raw_ds=None, mean_ds=None, std_ds=None, samples_ds=None, add_colorbar=False, var_clim=None, std_clim=None, var_cbar_label=None, std_cbar_label=None, fontsize=None, figsize=(15, 5)):
     if var_clim is None:
@@ -490,24 +500,25 @@ fig, axes = gen_test_fig(
     figsize=(20, 20/3)
 )
 
-
-
 # %%
 
 location = "alexandra"
 if location not in LOCATION_LATLON:
     raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
 X_t = LOCATION_LATLON[location]
-dates = pd.date_range("2001-09-01", "2001-10-31")
-station_raw_df
+dates = pd.date_range(f"{val_start_year}-09-01", f"{val_start_year}-10-31")
+#station_raw_df
+
 # %%
 locs = set(zip(station_raw_df.reset_index()["latitude"], station_raw_df.reset_index()["longitude"]))
 locs
+
 # %%
 # Find closest station to desired target location
 X_station_closest = min(locs, key=lambda loc: np.linalg.norm(np.array(loc) - X_t))
 X_t = np.array(X_station_closest)#.reshape(2, 1)
 X_t
+
 # %%
 # As above but zooming in
 lat_slice = slice(X_t[0] + 2, X_t[0] - 2)
@@ -525,7 +536,6 @@ fig, axes = gen_test_fig(
 # Plot X_t
 for ax in axes:
     ax.scatter(X_t[1], X_t[0], marker="s", color="black", transform=crs, s=10**2, facecolors='none', linewidth=2)
-
 
 # %%
 # Get station target data
@@ -546,11 +556,11 @@ ax.scatter([loc[1] for loc in locs], [loc[0] for loc in locs], transform=crs, co
 era5_raw_df = era5_raw_ds.sel(latitude=X_t[0], longitude=X_t[1], method="nearest").to_dataframe()
 era5_raw_df = era5_raw_df.loc[dates]
 era5_raw_df
+
 #%%
 test_tasks = task_loader(dates, "all")
 preds = model.predict(test_tasks, X_t=era5_raw_ds, resolution_factor=2)
 preds_db = preds['dry_bulb']
-
 
 #%%
 
@@ -573,4 +583,7 @@ ax.set_ylabel("2m temperature [°C]")
 ax.set_xticks(range(len(era5_raw_df))[::14])
 ax.set_xticklabels(era5_raw_df.index[::14].strftime("%Y-%m-%d"), rotation=15)
 ax.set_title(f"ConvNP prediction for {location}", y=1.15)
+
+fig.savefig("tmp/predictions_example.png", bbox_inches="tight")
+
 # %%

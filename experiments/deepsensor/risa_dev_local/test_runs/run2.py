@@ -67,7 +67,7 @@ highres_aux_raw_ds, aux_raw_ds = data.preprocess_topography(topography_highres_c
 era5_raw_ds = data.preprocess_era5(coarsen_factor=era5_coarsen_factor)
 station_raw_df = data.preprocess_stations()
 
-data.process_all(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
+data.process_all_for_training(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
 processed_output_dict = data.get_processed_output_dict()
 
 data.print_resolutions()

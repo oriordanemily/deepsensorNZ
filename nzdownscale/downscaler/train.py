@@ -48,7 +48,6 @@ class Train:
 
         self.save_model_path = save_model_path
         self.processed_output_dict = processed_output_dict
-        self.metadata_dict = {k: processed_output_dict[k] for k in ['data_settings', 'date_info']}
 
         self.era5_ds = processed_output_dict['era5_ds']
         self.highres_aux_ds = processed_output_dict['highres_aux_ds']
@@ -63,12 +62,20 @@ class Train:
         self.years = np.arange(self.start_year, self.end_year+1)
 
         self.model = None
-        self.train_losses = None
-        self.val_losses = None
         self.train_tasks = None
         self.val_tasks = None
         self.task_loader = None
+        self.train_losses = []
+        self.val_losses = []
+        self.metadata_dict = None
+        self.convnp_kwargs = None
 
+
+    def run_training_sequence(self, n_epochs, model_name_prefix, **convnp_kwargs):
+
+        self.setup_task_loader()
+        self.initialise_model(**convnp_kwargs)
+        self.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix)
 
     def setup_task_loader(self, verbose=False):
 
@@ -142,7 +149,7 @@ class Train:
         
         self.convnp_kwargs = dict(convnp_kwargs)
         self.model = model
-        
+
 
 
     def plot_context_encodings(self):
@@ -224,6 +231,10 @@ class Train:
                 val_loss_best = val_loss
                 if not os.path.exists(self.save_model_path): os.makedirs(self.save_model_path)
                 torch.save(model.model.state_dict(), f"{self.save_model_path}/{model_name}.pt")
+
+                self.train_losses = train_losses
+                self.val_losses = val_losses
+
                 self.save_metadata(f"{self.save_model_path}/metadata", f'{model_name}')
 
                 if plot_losses:
@@ -246,6 +257,10 @@ class Train:
 
 
     def get_training_output_dict(self):
+
+        if self.metadata_dict is None:
+            self._construct_metadata_dict()
+
         training_output_dict = {
             'model': self.model,
             'train_losses': self.train_losses,
@@ -256,15 +271,23 @@ class Train:
             'task_loader': self.task_loader,
             'data_processor': self.data_processor,
 
-            'convnp_kwargs': self.convnp_kwargs,
             'metadata_dict': self.metadata_dict,
         }
         return training_output_dict
     
 
     def save_metadata(self, folder, name):
+        self._construct_metadata_dict()
         if not os.path.exists(folder): os.makedirs(folder)
         utils.save_pickle(self.metadata_dict, f"{folder}/{name}.pkl")
+
+
+    def _construct_metadata_dict(self):
+        metadata_dict = {k: self.processed_output_dict[k] for k in ['data_settings', 'date_info']}
+        metadata_dict['convnp_kwargs'] = self.convnp_kwargs
+        metadata_dict['train_losses'] = self.train_losses
+        metadata_dict['val_losses'] = self.val_losses
+        self.metadata_dict = metadata_dict
 
 
     def make_loss_plot(self, train_losses, val_losses, folder='tmp', save_name="model_loss.png"):
