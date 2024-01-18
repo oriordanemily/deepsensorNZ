@@ -31,7 +31,7 @@ from nzdownscale.dataprocess import era5, stations, topography, utils, config
 # from nzdownscale.dataprocess.stations import ProcessStations
 # from nzdownscale.dataprocess.topography import ProcessTopography
 # from nzdownscale.dataprocess.utils import DataProcess, PlotData
-from nzdownscale.dataprocess.config import LOCATION_LATLON
+# from nzdownscale.dataprocess.config import LOCATION_LATLON
 #from nzdownscale import downscaler
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
@@ -45,6 +45,8 @@ train_start_year = 2000
 val_start_year = 2003
 
 topography_highres_coarsen_factor = 30
+# note that the lowres topo is coarsened from the highres topo, so the lowres topo resolution is actually 30*10 = 300
+# think this should be changed to its actual coarsening value?
 topography_lowres_coarsen_factor = 10
 era5_coarsen_factor = 5
 

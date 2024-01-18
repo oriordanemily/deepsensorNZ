@@ -2,6 +2,7 @@ import logging
 logging.captureWarnings(True)
 from typing_extensions import Literal
 from tqdm import tqdm
+import warnings
 
 import xarray as xr
 import pandas as pd
@@ -22,8 +23,8 @@ class PreprocessForDownscaling:
                  variable='temperature',
                  start_year=2000,
                  end_year=2001,
-                 #train_start_year=2000,
-                 val_start_year=2001,
+                 val_start_year=2002,
+                 val_end_year=2002,
                  use_daily_data=True,
                  ) -> None:
         
@@ -34,9 +35,9 @@ class PreprocessForDownscaling:
         self.var = variable
         self.start_year = start_year
         self.end_year = end_year
-        #self.train_start_year = train_start_year
         self.val_start_year = val_start_year
-        self.years = np.arange(start_year, end_year+1)
+        self.val_end_year = val_end_year
+        self.years = np.arange(start_year, val_end_year+1)
         self.use_daily_data = use_daily_data
 
         self.dataprocess = utils.DataProcess()
@@ -96,7 +97,6 @@ class PreprocessForDownscaling:
 
     
     def load_stations(self):
-        print("Loading stations")
         #station_paths = process_stations.get_path_all_stations(var)
         self.station_metadata_all = self.process_stations.get_metadata_df(self.var)
 
@@ -162,6 +162,7 @@ class PreprocessForDownscaling:
                                ds_elev,
                                coarsen_factor=30,
                                plot=False,
+                               fillna=True,
                                ):
         
         process_top = self.process_top
@@ -174,7 +175,8 @@ class PreprocessForDownscaling:
             ds_elev_highres = process_top.coarsen_da(ds_elev, coarsen_factor)
 
         #fill all nan values with 0 to avoid training error
-        ds_elev_highres = ds_elev_highres.fillna(0)
+        if fillna:
+            ds_elev_highres = ds_elev_highres.fillna(0)
 
         if plot:
             da_elev_highres = process_top.ds_to_da(ds_elev_highres)
@@ -355,7 +357,7 @@ class PreprocessForDownscaling:
         station_paths = list(df_station_metadata.index)
 
         df_list = []
-        for path in tqdm(station_paths):
+        for path in tqdm(station_paths, desc='Loading filtered stations'):
             df = self.process_stations.load_station_df(path, var, daily=self.use_daily_data)
             df_list.append(df)
         # print('Concatenating station data...')
@@ -437,6 +439,7 @@ class PreprocessForDownscaling:
                 'end_year': self.end_year,
                 #'train_start_year': self.train_start_year,
                 'val_start_year': self.val_start_year,
+                'val_end_year': self.val_end_year,
                 'use_daily_data': self.use_daily_data,
             }
 
@@ -504,8 +507,8 @@ class PreprocessForDownscaling:
 
     def _get_resolutions_dict(self):
         resolutions = {
-            'topography_high_res': self._lat_lon_dict(self.aux_raw_ds),
-            'topography_low_res': self._lat_lon_dict(self.highres_aux_raw_ds),
+            'topography_high_res': self._lat_lon_dict(self.highres_aux_raw_ds),
+            'topography_low_res': self._lat_lon_dict(self.aux_raw_ds),
             'era5': self._lat_lon_dict(self.era5_raw_ds),
         }
         self.resolutions = resolutions
@@ -522,4 +525,8 @@ class PreprocessForDownscaling:
     def print_resolutions(self):
         resolutions = self._get_resolutions_dict()
         print(f"Topography highres:\n  lon={resolutions['topography_high_res']['lon']:.4f}, lat={resolutions['topography_high_res']['lat']:.4f} \nTopography lowres:\n  lon={resolutions['topography_low_res']['lon']:.4f}, lat={resolutions['topography_low_res']['lat']:.4f}\nERA5:\n  lon={resolutions['era5']['lon']:.4f}, lat={resolutions['era5']['lat']:.4f} ")
+        if resolutions['topography_high_res']['lon'] > resolutions['era5']['lon'] or resolutions['topography_high_res']['lat'] > resolutions['era5']['lat']:
+            warnings.warn("highres topography resolution is higher than ERA5 resolution", UserWarning)
+        if resolutions['topography_high_res']['lon'] > resolutions['topography_low_res']['lon'] or resolutions['topography_high_res']['lat'] > resolutions['topography_low_res']['lon']:
+            warnings.warn("lowres topography resolution is higher than highres topography resolution", UserWarning)
 

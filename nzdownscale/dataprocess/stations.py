@@ -89,7 +89,7 @@ class ProcessStations(DataProcess):
 
         station_paths = self.get_path_all_stations(var)        
         dict_md = {}
-        for f in tqdm(station_paths):
+        for f in tqdm(station_paths, desc='Loading stations'):
             try:
                 ds = self.load_station(f)
                 lon, lat = self.get_lon_lat(ds)
