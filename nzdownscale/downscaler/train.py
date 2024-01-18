@@ -57,6 +57,7 @@ class Train:
         self.start_year = processed_output_dict['date_info']['start_year']
         self.end_year = processed_output_dict['date_info']['end_year']
         self.val_start_year = processed_output_dict['date_info']['val_start_year']
+        self.val_end_year = processed_output_dict['date_info']['val_end_year']
         #self.years = processed_output_dict['date_info']['years']
         self.years = np.arange(self.start_year, self.end_year+1)
 
@@ -77,7 +78,8 @@ class Train:
         start_year = self.start_year
         #train_start_year = self.train_start_year
         val_start_year = self.val_start_year
-        years = self.years
+        val_end_year = self.val_end_year
+        # years = self.years
         
         task_loader = TaskLoader(context=[era5_ds, aux_ds],
                                 target=station_df, 
@@ -87,7 +89,7 @@ class Train:
         train_start = f'{start_year}-01-01'
         train_end = f'{val_start_year-1}-12-31'
         val_start = f'{val_start_year}-01-01'
-        val_end = f'{years[-1]}-12-31'
+        val_end = f'{val_end_year}-12-31'
 
         train_dates = era5_ds.sel(time=slice(train_start, train_end)).time.values
         val_dates = era5_ds.sel(time=slice(val_start, val_end)).time.values
