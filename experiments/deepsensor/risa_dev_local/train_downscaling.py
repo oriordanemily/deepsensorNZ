@@ -33,12 +33,13 @@ def main():
         "--start_year",
         type=int,
         default=2000,
+        help='Training start year'
     ),
     parser.add_argument(
         "--end_year",
         type=int,
         default=2001,
-        help='End year is inclusive'
+        help='Training end year is inclusive'
     ),
     parser.add_argument(
         "--val_start_year",
@@ -104,8 +105,6 @@ def main():
     ),    
 
     args = parser.parse_args()
-
-
 
 
 if __name__ == '__main__':

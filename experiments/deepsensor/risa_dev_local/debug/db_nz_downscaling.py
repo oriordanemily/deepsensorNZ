@@ -15,6 +15,7 @@ from nzdownscale.downscaler.train import Train
 from nzdownscale.downscaler.validate import ValidateV1
 from nzdownscale.dataprocess import utils
 
+
 #%% 
 # Settings
 # ------------------------------------------
@@ -42,6 +43,8 @@ convnp_kwargs = {
 #%% 
 # Preprocess data
 # ------------------------------------------
+
+from nzdownscale.downscaler import preprocess;importlib.reload(preprocess);from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 
 data = PreprocessForDownscaling(
     variable = var,
@@ -71,6 +74,7 @@ data.plot_dataset('top_lowres')
 #%% 
 # Train model
 # ------------------------------------------
+from nzdownscale.downscaler import train;importlib.reload(train);from nzdownscale.downscaler.train import Train
 
 training = Train(processed_output_dict=processed_output_dict)
 
@@ -83,6 +87,7 @@ training_output_dict = training.get_training_output_dict()
 # ------------------------------------------
 
 # Option 1: load from processed_output_dict and training_output_dict just created
+from nzdownscale.downscaler import validate;importlib.reload(validate);from nzdownscale.downscaler.validate import ValidateV1
 
 validate = ValidateV1(
     processed_output_dict=processed_output_dict,

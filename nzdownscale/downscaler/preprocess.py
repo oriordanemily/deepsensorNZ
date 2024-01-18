@@ -434,10 +434,8 @@ class PreprocessForDownscaling:
     def get_processed_output_dict(self):
 
         date_info = {
-                #'years': self.years,
                 'start_year': self.start_year,
                 'end_year': self.end_year,
-                #'train_start_year': self.train_start_year,
                 'val_start_year': self.val_start_year,
                 'val_end_year': self.val_end_year,
                 'use_daily_data': self.use_daily_data,

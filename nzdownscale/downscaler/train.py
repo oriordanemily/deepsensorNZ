@@ -58,7 +58,7 @@ class Train:
         self.start_year = processed_output_dict['date_info']['start_year']
         self.end_year = processed_output_dict['date_info']['end_year']
         self.val_start_year = processed_output_dict['date_info']['val_start_year']
-        #self.years = processed_output_dict['date_info']['years']
+        self.val_end_year = processed_output_dict['date_info']['val_end_year']
         self.years = np.arange(self.start_year, self.end_year+1)
 
         self.model = None
@@ -77,6 +77,7 @@ class Train:
         self.initialise_model(**convnp_kwargs)
         self.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix)
 
+
     def setup_task_loader(self, verbose=False):
 
         era5_ds = self.era5_ds
@@ -84,10 +85,10 @@ class Train:
         aux_ds = self.aux_ds
         station_df = self.station_df
         start_year = self.start_year
-        #train_start_year = self.train_start_year
+        end_year = self.end_year
         val_start_year = self.val_start_year
         val_end_year = self.val_end_year
-        # years = self.years
+
         
         task_loader = TaskLoader(context=[era5_ds, aux_ds],
                                 target=station_df, 
@@ -96,7 +97,7 @@ class Train:
             print(task_loader)
 
         train_start = f'{start_year}-01-01'
-        train_end = f'{val_start_year-1}-12-31'
+        train_end = f'{end_year}-12-31'
         val_start = f'{val_start_year}-01-01'
         val_end = f'{val_end_year}-12-31'
 
