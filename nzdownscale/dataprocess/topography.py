@@ -5,7 +5,7 @@ Process topography/elevation data
 import xarray as xr
 
 from nzdownscale.dataprocess.utils import DataProcess
-from nzdownscale.dataprocess.config import DATA_PATHS
+from nzdownscale.dataprocess.config_local import DATA_PATHS
 
 
 class ProcessTopography(DataProcess):

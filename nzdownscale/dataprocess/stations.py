@@ -6,7 +6,9 @@ import pandas as pd
 from tqdm import tqdm
 
 from nzdownscale.dataprocess.utils import DataProcess, PlotData
-from nzdownscale.dataprocess.config import VARIABLE_OPTIONS, DATA_PATHS, VAR_STATIONS
+from nzdownscale.dataprocess.config import VARIABLE_OPTIONS, VAR_STATIONS
+from nzdownscale.dataprocess.config_local import DATA_PATHS
+
 
 
 class ProcessStations(DataProcess):

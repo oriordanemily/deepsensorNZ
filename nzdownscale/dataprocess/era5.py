@@ -5,7 +5,8 @@ import glob
 import xarray as xr
 
 from nzdownscale.dataprocess.utils import DataProcess
-from nzdownscale.dataprocess.config import VARIABLE_OPTIONS, DATA_PATHS, VAR_ERA5
+from nzdownscale.dataprocess.config import VARIABLE_OPTIONS, VAR_ERA5
+from nzdownscale.dataprocess.config_local import DATA_PATHS
 
 
 class ProcessERA5(DataProcess):
