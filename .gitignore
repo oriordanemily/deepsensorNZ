@@ -9,6 +9,7 @@ data_jasmin/
 experiments/deepsensor/gallery_demos
 tmp/
 models/
+nzdownscale/dataproces/config_local.py
 
 # misc
 **/.ipynb_checkpoints/
@@ -80,3 +81,5 @@ coverage.xml
 
 # Sphinx documentation
 docs/_build/
+
+# Local info
