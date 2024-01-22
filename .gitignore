@@ -83,3 +83,4 @@ coverage.xml
 docs/_build/
 
 # Local info
+nzdownscale/dataprocess/config_local.py
