@@ -30,7 +30,7 @@ from tqdm import tqdm
 from nzdownscale.downscaler.train import Train
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.dataprocess import era5, stations, topography, utils, config
-from nzdownscale.dataprocess.config import LOCATION_LATLON
+from nzdownscale.dataprocess.config import LOCATION_LATLON, PLOT_EXTENT
 
 
 class ValidateV1:
@@ -165,9 +165,7 @@ class ValidateV1:
         return model
 
 
-    # ! clean up below
-
-    def plot_example_prediction(self):
+    def plot_example_prediction(self, infer_extent=True):
 
         ### initialise plots
         task_loader = self.task_loader
@@ -183,9 +181,17 @@ class ValidateV1:
         pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
 
         # Plot 1
-        fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=ccrs.PlateCarree())
+        # Plots mean and std dev of prediction
+        if not infer_extent:
+            extent = PLOT_EXTENT['all']
+            fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=ccrs.PlateCarree(),
+                                            extent=(extent['minlon'], extent['maxlon'], extent['minlat'], extent['maxlat']))
+        else:
+            fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=ccrs.PlateCarree())
+
 
         # Plot 2
+
         pred_db = pred['dry_bulb']
         
         fig, axes = self.gen_test_fig(
@@ -201,7 +207,7 @@ class ValidateV1:
         
 
     def gen_test_fig(self, era5_ds_plot=None, mean_ds=None, std_ds=None, samples_ds=None, add_colorbar=False, var_clim=None, std_clim=None, var_cbar_label=None, std_cbar_label=None, fontsize=None, figsize=(15, 5)):
-        
+        # Plots ERA5, ConvNP mean, ConvNP std dev
         crs = ccrs.PlateCarree()
 
         if var_clim is None:
@@ -233,8 +239,9 @@ class ValidateV1:
 
         axis_i = 0
         if era5_ds_plot is not None:
+            if era5_ds_plot.shape == (0, 0) or era5_ds_plot.shape == (1, 1):
+                raise ValueError('era5_ds_plot resolution too coarse to plot at this scale. Please use a higher resolution or a larger region.')
             ax = axes[axis_i]
-            # era5_raw_ds.sel(lat=slice(mean_ds["lat"].min(), mean_ds["lat"].max()), lon=slice(mean_ds["lon"].min(), mean_ds["lon"].max())).plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=False)
             era5_ds_plot.plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=add_colorbar, cbar_kwargs=dict(label=var_cbar_label))
             ax.set_title("ERA5", fontsize=fontsize)
 
@@ -263,7 +270,7 @@ class ValidateV1:
         return fig, axes
 
 
-    def emily_plots(self):
+    def emily_plots(self, location='alexandra'):
 
         ### initialise plots
         val_start_year = self.processed_dict['date_info']['val_start_year']
@@ -273,8 +280,6 @@ class ValidateV1:
         task_loader = self.task_loader
         model = self.model
         crs = ccrs.PlateCarree()
-        #######
-        ### rest is Emily's code
 
         date = f"{val_start_year}-06-25"
         test_task = task_loader(date, ["all", "all"], seed_override=42)
@@ -283,7 +288,7 @@ class ValidateV1:
         
         # %%
 
-        location = "alexandra"
+        location = location
         if location not in LOCATION_LATLON:
             raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
         X_t = LOCATION_LATLON[location]
@@ -300,7 +305,7 @@ class ValidateV1:
         X_t
 
         # %%
-        # As above but zooming in
+        # Plots same as second plot in plot_example_prediction but zoomed in to location
         lat_slice = slice(X_t[0] + 2, X_t[0] - 2)
         lon_slice = slice(X_t[1] - 2, min(X_t[1] + 2, 180))
         fig, axes = self.gen_test_fig(
@@ -313,7 +318,6 @@ class ValidateV1:
             std_cbar_label="std dev [°C]",
             std_clim=(None, 2),
         )
-        # Plot X_t
         for ax in axes:
             ax.scatter(X_t[1], X_t[0], marker="s", color="black", transform=crs, s=10**2, facecolors='none', linewidth=2)
 
