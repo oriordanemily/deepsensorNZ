@@ -498,7 +498,8 @@ class PreprocessForDownscaling:
             ax = self.process_stations.plot_stations(self.station_metadata, ax)
 
         res = self._lat_lon_dict(ds)
-        plt.title(f'Lat res: {res["lat"]:.4f} degrees, '
+
+        plt.title(f'{type}\n Lat res: {res["lat"]:.4f} degrees, '
                     f'lon res: {res["lon"]:.4f} degrees')
         plt.show()
 
