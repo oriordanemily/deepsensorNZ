@@ -1,7 +1,7 @@
 DATA_PATHS = {
     'ERA5': {
         'parent': 'data/ERA5-land',
-        #'parent': '/mnt/datasets/ERA5/NZ_land',
+        # 'parent': '/mnt/datasets/ERA5/NZ_land',
     },    
     'topography': {
         'parent': 'data/topography',
@@ -11,6 +11,6 @@ DATA_PATHS = {
     },    
     'stations': {
         'parent': 'data/stations',
-        #'parent': '/mnt/datasets/NationalClimateDatabase/NetCDFFilesByVariableAndSite/Hourly',
+        # 'parent': '/mnt/datasets/NationalClimateDatabase/NetCDFFilesByVariableAndSite/Hourly',
     },
 }
