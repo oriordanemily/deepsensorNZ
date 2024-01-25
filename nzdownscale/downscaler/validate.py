@@ -30,7 +30,7 @@ from tqdm import tqdm
 from nzdownscale.downscaler.train import Train
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.dataprocess import era5, stations, topography, utils, config
-from nzdownscale.dataprocess.config import LOCATION_LATLON, PLOT_EXTENT
+from nzdownscale.dataprocess.config import LOCATION_LATLON
 
 
 class ValidateV1:
@@ -38,6 +38,7 @@ class ValidateV1:
                  processed_output_dict: dict = None,
                  training_output_dict: dict = None,
                  training_metadata_path: str = None,
+                 validation_date_range: list = None
                  ) -> None:
         """
         Args:
@@ -47,11 +48,14 @@ class ValidateV1:
                 Dict output from nzdownscale.downscaler.train.Train.get_training_output_dict()
             training_metadata_path (int, optional):
                 (If loading pretrained model) Path to dictionary pickle file for training metadata, saved with model e.g. 'models/downscaling/metadata/test_model_1705594143.pkl'
+            validation_date_range (list, optional):
+                List of two years in format 'YYYY' for start and end of validation period (inclusive) e.g. ['2005', '2006']. Only include if different from model training period.
         """
         
         self.processed_output_dict = processed_output_dict
         self.training_output_dict = training_output_dict
         self.training_metadata_path = training_metadata_path
+        self.validation_date_range = validation_date_range
 
         self._check_args()
 
@@ -81,10 +85,15 @@ class ValidateV1:
 
     def get_metadata(self):
         if self.training_metadata_path is not None:
-            return utils.open_pickle(self.training_metadata_path)
+            metadata = utils.open_pickle(self.training_metadata_path)
         elif self.training_output_dict is not None:
-            return self.training_output_dict['metadata_dict']
+            metadata = self.training_output_dict['metadata_dict']
 
+        if self.validation_date_range is not None:
+            metadata['date_info']['val_start_year'] = self.validation_date_range[0]
+            metadata['date_info']['val_end_year'] = self.validation_date_range[1]
+
+        return metadata
 
     def _load_processed_dict_data(self):
         
@@ -106,6 +115,7 @@ class ValidateV1:
             start_year = self.model_metadata['date_info']['start_year'],
             end_year = self.model_metadata['date_info']['end_year'],
             val_start_year = self.model_metadata['date_info']['val_start_year'],
+            val_end_year = self.model_metadata['date_info']['val_end_year'],
             use_daily_data = self.model_metadata['date_info']['use_daily_data'],
         )
         data.run_processing_sequence(
@@ -161,8 +171,50 @@ class ValidateV1:
                         self.task_loader, 
                         **convnp_kwargs,
                         ) 
-            _ = model(self.val_tasks[0])   # ? need ? 
+            _ = model(self.training_dict['train_tasks'][0])   # ? need ? 
         return model
+
+    def infer_extent(self):
+        """Get extent from config file. Return as tuple (minlon, maxlon, minlat, maxlat)
+        """
+        from nzdownscale.dataprocess.config import PLOT_EXTENT
+
+        extent = PLOT_EXTENT['all']
+        return (extent['minlon'], extent['maxlon'], extent['minlat'], extent['maxlat'])
+
+
+    def plot_nationwide_prediction(self, date: str = None, infer_extent=False, return_fig=False):
+        """Plot mean and std of model prediction
+
+        Args:
+            date (str, optional): date for prediction in format 'YYYY-MM-DD'. Default is None, in which case first validation date is used.
+            infer_extent (bool, optional): Infer extent from data. If False, extent will be taken from config file. Defaults to True.
+            return (bool, optional): If True, return figure object. Defaults to False.
+        """
+
+        # ! to do: add option to plot different times once we're training hourly data
+
+        task_loader = self.task_loader
+        model = self.model
+        data_processor = self.data_processor
+        if date is None:
+            val_start_year = self.processed_dict['date_info']['val_start_year']
+            date = f"{val_start_year}-01-01T00:00:00.000000000"
+        else:
+            date = f'{date}T00:00:00.000000000'
+        test_task = task_loader(date, ["all", "all"], seed_override=42)
+        pred = model.predict(test_task, X_t=self.processed_dict['era5_raw_ds'], resolution_factor=1)
+
+        if infer_extent:
+            extent = self.infer_extent()
+        else:
+            extent = None
+        
+        fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=ccrs.PlateCarree(), extent=extent)
+
+        if return_fig:
+            return fig
+
 
 
     def plot_example_prediction(self, infer_extent=True):
@@ -175,8 +227,8 @@ class ValidateV1:
         val_start_year = self.processed_dict['date_info']['val_start_year']
         ###
 
-        date = f"{val_start_year}-06-25"
-
+        # date = f"{val_start_year}-06-25T00:00:00.000000000"
+        date = f'2000-05-01T00:00:00.000000000'
         test_task = task_loader(date, ["all", "all"], seed_override=42)
         pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
 
@@ -195,7 +247,7 @@ class ValidateV1:
         pred_db = pred['dry_bulb']
         
         fig, axes = self.gen_test_fig(
-            era5_raw_ds.isel(time=0), 
+            era5_raw_ds.sel(time=date), 
             pred_db["mean"],
             pred_db["std"],
             add_colorbar=True,
@@ -270,7 +322,7 @@ class ValidateV1:
         return fig, axes
 
 
-    def emily_plots(self, location='alexandra'):
+    def emily_plots(self, location='alexandra', date_range=('2005-09-01', '2005-10-31')):
 
         ### initialise plots
         val_start_year = self.processed_dict['date_info']['val_start_year']
@@ -281,18 +333,21 @@ class ValidateV1:
         model = self.model
         crs = ccrs.PlateCarree()
 
-        date = f"{val_start_year}-06-25"
+        # date = f"{val_start_year}-06-25"
+        date = f'2000-05-01T00:00:00.000000000'
         test_task = task_loader(date, ["all", "all"], seed_override=42)
         pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
         pred_db = pred['dry_bulb']
         
         # %%
-
+        
         location = location
         if location not in LOCATION_LATLON:
             raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
         X_t = LOCATION_LATLON[location]
-        dates = pd.date_range(f"{val_start_year}-09-01", f"{val_start_year}-10-31")
+        # dates = pd.date_range(f"{val_start_year}-09-01", f"{val_start_year}-10-31")
+        dates = pd.date_range(date_range[0], date_range[1])#f"2001-09-01", f"2001-10-31")
+
         #station_raw_df
 
         # %%
@@ -309,7 +364,7 @@ class ValidateV1:
         lat_slice = slice(X_t[0] + 2, X_t[0] - 2)
         lon_slice = slice(X_t[1] - 2, min(X_t[1] + 2, 180))
         fig, axes = self.gen_test_fig(
-            era5_raw_ds.isel(time=0).sel(latitude=lat_slice, longitude=lon_slice),
+            era5_raw_ds.sel(time=date).sel(latitude=lat_slice, longitude=lon_slice),
             pred_db["mean"].sel(latitude=lat_slice, longitude=lon_slice),
             pred_db["std"].sel(latitude=lat_slice, longitude=lon_slice),
             add_colorbar=True,
@@ -323,7 +378,13 @@ class ValidateV1:
 
         # %%
         # Get station target data
-        station_closest_df = station_raw_df.reset_index().set_index(["latitude", "longitude"]).loc[X_station_closest].set_index("time").loc[dates]
+        
+        station_closest_df = station_raw_df.reset_index().set_index(["latitude", "longitude"]).loc[X_station_closest].set_index("time")
+        intersection = station_closest_df.index.intersection(dates)
+        if intersection.empty:
+            raise ValueError(f"Station {X_station_closest} has no data for dates {dates}")
+        else:
+            station_closest_df = station_closest_df.loc[dates]
         station_closest_df
 
         # %%
