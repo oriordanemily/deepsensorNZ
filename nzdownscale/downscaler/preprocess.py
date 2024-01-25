@@ -20,11 +20,11 @@ from nzdownscale.dataprocess.config import LOCATION_LATLON
 class PreprocessForDownscaling:
 
     def __init__(self,
+                 start_year,
+                 end_year,
+                 val_start_year,
+                 val_end_year = None,
                  variable='temperature',
-                 start_year=2000,
-                 end_year=2001,
-                 val_start_year=2002,
-                 val_end_year=2002,
                  use_daily_data=True,
                  ) -> None:
         
@@ -36,7 +36,11 @@ class PreprocessForDownscaling:
         self.start_year = start_year
         self.end_year = end_year
         self.val_start_year = val_start_year
-        self.val_end_year = val_end_year
+        if val_end_year is None:
+            # one year validation
+            val_end_year = val_start_year
+        else:
+            self.val_end_year = val_end_year
         self.years = np.arange(start_year, val_end_year+1)
         self.use_daily_data = use_daily_data
 
