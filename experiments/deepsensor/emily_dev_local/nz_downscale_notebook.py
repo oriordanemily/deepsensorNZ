@@ -18,7 +18,7 @@ from nzdownscale.downscaler.validate import ValidateV1
 from nzdownscale.dataprocess import utils
 
 #%% 
-training = False
+training = True
 
 #%%
 
@@ -29,14 +29,18 @@ if training:
 
     var = 'temperature'
     start_year = 2000
-    end_year = 2004
+    end_year = 2001
     val_start_year = 2005
     val_end_year = 2005
     use_daily_data = True
 
-    topography_highres_coarsen_factor = 5
+    # topography_highres_coarsen_factor = 5
+    # topography_lowres_coarsen_factor = 30
+    # era5_coarsen_factor = 3
+
+    topography_highres_coarsen_factor = 10
     topography_lowres_coarsen_factor = 30
-    era5_coarsen_factor = 3
+    era5_coarsen_factor = 10
 
     model_name_prefix = 'test'
     n_epochs = 2
@@ -82,7 +86,7 @@ if training:
 if training:
     training = Train(processed_output_dict=processed_output_dict)
 
-    training.run_training_sequence(n_epochs, model_name_prefix, **convnp_kwargs)
+    training.run_training_sequence(n_epochs, model_name_prefix, **convnp_kwargs, batch=True, batch_size=4)
 
     training_output_dict = training.get_training_output_dict()
 
