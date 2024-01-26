@@ -12,7 +12,7 @@ def main():
     """
     Example:
 
-    python experiments/deepsensor/risa_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=30 --topography_lowres_coarsen_factor=30 --era5_coarsen_factor=30 --model_name_prefix='test' --n_epochs=3  --internal_density=5
+    CUDA_VISIBLE_DEVICES=2 python -m memory_profiler experiments/deepsensor/emily_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=10 --topography_lowres_coarsen_factor=15 --era5_coarsen_factor=3 --model_name_prefix='test' --n_epochs=50  --internal_density=500
     """
 
     parser = argparse.ArgumentParser()
