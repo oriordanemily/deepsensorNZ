@@ -407,102 +407,54 @@ class ValidateV1:
         if return_fig:
             return fig, ax
 
+    def plot_timeseries_comparison(self, 
+                                   location, 
+                                   date_range: tuple, 
+                                   return_fig=False):
 
-    def emily_plots(self, location='alexandra', date_range=('2005-09-01', '2005-10-31')):
-
-        ### initialise plots
-        val_start_year = self.processed_dict['date_info']['val_start_year']
-        era5_raw_ds = self.processed_dict['era5_raw_ds']
-        station_raw_df = self.processed_dict['station_raw_df']
-        
         task_loader = self.task_loader
         model = self.model
-        crs = ccrs.PlateCarree()
+        era5_raw_ds = self.processed_dict['era5_raw_ds']
+        station_raw_df = self.processed_dict['station_raw_df']
 
-        # date = f"{val_start_year}-06-25"
-        date = f'2000-05-01T00:00:00.000000000'
-        test_task = task_loader(date, ["all", "all"], seed_override=42)
-        pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
+        if isinstance(location, str):
+            if location not in LOCATION_LATLON:
+                raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
+            X_t = LOCATION_LATLON[location]
+        else:
+            X_t = location
+
+        dates = pd.date_range(date_range[0], date_range[1])
+
+        test_task = task_loader(dates, ["all", "all"], seed_override=42)
+        pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=1)
         pred_db = pred['dry_bulb']
-        
-        # %%
-        
-        location = location
-        if location not in LOCATION_LATLON:
-            raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
-        X_t = LOCATION_LATLON[location]
-        # dates = pd.date_range(f"{val_start_year}-09-01", f"{val_start_year}-10-31")
-        dates = pd.date_range(date_range[0], date_range[1])#f"2001-09-01", f"2001-10-31")
 
-        # %%
         locs = set(zip(station_raw_df.reset_index()["latitude"], station_raw_df.reset_index()["longitude"]))
-        locs
-        # %%
-        # Find closest station to desired target location
         X_station_closest = min(locs, key=lambda loc: np.linalg.norm(np.array(loc) - X_t))
         X_t = np.array(X_station_closest)#.reshape(2, 1)
-        X_t
-
-        # %%
-        # Plots same as second plot in plot_example_prediction but zoomed in to location
-        lat_slice = slice(X_t[0] + 2, X_t[0] - 2)
-        lon_slice = slice(X_t[1] - 2, min(X_t[1] + 2, 180))
-        fig, axes = self.gen_test_fig(
-            era5_raw_ds.sel(time=date).sel(latitude=lat_slice, longitude=lon_slice),
-            pred_db["mean"].sel(latitude=lat_slice, longitude=lon_slice),
-            pred_db["std"].sel(latitude=lat_slice, longitude=lon_slice),
-            add_colorbar=True,
-            # var_clim=(10, -5),
-            var_cbar_label="2m temperature [°C]",
-            std_cbar_label="std dev [°C]",
-            std_clim=(None, 2),
-        )
-        for ax in axes:
-            ax.scatter(X_t[1], X_t[0], marker="s", color="black", transform=crs, s=10**2, facecolors='none', linewidth=2)
-
-        # %%
-        # Get station target data
-        
         station_closest_df = station_raw_df.reset_index().set_index(["latitude", "longitude"]).loc[X_station_closest].set_index("time")
         intersection = station_closest_df.index.intersection(dates)
         if intersection.empty:
             raise ValueError(f"Station {X_station_closest} has no data for dates {dates}")
         else:
             station_closest_df = station_closest_df.loc[dates]
-        station_closest_df
-
-        # %%
-        # Plot location of X_t on map using cartopy
-        fig, ax = plt.subplots(1, 1, subplot_kw=dict(projection=crs), figsize=(20, 20))
-        pred_db['mean'].plot(ax=ax, cmap="jet")
-        ax.coastlines()
-        ax.add_feature(cf.BORDERS)
-        ax.scatter(X_t[1], X_t[0], transform=crs, color="black", marker="*", s=200)
-        # Plot station locations
-        ax.scatter([loc[1] for loc in locs], [loc[0] for loc in locs], transform=crs, color="red", marker=".")
-        # ax.set_extent([6, 15, 47.5, 55])
-        # %%
 
         era5_raw_df = era5_raw_ds.sel(latitude=X_t[0], longitude=X_t[1], method="nearest").to_dataframe()
         era5_raw_df = era5_raw_df.loc[dates]
         era5_raw_df
 
-        #%%
-
-        test_tasks = task_loader(dates, "all")
-        preds = model.predict(test_tasks, X_t=era5_raw_ds, resolution_factor=2)
-        preds_db = preds['dry_bulb']
-
-        #%%
-        # Plot
         sns.set_style("white")
+
+        convnp_mean = pred_db["mean"].sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
+        stddev = pred_db["std"].sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
+        era5_vals = era5_raw_df["t2m"].values.astype('float')
+
+        # Plot mean
         fig, ax = plt.subplots(1, 1, figsize=(7*.9, 3*.9))
-        convnp_mean = preds_db["mean"].sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
         ax.plot(convnp_mean, label="ConvNP", marker="o", markersize=3)
-        stddev = preds_db["std"].sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
         # Make 95% confidence interval
         ax.fill_between(range(len(convnp_mean)), convnp_mean - 2 * stddev, convnp_mean + 2 * stddev, alpha=0.25, label="ConvNP 95% CI")
-        era5_vals = era5_raw_df["t2m"].values.astype('float')
         ax.plot(era5_vals, label="ERA5", marker="o", markersize=3)
         # Plot true station data
         ax.plot(station_closest_df["dry_bulb"].values.astype('float'), label="Station", marker="o", markersize=3)
@@ -514,3 +466,5 @@ class ValidateV1:
         ax.set_xticklabels(era5_raw_df.index[::14].strftime("%Y-%m-%d"), rotation=15)
         ax.set_title(f"ConvNP prediction for {location}", y=1.15)
 
+        if return_fig:
+            return fig, ax
