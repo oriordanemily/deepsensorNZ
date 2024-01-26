@@ -349,6 +349,64 @@ class ValidateV1:
             ax.coastlines()
         return fig, axes
 
+    def plot_prediction_with_stations(self, date: str = None, location=None, closest_station=False, 
+    zoom_to_location=False, infer_extent=False, return_fig=False):
+
+        task_loader = self.task_loader
+        model = self.model
+        era5_raw_ds = self.processed_dict['era5_raw_ds']
+        
+        if date is None:
+            val_start_year = self.processed_dict['date_info']['val_start_year']
+            date = f"{val_start_year}-01-01T00:00:00.000000000"
+        else:
+            date = f'{date}T00:00:00.000000000'
+
+        test_task = task_loader(date, ["all", "all"], seed_override=42)
+        pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
+        pred_db = pred['dry_bulb']
+
+        # Get ERA5 data at location
+        station_raw_df = self.processed_dict['station_raw_df']
+        locs = set(zip(station_raw_df.reset_index()["latitude"], station_raw_df.reset_index()["longitude"]))
+        
+        if location is not None:
+            if isinstance(location, str):
+                if location not in LOCATION_LATLON:
+                    raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
+                X_t = LOCATION_LATLON[location]
+            else:
+                X_t = location
+
+        if closest_station:
+            # Find closest station to desired target location
+            X_station_closest = min(locs, key=lambda loc: np.linalg.norm(np.array(loc) - X_t))
+            X_t = np.array(X_station_closest)
+
+        if zoom_to_location:
+            lat_slice = slice(X_t[0] + 2, X_t[0] - 2)
+            lon_slice = slice(X_t[1] - 2, min(X_t[1] + 2, 180))
+            pred_db = pred_db.sel(latitude=lat_slice, longitude=lon_slice)
+            
+        fig, ax = plt.subplots(1, 1, subplot_kw=dict(projection=ccrs.PlateCarree()), figsize=(20, 20))
+        pred_db['mean'].plot(ax=ax, cmap="jet")
+        ax.coastlines()
+        ax.add_feature(cf.BORDERS)
+        
+        if location is not None:
+            ax.scatter(X_t[1], X_t[0], transform=ccrs.PlateCarree(), color="black", marker="*", s=200)
+            size_of_stations = 60
+        else:
+            import matplotlib as mpl
+            size_of_stations = mpl.rcParams['lines.markersize'] ** 2
+        # Plot station locations
+        ax.scatter([loc[1] for loc in locs], [loc[0] for loc in locs], transform=ccrs.PlateCarree(), color="red", marker=".", s=size_of_stations)
+        if zoom_to_location:
+            ax.set_extent([X_t[1] - 2, X_t[1] + 2, X_t[0] - 2, X_t[0] + 2])
+
+        if return_fig:
+            return fig, ax
+
 
     def emily_plots(self, location='alexandra', date_range=('2005-09-01', '2005-10-31')):
 
