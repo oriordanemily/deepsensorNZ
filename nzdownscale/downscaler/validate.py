@@ -215,37 +215,55 @@ class ValidateV1:
         if return_fig:
             return fig
 
-
-
-    def plot_example_prediction(self, infer_extent=True):
-
-        ### initialise plots
+    def plot_ERA5_and_prediction(self, date: str = None, location=None, closest_station=False, infer_extent=False, return_fig=False):
+        """Plot ERA5, and mean and std of model prediction at given date. 
+        
+        Args:
+            date (str, optional): date for prediction in format 'YYYY-MM-DD'. Default is None, in which case first validation date is used.
+            location (str or tuple, optional): Location to zoom in on. If str, must be one of the keys in LOCATION_LATLON. If tuple, must be (lat, lon). Defaults to None.
+            closest_station (bool, optional): If True, find closest station to location and plot that instead. Only used if location is not None. Defaults to False.
+            infer_extent (bool, optional): Infer extent from data. If False, extent will be taken from config file. Defaults to True.
+            return_fig (bool, optional): If True, return figure object. Defaults to False.
+        """
         task_loader = self.task_loader
-        data_processor = self.data_processor
         model = self.model
         era5_raw_ds = self.processed_dict['era5_raw_ds']
-        val_start_year = self.processed_dict['date_info']['val_start_year']
-        ###
 
-        # date = f"{val_start_year}-06-25T00:00:00.000000000"
-        date = f'2000-05-01T00:00:00.000000000'
-        test_task = task_loader(date, ["all", "all"], seed_override=42)
-        pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
+        if location is not None:
+            if isinstance(location, str):
+                if location not in LOCATION_LATLON:
+                    raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
+                X_t = LOCATION_LATLON[location]
+            else:
+                X_t = location
+            
+            # Get ERA5 data at location
+            station_raw_df = self.processed_dict['station_raw_df']
+            locs = set(zip(station_raw_df.reset_index()["latitude"], station_raw_df.reset_index()["longitude"]))
+            
+            if closest_station:
+                # Find closest station to desired target location
+                X_station_closest = min(locs, key=lambda loc: np.linalg.norm(np.array(loc) - X_t))
+                X_t = np.array(X_station_closest)
+            lat_slice = slice(X_t[0] + 2, X_t[0] - 2)
+            lon_slice = slice(X_t[1] - 2, min(X_t[1] + 2, 180))
+            era5_raw_ds = era5_raw_ds.sel(latitude=lat_slice, longitude=lon_slice)
 
-        # Plot 1
-        # Plots mean and std dev of prediction
-        if not infer_extent:
-            extent = PLOT_EXTENT['all']
-            fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=ccrs.PlateCarree(),
-                                            extent=(extent['minlon'], extent['maxlon'], extent['minlat'], extent['maxlat']))
+        if date is None:
+            val_start_year = self.processed_dict['date_info']['val_start_year']
+            date = f"{val_start_year}-01-01T00:00:00.000000000"
         else:
-            fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=ccrs.PlateCarree())
+            date = f'{date}T00:00:00.000000000'
+        test_task = task_loader(date, ["all", "all"], seed_override=42)
 
-
-        # Plot 2
-
+        pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=1)
         pred_db = pred['dry_bulb']
         
+        if infer_extent:
+            extent = self.infer_extent()
+        else:
+            extent = None
+
         fig, axes = self.gen_test_fig(
             era5_raw_ds.sel(time=date), 
             pred_db["mean"],
@@ -254,13 +272,23 @@ class ValidateV1:
             var_cbar_label="2m temperature [°C]",
             std_cbar_label="std dev [°C]",
             std_clim=(None, 2),
-            figsize=(20, 20/3)
+            figsize=(20, 20/3),
+            extent=extent
         )
-        
 
-    def gen_test_fig(self, era5_ds_plot=None, mean_ds=None, std_ds=None, samples_ds=None, add_colorbar=False, var_clim=None, std_clim=None, var_cbar_label=None, std_cbar_label=None, fontsize=None, figsize=(15, 5)):
+        if location is not None:
+            for ax in axes:
+                ax.scatter(X_t[1], X_t[0], marker="s", color="black", transform=ccrs.PlateCarree(), s=10**2, facecolors='none', linewidth=2)
+
+        if return_fig:
+            return fig, axes
+
+    def gen_test_fig(self, era5_ds_plot=None, mean_ds=None, std_ds=None, samples_ds=None, add_colorbar=False, var_clim=None, std_clim=None, var_cbar_label=None, std_cbar_label=None, fontsize=None, figsize=(15, 5), extent=None):
         # Plots ERA5, ConvNP mean, ConvNP std dev
         crs = ccrs.PlateCarree()
+
+        if extent is not None:
+            NotImplementedError('extent not yet implemented')
 
         if var_clim is None:
             vmin = np.array(mean_ds.min())
@@ -347,8 +375,6 @@ class ValidateV1:
         X_t = LOCATION_LATLON[location]
         # dates = pd.date_range(f"{val_start_year}-09-01", f"{val_start_year}-10-31")
         dates = pd.date_range(date_range[0], date_range[1])#f"2001-09-01", f"2001-10-31")
-
-        #station_raw_df
 
         # %%
         locs = set(zip(station_raw_df.reset_index()["latitude"], station_raw_df.reset_index()["longitude"]))
