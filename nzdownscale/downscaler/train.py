@@ -65,11 +65,11 @@ class Train:
         self.convnp_kwargs = None
 
 
-    def run_training_sequence(self, n_epochs, model_name_prefix, **convnp_kwargs):
+    def run_training_sequence(self, n_epochs, model_name_prefix, batch=False, batch_size=1, **convnp_kwargs,):
 
         self.setup_task_loader()
         self.initialise_model(**convnp_kwargs)
-        self.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix)
+        self.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix, batch=batch, batch_size=batch_size)
 
 
     def setup_task_loader(self, verbose=False):
@@ -140,7 +140,7 @@ class Train:
                     )
     
         # Print number of parameters to check model is not too large for GPU memory
-        _ = model(self.val_tasks[0])
+        _ = model(self.train_tasks[0])
         print(f"Model has {deepsensor.backend.nps.num_params(model.model):,} parameters")
         
         self.convnp_kwargs = dict(convnp_kwargs)
@@ -190,6 +190,8 @@ class Train:
                     plot_losses=True,
                     model_name='default',
                     model_name_prefix=None,
+                    batch=False,
+                    batch_size=1,
                     ):
 
         model = self.model
@@ -214,13 +216,27 @@ class Train:
 
         val_loss_best = np.inf
 
+        if batch:
+            print(f'Using batched data with batch size {batch_size}')
+            # if batch is True and batch_size is None, then batches are created by number of stations
+            batched_train_tasks = self.batch_data_by_num_stations(train_tasks, batch_size=batch_size)
+            batched_val_tasks = self.batch_data_by_num_stations(val_tasks, batch_size=batch_size)
+
         for epoch in tqdm(range(n_epochs)):
-            batch_losses = train_epoch(model, train_tasks)
+            if batch:
+                batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}']) for num_stations in batched_train_tasks.keys()]
+                batch_losses = [item for sublist in batch_losses for item in sublist]
+            else:
+                batch_losses = train_epoch(model, train_tasks)
             batch_losses_not_nan = [arr for arr in batch_losses if~ np.isnan(arr)]
             train_loss = np.mean(batch_losses_not_nan)
             train_losses.append(train_loss)
 
-            val_loss = compute_val_loss(model, val_tasks)
+            if batch:
+                batch_val_losses = [compute_val_loss(model, batched_val_tasks[f'{num_stations}']) for num_stations in batched_val_tasks.keys()]
+                val_loss = np.mean(batch_val_losses)
+            else:
+                val_loss = compute_val_loss(model, val_tasks)
             val_losses.append(val_loss)
 
             if val_loss < val_loss_best:
@@ -251,6 +267,30 @@ class Train:
         self.train_losses = train_losses
         self.val_losses = val_losses
 
+    # def train_epoch_and_print(self, model, train_tasks):
+    #     # used for debugging
+    #     te = train_epoch(model, train_tasks)
+    #     return te 
+    
+    def batch_data_by_num_stations(self, tasks, batch_size=None):
+        batched_tasks = {}
+        for task in tasks:
+            num_stations = task['X_t'][0].shape[1]
+            if f'{num_stations}' not in batched_tasks.keys():
+                batched_tasks[f'{num_stations}'] = [task]
+            else:
+                batched_tasks[f'{num_stations}'].append(task)
+
+        if batch_size is not None:
+            batched_tasks_copy = batched_tasks.copy()
+            batched_tasks = {}
+            for num_stations in batched_tasks_copy.keys():
+                number_tasks_in_batch = len(batched_tasks_copy[f'{num_stations}'])
+                for idx, i in enumerate(range(0, number_tasks_in_batch, batch_size)):
+                    batched_tasks[f'{num_stations}_{idx}'] = batched_tasks_copy[f'{num_stations}'][i:i+batch_size]
+
+        return batched_tasks
+    
 
     def get_training_output_dict(self):
 
@@ -296,3 +336,5 @@ class Train:
         fig.savefig(f"{folder}/{save_name}", bbox_inches="tight")
         print(f"Saved: {folder}/{save_name}")
 
+
+# %%
