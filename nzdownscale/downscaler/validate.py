@@ -56,6 +56,7 @@ class ValidateV1:
         self.training_output_dict = training_output_dict
         self.training_metadata_path = training_metadata_path
         self.validation_date_range = validation_date_range
+        self.crs = ccrs.PlateCarree()
 
         self._check_args()
 
@@ -81,7 +82,6 @@ class ValidateV1:
             if self.training_output_dict is None: 
                 raise ValueError('training_output_dict is required if not loading pretrained model. Please provide load_model_path or training_output_dict during class instantiation')
             self.model = self.training_output_dict['model']
-
 
     def get_metadata(self):
         if self.training_metadata_path is not None:
@@ -174,14 +174,7 @@ class ValidateV1:
             _ = model(self.training_dict['train_tasks'][0])   # ? need ? 
         return model
 
-    def infer_extent(self):
-        """Get extent from config file. Return as tuple (minlon, maxlon, minlat, maxlat)
-        """
-        from nzdownscale.dataprocess.config import PLOT_EXTENT
-
-        extent = PLOT_EXTENT['all']
-        return (extent['minlon'], extent['maxlon'], extent['minlat'], extent['maxlat'])
-
+    ### Plotting functions
 
     def plot_nationwide_prediction(self, date: str = None, infer_extent=False, return_fig=False):
         """Plot mean and std of model prediction
@@ -194,23 +187,27 @@ class ValidateV1:
 
         # ! to do: add option to plot different times once we're training hourly data
 
+        # setup
         task_loader = self.task_loader
         model = self.model
+        era5_raw_ds = self.processed_dict['era5_raw_ds']
         data_processor = self.data_processor
-        if date is None:
-            val_start_year = self.processed_dict['date_info']['val_start_year']
-            date = f"{val_start_year}-01-01T00:00:00.000000000"
-        else:
-            date = f'{date}T00:00:00.000000000'
-        test_task = task_loader(date, ["all", "all"], seed_override=42)
-        pred = model.predict(test_task, X_t=self.processed_dict['era5_raw_ds'], resolution_factor=1)
+        crs = self.crs 
 
+        # format date
+        date = self._format_date(date)
+
+        # get predictions and test_task
+        pred, test_task = self._get_predictions_and_tasks(date, task_loader, model, era5_raw_ds, return_dataarray=False)
+        
+        # plotting extent
         if infer_extent:
-            extent = self.infer_extent()
+            extent = self._infer_extent()
         else:
             extent = None
         
-        fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=ccrs.PlateCarree(), extent=extent)
+        # plot 
+        fig = deepsensor.plot.prediction(pred, date, data_processor, task_loader, test_task, crs=crs, extent=extent)
 
         if return_fig:
             return fig
@@ -225,45 +222,41 @@ class ValidateV1:
             infer_extent (bool, optional): Infer extent from data. If False, extent will be taken from config file. Defaults to True.
             return_fig (bool, optional): If True, return figure object. Defaults to False.
         """
+        #setup
         task_loader = self.task_loader
         model = self.model
         era5_raw_ds = self.processed_dict['era5_raw_ds']
+        station_raw_df = self.processed_dict['station_raw_df']
 
+        # get location if specified
         if location is not None:
             if isinstance(location, str):
-                if location not in LOCATION_LATLON:
-                    raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
-                X_t = LOCATION_LATLON[location]
+                X_t = self._get_location_coordinates(location)
             else:
                 X_t = location
             
-            # Get ERA5 data at location
-            station_raw_df = self.processed_dict['station_raw_df']
-            locs = set(zip(station_raw_df.reset_index()["latitude"], station_raw_df.reset_index()["longitude"]))
-            
             if closest_station:
                 # Find closest station to desired target location
-                X_station_closest = min(locs, key=lambda loc: np.linalg.norm(np.array(loc) - X_t))
-                X_t = np.array(X_station_closest)
+                X_t = self._find_closest_station(X_t, station_raw_df)
+
+            # zoom plot into location
             lat_slice = slice(X_t[0] + 2, X_t[0] - 2)
             lon_slice = slice(X_t[1] - 2, min(X_t[1] + 2, 180))
             era5_raw_ds = era5_raw_ds.sel(latitude=lat_slice, longitude=lon_slice)
 
-        if date is None:
-            val_start_year = self.processed_dict['date_info']['val_start_year']
-            date = f"{val_start_year}-01-01T00:00:00.000000000"
-        else:
-            date = f'{date}T00:00:00.000000000'
-        test_task = task_loader(date, ["all", "all"], seed_override=42)
+        # format date
+        date = self._format_date(date)
 
-        pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=1)
-        pred_db = pred['dry_bulb']
+        # get predictions and test_task
+        pred_db, _ = self._get_predictions_and_tasks(date, task_loader, model, era5_raw_ds)
         
+        # plotting extent
         if infer_extent:
-            extent = self.infer_extent()
+            extent = utils._infer_extent()
         else:
             extent = None
 
+        # use test figure plot
         fig, axes = self.gen_test_fig(
             era5_raw_ds.sel(time=date), 
             pred_db["mean"],
@@ -278,14 +271,134 @@ class ValidateV1:
 
         if location is not None:
             for ax in axes:
-                ax.scatter(X_t[1], X_t[0], marker="s", color="black", transform=ccrs.PlateCarree(), s=10**2, facecolors='none', linewidth=2)
+                ax.scatter(X_t[1], X_t[0], marker="s", color="black", transform=self.crs, s=10**2, facecolors='none', linewidth=2)
 
         if return_fig:
             return fig, axes
 
+    def plot_prediction_with_stations(self, date: str = None, location=None, closest_station=False, zoom_to_location=False, infer_extent=False, return_fig=False):
+
+        # setup
+        task_loader = self.task_loader
+        model = self.model
+        era5_raw_ds = self.processed_dict['era5_raw_ds']
+        station_raw_df = self.processed_dict['station_raw_df']
+
+        if infer_extent:
+            extent = self._infer_extent()
+
+        date = self._format_date(date)
+
+        pred_db, _ = self._get_predictions_and_tasks(date, task_loader, model, era5_raw_ds)
+        
+        if location is not None:
+            if isinstance(location, str):
+                X_t = self._get_location_coordinates(location)
+            else:
+                X_t = location
+
+            if closest_station:
+                # Find closest station to desired target location
+                X_t = self._find_closest_station(X_t, station_raw_df)
+
+            if zoom_to_location:
+                lat_slice = slice(X_t[0] + 2, X_t[0] - 2)
+                lon_slice = slice(X_t[1] - 2, min(X_t[1] + 2, 180))
+                pred_db = pred_db.sel(latitude=lat_slice, longitude=lon_slice)
+            
+        # Plot prediction mean
+        fig, ax = plt.subplots(1, 1, subplot_kw=dict(projection=self.crs), figsize=(20, 20))
+        pred_db['mean'].plot(ax=ax, cmap="jet")
+        ax.coastlines()
+        ax.add_feature(cf.BORDERS)
+        
+        if location is not None:
+            ax.scatter(X_t[1], X_t[0], transform=self.crs, color="black", marker="*", s=200)
+            size_of_stations = 60
+        else:
+            import matplotlib as mpl
+            size_of_stations = mpl.rcParams['lines.markersize'] ** 2
+        
+        # Plot station locations
+        locs = self._get_station_locations(station_raw_df)
+        ax.scatter([loc[1] for loc in locs], [loc[0] for loc in locs], transform=self.crs, color="red", marker=".", s=size_of_stations)
+        
+        if zoom_to_location:
+            ax.set_extent([lon_slice.start, lon_slice.stop, lat_slice.start, lat_slice.stop])
+        elif infer_extent:
+            ax.set_extent([extent['minlon'], extent['maxlon'], extent['minlat'], extent['maxlat']])
+
+        if return_fig:
+            return fig, ax
+
+    def plot_timeseries_comparison(self, 
+                                   location, 
+                                   date_range: tuple, 
+                                   closest_station=True,
+                                   return_fig=False):
+
+        # ! need to implement something to indicate how far ERA5/convnp location is from closest station. For now, this function plots ERA5/convnp at the closest station by default (when closest_station=True).
+
+        # setup
+        task_loader = self.task_loader
+        model = self.model
+        era5_raw_ds = self.processed_dict['era5_raw_ds']
+        station_raw_df = self.processed_dict['station_raw_df']
+
+        # get location
+        if isinstance(location, str):
+            X_t = self._get_location_coordinates(location)
+        else:
+            X_t = location
+
+        dates = pd.date_range(date_range[0], date_range[1])
+
+        pred_db, _ = self._get_predictions_and_tasks(dates, task_loader, model, era5_raw_ds)
+
+        X_station_closest = self._find_closest_station(X_t, station_raw_df)
+
+        # Get station data on dates in date_range
+        station_closest_df = station_raw_df.reset_index().set_index(["latitude", "longitude"]).loc[tuple(X_station_closest)].set_index("time")
+        intersection = station_closest_df.index.intersection(dates)
+        if intersection.empty:
+            raise ValueError(f"Station {X_station_closest} has no data for dates {dates}")
+        else:
+            station_closest_df = station_closest_df.loc[dates]
+
+        if closest_station:
+            X_t = X_station_closest
+
+        era5_raw_df = era5_raw_ds.sel(latitude=X_t[0], longitude=X_t[1], method="nearest").to_dataframe()
+        era5_raw_df = era5_raw_df.loc[dates]
+        era5_raw_df
+
+        sns.set_style("white")
+
+        convnp_mean = pred_db["mean"].sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
+        stddev = pred_db["std"].sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
+        era5_vals = era5_raw_df["t2m"].values.astype('float')
+
+        # Plot mean
+        fig, ax = plt.subplots(1, 1, figsize=(7*.9, 3*.9))
+        ax.plot(convnp_mean, label="ConvNP", marker="o", markersize=3)
+        # Make 95% confidence interval
+        ax.fill_between(range(len(convnp_mean)), convnp_mean - 2 * stddev, convnp_mean + 2 * stddev, alpha=0.25, label="ConvNP 95% CI")
+        ax.plot(era5_vals, label="ERA5", marker="o", markersize=3)
+        # Plot true station data
+        ax.plot(station_closest_df["dry_bulb"].values.astype('float'), label="Station", marker="o", markersize=3)
+        # Add legend
+        ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02, 1, 0.2), ncol=4, mode="expand", borderaxespad=0)
+        ax.set_xlabel("Time")
+        ax.set_ylabel("2m temperature [°C]")
+        ax.set_xticks(range(len(era5_raw_df))[::14])
+        ax.set_xticklabels(era5_raw_df.index[::14].strftime("%Y-%m-%d"), rotation=15)
+        ax.set_title(f"ConvNP prediction for {location}", y=1.15)
+
+        if return_fig:
+            return fig, ax
+
     def gen_test_fig(self, era5_ds_plot=None, mean_ds=None, std_ds=None, samples_ds=None, add_colorbar=False, var_clim=None, std_clim=None, var_cbar_label=None, std_cbar_label=None, fontsize=None, figsize=(15, 5), extent=None):
         # Plots ERA5, ConvNP mean, ConvNP std dev
-        crs = ccrs.PlateCarree()
 
         if extent is not None:
             NotImplementedError('extent not yet implemented')
@@ -315,7 +428,7 @@ class ValidateV1:
         if samples_ds is not None:
             ncols += samples_ds.shape[0]
 
-        fig, axes = plt.subplots(1, ncols, subplot_kw=dict(projection=crs), figsize=figsize)
+        fig, axes = plt.subplots(1, ncols, subplot_kw=dict(projection=self.crs), figsize=figsize)
 
         axis_i = 0
         if era5_ds_plot is not None:
@@ -348,123 +461,55 @@ class ValidateV1:
             ax.add_feature(cf.BORDERS)
             ax.coastlines()
         return fig, axes
-
-    def plot_prediction_with_stations(self, date: str = None, location=None, closest_station=False, 
-    zoom_to_location=False, infer_extent=False, return_fig=False):
-
-        task_loader = self.task_loader
-        model = self.model
-        era5_raw_ds = self.processed_dict['era5_raw_ds']
-        
+    
+    ### Plotting utils
+    def _format_date(self, date: str = None):
         if date is None:
             val_start_year = self.processed_dict['date_info']['val_start_year']
             date = f"{val_start_year}-01-01T00:00:00.000000000"
         else:
             date = f'{date}T00:00:00.000000000'
-
-        test_task = task_loader(date, ["all", "all"], seed_override=42)
-        pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
-        pred_db = pred['dry_bulb']
-
-        # Get ERA5 data at location
-        station_raw_df = self.processed_dict['station_raw_df']
-        locs = set(zip(station_raw_df.reset_index()["latitude"], station_raw_df.reset_index()["longitude"]))
-        
-        if location is not None:
-            if isinstance(location, str):
-                if location not in LOCATION_LATLON:
-                    raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
-                X_t = LOCATION_LATLON[location]
-            else:
-                X_t = location
-
-        if closest_station:
-            # Find closest station to desired target location
-            X_station_closest = min(locs, key=lambda loc: np.linalg.norm(np.array(loc) - X_t))
-            X_t = np.array(X_station_closest)
-
-        if zoom_to_location:
-            lat_slice = slice(X_t[0] + 2, X_t[0] - 2)
-            lon_slice = slice(X_t[1] - 2, min(X_t[1] + 2, 180))
-            pred_db = pred_db.sel(latitude=lat_slice, longitude=lon_slice)
-            
-        fig, ax = plt.subplots(1, 1, subplot_kw=dict(projection=ccrs.PlateCarree()), figsize=(20, 20))
-        pred_db['mean'].plot(ax=ax, cmap="jet")
-        ax.coastlines()
-        ax.add_feature(cf.BORDERS)
-        
-        if location is not None:
-            ax.scatter(X_t[1], X_t[0], transform=ccrs.PlateCarree(), color="black", marker="*", s=200)
-            size_of_stations = 60
-        else:
-            import matplotlib as mpl
-            size_of_stations = mpl.rcParams['lines.markersize'] ** 2
-        # Plot station locations
-        ax.scatter([loc[1] for loc in locs], [loc[0] for loc in locs], transform=ccrs.PlateCarree(), color="red", marker=".", s=size_of_stations)
-        if zoom_to_location:
-            ax.set_extent([X_t[1] - 2, X_t[1] + 2, X_t[0] - 2, X_t[0] + 2])
-
-        if return_fig:
-            return fig, ax
-
-    def plot_timeseries_comparison(self, 
-                                   location, 
-                                   date_range: tuple, 
-                                   return_fig=False):
-
-        task_loader = self.task_loader
-        model = self.model
-        era5_raw_ds = self.processed_dict['era5_raw_ds']
-        station_raw_df = self.processed_dict['station_raw_df']
-
-        if isinstance(location, str):
-            if location not in LOCATION_LATLON:
-                raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
-            X_t = LOCATION_LATLON[location]
-        else:
-            X_t = location
-
-        dates = pd.date_range(date_range[0], date_range[1])
+        return date
+    
+    def _get_predictions_and_tasks(self, dates, task_loader, model, era5_raw_ds, return_dataarray=True):
+        if isinstance(dates, str):
+            dates = [dates]
 
         test_task = task_loader(dates, ["all", "all"], seed_override=42)
+        if len(dates) == 1:
+            test_task = test_task[0]
         pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=1)
-        pred_db = pred['dry_bulb']
+        # pred is of type deepsensor.model.pred.Prediction
 
-        locs = set(zip(station_raw_df.reset_index()["latitude"], station_raw_df.reset_index()["longitude"]))
-        X_station_closest = min(locs, key=lambda loc: np.linalg.norm(np.array(loc) - X_t))
-        X_t = np.array(X_station_closest)#.reshape(2, 1)
-        station_closest_df = station_raw_df.reset_index().set_index(["latitude", "longitude"]).loc[X_station_closest].set_index("time")
-        intersection = station_closest_df.index.intersection(dates)
-        if intersection.empty:
-            raise ValueError(f"Station {X_station_closest} has no data for dates {dates}")
-        else:
-            station_closest_df = station_closest_df.loc[dates]
+        if return_dataarray:
+            pred = pred['dry_bulb']
 
-        era5_raw_df = era5_raw_ds.sel(latitude=X_t[0], longitude=X_t[1], method="nearest").to_dataframe()
-        era5_raw_df = era5_raw_df.loc[dates]
-        era5_raw_df
+        return pred, test_task
+    
+    def _infer_extent(self):
+        """Get extent from config file. Return as tuple (minlon, maxlon, minlat, maxlat)
+        """
+        from nzdownscale.dataprocess.config import PLOT_EXTENT
 
-        sns.set_style("white")
+        extent = PLOT_EXTENT['all']
+        return (extent['minlon'], extent['maxlon'], extent['minlat'], extent['maxlat'])
 
-        convnp_mean = pred_db["mean"].sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
-        stddev = pred_db["std"].sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
-        era5_vals = era5_raw_df["t2m"].values.astype('float')
+    def _get_location_coordinates(self, location):
+        if location not in LOCATION_LATLON:
+            raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
+        X_t = LOCATION_LATLON[location]
 
-        # Plot mean
-        fig, ax = plt.subplots(1, 1, figsize=(7*.9, 3*.9))
-        ax.plot(convnp_mean, label="ConvNP", marker="o", markersize=3)
-        # Make 95% confidence interval
-        ax.fill_between(range(len(convnp_mean)), convnp_mean - 2 * stddev, convnp_mean + 2 * stddev, alpha=0.25, label="ConvNP 95% CI")
-        ax.plot(era5_vals, label="ERA5", marker="o", markersize=3)
-        # Plot true station data
-        ax.plot(station_closest_df["dry_bulb"].values.astype('float'), label="Station", marker="o", markersize=3)
-        # Add legend
-        ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02, 1, 0.2), ncol=4, mode="expand", borderaxespad=0)
-        ax.set_xlabel("Time")
-        ax.set_ylabel("2m temperature [°C]")
-        ax.set_xticks(range(len(era5_raw_df))[::14])
-        ax.set_xticklabels(era5_raw_df.index[::14].strftime("%Y-%m-%d"), rotation=15)
-        ax.set_title(f"ConvNP prediction for {location}", y=1.15)
+        return X_t
 
-        if return_fig:
-            return fig, ax
+    def _find_closest_station(self, coordinates, stations_raw_df):
+        locs = self._get_station_locations(stations_raw_df)
+        
+        # Find closest station to desired target location
+        X_station_closest = min(locs, key=lambda loc: np.linalg.norm(np.array(loc) - coordinates))
+        X_t = np.array(X_station_closest)
+
+        return X_t
+    
+    def _get_station_locations(self, stations_raw_df):
+        locs = set(zip(stations_raw_df.reset_index()["latitude"], stations_raw_df.reset_index()["longitude"]))
+        return locs
