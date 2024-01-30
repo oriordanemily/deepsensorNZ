@@ -175,22 +175,28 @@ class ValidateV1:
             _ = model(self.training_dict['train_tasks'][0])   # ? need ? 
         return model
 
-    def calculate_loss(self, dates: str = None, 
-                       location: str = None, 
+    def calculate_loss(self, dates: list or str = None, 
+                       locations: list or str = None, 
                        function: str = 'l1',
                        return_pred=False,
-                       return_station=False):
+                       return_station=False,
+                       verbose=True):
         
-        if not isinstance(dates, list):
+        if isinstance(dates, str):
             dates = [dates]
+        
+        if not isinstance(locations, list):
+            locations = [locations]
 
         if function == 'l1':
-            ord = 1
+            pass # was using np.linalg.norm but replaced for multidate calculations
         elif function == 'l2':
-            ord = 2
+            NotImplementedError('l2 not yet implemented')
         else:
             raise ValueError('function must be one of l1 or l2')
         
+        if verbose:
+            print('Setting up...')
         # setup
         task_loader = self.task_loader
         model = self.model
@@ -201,11 +207,24 @@ class ValidateV1:
         dates = [self._format_date(date) for date in dates]
 
         # get predictions and test_task
-        pred, _ = self._get_predictions_and_tasks(dates, task_loader, model, era5_raw_ds, return_dataarray=False)
+        pred, _ = self._get_predictions_and_tasks(dates, task_loader, model, era5_raw_ds, return_dataarray=False, verbose=verbose)
         pred_db = pred['dry_bulb']
 
         # get location if specified
-        if location is not None:
+        norms = {}
+        if return_pred:
+            pred_values = {}
+        if return_station:
+            station_values = {}
+
+        for location in locations:
+            if verbose:
+                print(f'Calculating loss for {location}')
+            norms[location] = []
+            if return_pred:
+                pred_values[location] = []
+            if return_station:
+                station_values[location] = []
             if isinstance(location, str):
                 if location in STATION_LATLON:
                     X_t = self._get_location_coordinates(location, station=True)
@@ -214,22 +233,65 @@ class ValidateV1:
             else:
                 X_t = location
 
-            # Find closest station to desired target location
-            X_t = self._find_closest_station(X_t, station_raw_df)
-            pred_db = pred_db.sel(latitude=X_t[0], longitude=X_t[1], method='nearest')
+            if location not in STATION_LATLON:
+                # Find closest station to desired target location
+                X_t = self._find_closest_station(X_t, station_raw_df)
+                pred_db = pred_db.sel(latitude=X_t[0], longitude=X_t[1], method='nearest')
 
-        pred_db_mean = pred_db['mean']
-        station_val = station_raw_df.loc[dates, 'dry_bulb'].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].values.astype('float')
-        returns = [np.linalg.norm(pred_db_mean - station_val, ord=ord)]
+            pred_db_mean = pred_db['mean'].sel({'latitude': X_t[0], 'longitude': X_t[1]}, method='nearest')
+            station_val = station_raw_df.loc[dates, 'dry_bulb'].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].groupby('time').mean().values.astype('float')
+
+            norms[location] = np.abs(pred_db_mean - station_val)
+            if return_pred:
+                pred_values[location] = pred_db_mean
+            if return_station:
+                station_values[location] = station_val
+
+        items_to_return = [norms]
         if return_pred:
-            returns.append(pred_db_mean)
+            items_to_return.append(pred_values)
         if return_station:
-            returns.append(station_val)
+            items_to_return.append(station_values)
 
-        if len(returns) == 1:
-            returns = returns[0]
-        return returns
+        if len(items_to_return) == 1:
+            return items_to_return[0]
+        else:
+            return items_to_return
 
+    def stations_in_date_range(self, date_range):
+        """Check if station is fully available for given date range
+
+        Args:
+            date_range (tuple): (start_date, end_date)
+        """
+        dates = pd.date_range(date_range[0], date_range[1])
+        station_raw_df = self.processed_dict['station_raw_df']
+
+        dict_location = {}
+        success = True
+        keep_locations = []
+
+        for location in STATION_LATLON.keys():
+            if isinstance(location, str):
+                X_t = self._get_location_coordinates(location, station=True)
+            try:
+                # is location in station_raw_df?
+                dict_location[location] = station_raw_df.loc[pd.IndexSlice[:, X_t[0], X_t[1]], :]
+                # is location available for all dates?
+                for d in dates:
+                    if d not in dict_location[location].index:
+                        success = False
+                        break
+            except:
+                success = False
+
+            if success:
+                keep_locations.append(location)
+            success = True
+
+        print(f'{len(keep_locations)}/{len(STATION_LATLON)} locations kept')
+        return keep_locations
+    
     ### Plotting functions
 
     def plot_nationwide_prediction(self, date: str = None, infer_extent=False, return_fig=False):
@@ -332,7 +394,7 @@ class ValidateV1:
         if return_fig:
             return fig, axes
 
-    def plot_prediction_with_stations(self, date: str = None, location=None, closest_station=False, zoom_to_location=False, infer_extent=False, return_fig=False):
+    def plot_prediction_with_stations(self, date: str = None, location=None, closest_station=False, zoom_to_location=False, infer_extent=False, return_fig=False, labels=None):
 
         # setup
         task_loader = self.task_loader
@@ -378,11 +440,15 @@ class ValidateV1:
         # Plot station locations
         locs = self._get_station_locations(station_raw_df)
         ax.scatter([loc[1] for loc in locs], [loc[0] for loc in locs], transform=self.crs, color="red", marker=".", s=size_of_stations)
-        
+
         if zoom_to_location:
             ax.set_extent([lon_slice.start, lon_slice.stop, lat_slice.start, lat_slice.stop])
         elif infer_extent:
             ax.set_extent([extent['minlon'], extent['maxlon'], extent['minlat'], extent['maxlat']])
+
+        if labels is not None:
+            for location, losses in labels.items():
+                ax.text(float(losses.longitude), float(losses.latitude), str(np.round(np.nanmean(losses.values),2)))
 
         if return_fig:
             return fig, ax
@@ -527,13 +593,15 @@ class ValidateV1:
             date = f'{date}T00:00:00.000000000'
         return date
     
-    def _get_predictions_and_tasks(self, dates, task_loader, model, era5_raw_ds, return_dataarray=True):
+    def _get_predictions_and_tasks(self, dates, task_loader, model, era5_raw_ds, return_dataarray=True, verbose=False):
         if isinstance(dates, str):
             dates = [dates]
 
         test_task = task_loader(dates, ["all", "all"], seed_override=42)
         if len(dates) == 1:
             test_task = test_task[0]
+        if verbose:
+            print('Calculating predictions...')
         pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
         # pred is of type deepsensor.model.pred.Prediction
 
@@ -558,7 +626,7 @@ class ValidateV1:
         if location not in latlon_dict:
             raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
         if station: 
-            X_t = np.array([latlon_dict[location]['latitude'], latlon_dict[location]['longitude']])
+            X_t = np.array([float(latlon_dict[location]['latitude']), float(latlon_dict[location]['longitude'])])
         else:
             X_t = latlon_dict[location]
 
@@ -576,3 +644,5 @@ class ValidateV1:
     def _get_station_locations(self, stations_raw_df):
         locs = set(zip(stations_raw_df.reset_index()["latitude"], stations_raw_df.reset_index()["longitude"]))
         return locs
+
+# %%
