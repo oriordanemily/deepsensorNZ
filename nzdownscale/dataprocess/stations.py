@@ -163,7 +163,23 @@ class ProcessStations(DataProcess):
         #     ax.scatter(v['lon'], v['lat'], color='red', marker='o', s=60)
 
         return ax
+    
+    def get_station_info(self, var):
+        paths = self.get_path_all_stations(var)
 
+        stations_list = []
+        for path in paths:
+            stations_list.append(self.load_station(path))
 
+        station_info = {}
+        for station in stations_list:
+            name = station.attrs['site name']
+            station_info[name] = {'station_no': station.attrs['agent_number'],
+                                'latitude': float(station['latitude'].values),
+                                'longitude': float(station['longitude'].values),
+                                'elevation': float(station['station_height'].values),}
+
+        return station_info
+    
 if __name__ == '__main__':
     pass
