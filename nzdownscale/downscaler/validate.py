@@ -30,7 +30,7 @@ from tqdm import tqdm
 from nzdownscale.downscaler.train import Train
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.dataprocess import era5, stations, topography, utils, config
-from nzdownscale.dataprocess.config import LOCATION_LATLON
+from nzdownscale.dataprocess.config import LOCATION_LATLON, STATION_LATLON
 
 
 class ValidateV1:
@@ -110,6 +110,7 @@ class ValidateV1:
         if not hasattr(self, 'model_metadata'):
             self.model_metadata = self.get_metadata()
         
+        # ! to do : we don't need to load training data for validation
         data = PreprocessForDownscaling(
             variable = self.model_metadata['data_settings']['var'],
             start_year = self.model_metadata['date_info']['start_year'],
@@ -173,6 +174,61 @@ class ValidateV1:
                         ) 
             _ = model(self.training_dict['train_tasks'][0])   # ? need ? 
         return model
+
+    def calculate_loss(self, dates: str = None, 
+                       location: str = None, 
+                       function: str = 'l1',
+                       return_pred=False,
+                       return_station=False):
+        
+        if not isinstance(dates, list):
+            dates = [dates]
+
+        if function == 'l1':
+            ord = 1
+        elif function == 'l2':
+            ord = 2
+        else:
+            raise ValueError('function must be one of l1 or l2')
+        
+        # setup
+        task_loader = self.task_loader
+        model = self.model
+        era5_raw_ds = self.processed_dict['era5_raw_ds']
+        station_raw_df = self.processed_dict['station_raw_df']
+
+        # format date
+        dates = [self._format_date(date) for date in dates]
+
+        # get predictions and test_task
+        pred, _ = self._get_predictions_and_tasks(dates, task_loader, model, era5_raw_ds, return_dataarray=False)
+        pred_db = pred['dry_bulb']
+
+        # get location if specified
+        if location is not None:
+            if isinstance(location, str):
+                if location in STATION_LATLON:
+                    X_t = self._get_location_coordinates(location, station=True)
+                else:
+                    X_t = self._get_location_coordinates(location)
+            else:
+                X_t = location
+
+            # Find closest station to desired target location
+            X_t = self._find_closest_station(X_t, station_raw_df)
+            pred_db = pred_db.sel(latitude=X_t[0], longitude=X_t[1], method='nearest')
+
+        pred_db_mean = pred_db['mean']
+        station_val = station_raw_df.loc[dates, 'dry_bulb'].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].values.astype('float')
+        returns = [np.linalg.norm(pred_db_mean - station_val, ord=ord)]
+        if return_pred:
+            returns.append(pred_db_mean)
+        if return_station:
+            returns.append(station_val)
+
+        if len(returns) == 1:
+            returns = returns[0]
+        return returns
 
     ### Plotting functions
 
@@ -478,7 +534,7 @@ class ValidateV1:
         test_task = task_loader(dates, ["all", "all"], seed_override=42)
         if len(dates) == 1:
             test_task = test_task[0]
-        pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=1)
+        pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
         # pred is of type deepsensor.model.pred.Prediction
 
         if return_dataarray:
@@ -494,10 +550,17 @@ class ValidateV1:
         extent = PLOT_EXTENT['all']
         return (extent['minlon'], extent['maxlon'], extent['minlat'], extent['maxlat'])
 
-    def _get_location_coordinates(self, location):
-        if location not in LOCATION_LATLON:
+    def _get_location_coordinates(self, location, station=False):
+        if station:
+            latlon_dict = STATION_LATLON
+        else:
+            latlon_dict = LOCATION_LATLON
+        if location not in latlon_dict:
             raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
-        X_t = LOCATION_LATLON[location]
+        if station: 
+            X_t = np.array([latlon_dict[location]['latitude'], latlon_dict[location]['longitude']])
+        else:
+            X_t = latlon_dict[location]
 
         return X_t
 
