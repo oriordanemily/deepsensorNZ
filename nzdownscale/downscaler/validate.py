@@ -182,7 +182,7 @@ class ValidateV1:
                        return_station=False,
                        verbose=True):
         
-        if isinstance(dates, str):
+        if isinstance(dates, pd._libs.tslibs.timestamps.Timestamp) or isinstance(dates, str):
             dates = [dates]
         
         if not isinstance(locations, list):
@@ -236,9 +236,8 @@ class ValidateV1:
             if location not in STATION_LATLON:
                 # Find closest station to desired target location
                 X_t = self._find_closest_station(X_t, station_raw_df)
-                pred_db = pred_db.sel(latitude=X_t[0], longitude=X_t[1], method='nearest')
 
-            pred_db_mean = pred_db['mean'].sel({'latitude': X_t[0], 'longitude': X_t[1]}, method='nearest')
+            pred_db_mean = pred_db['mean'].sel(latitude=X_t[0], longitude=X_t[1], method='nearest')
             station_val = station_raw_df.loc[dates, 'dry_bulb'].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].groupby('time').mean().values.astype('float')
 
             norms[location] = np.abs(pred_db_mean - station_val)
@@ -257,6 +256,61 @@ class ValidateV1:
             return items_to_return[0]
         else:
             return items_to_return
+
+    def plot_losses(self, dates, loss_dict, pred_dict=None, station_dict=None, location=None, return_fig=False):
+        """_summary_
+
+        Args:
+            dates (_type_): dates to plot
+            loss_dict (_type_): dictionary of losses, output from calculate_loss
+            pred_dict (_type_, optional): dictionary of predictions, output from calculate_loss. Defaults to None.
+            station_dict (_type_, optional): dictionary of station values, output from calculate_loss. Defaults to None.
+            location (_type_, optional): location to plot for. If None, calculates average over all stations
+            return_fig (bool, optional): return fig. Defaults to False.
+
+        """
+        
+        fig, ax = plt.subplots()
+
+        if location is None:
+            losses = np.nanmean([i for i in loss_dict.values()], axis = 0)
+        else:
+            losses = loss_dict[location]
+        ax.plot(dates, losses, color='b', label = 'losses')
+        ax.set_ylabel('Losses (pred - station)', color='b')
+
+        create_ax2 = False
+        if pred_dict is not None or station_dict is not None:
+            create_ax2 = True
+            ax2 = ax.twinx()
+            ax2.set_ylabel('Temperature (C)')
+            if pred_dict is not None:
+                if location is None:
+                    preds = np.nanmean([i for i in pred_dict.values()], axis = 0)
+                else:
+                    preds = pred_dict[location]
+                ax2.plot(dates, preds, color='r', label='preds', alpha=0.5)
+            
+            if station_dict is not None:
+                if location is None:
+                    stations = np.nanmean([i for i in station_dict.values()], axis = 0)
+                else:
+                    stations = station_dict[location]
+                ax2.plot(dates, stations, color='g', label='stations', alpha=0.5)
+            ax2.legend(loc='upper right')
+
+        ax.legend(loc='upper left')
+        
+        if location is None:
+            ax.set_title(f'Average losses for all stations from {dates[0]} to {dates[1]}')
+        else:
+            ax.set_title(f'Losses for {location} from {dates[0]} to {dates[1]}')
+
+        if return_fig:
+            if create_ax2:
+                return fig, ax, ax2
+            else:
+                return fig, ax
 
     def stations_in_date_range(self, date_range):
         """Check if station is fully available for given date range
@@ -477,7 +531,8 @@ class ValidateV1:
 
         pred_db, _ = self._get_predictions_and_tasks(dates, task_loader, model, era5_raw_ds)
 
-        X_station_closest = self._find_closest_station(X_t, station_raw_df)
+        if closest_station:
+            X_station_closest = self._find_closest_station(X_t, station_raw_df)
 
         # Get station data on dates in date_range
         station_closest_df = station_raw_df.reset_index().set_index(["latitude", "longitude"]).loc[tuple(X_station_closest)].set_index("time")
@@ -602,7 +657,7 @@ class ValidateV1:
             test_task = test_task[0]
         if verbose:
             print('Calculating predictions...')
-        pred = model.predict(test_task, X_t=era5_raw_ds, resolution_factor=2)
+        pred = model.predict(test_task, X_t=era5_raw_ds.sel({'time': dates}), resolution_factor=2)
         # pred is of type deepsensor.model.pred.Prediction
 
         if return_dataarray:
@@ -619,12 +674,13 @@ class ValidateV1:
         return (extent['minlon'], extent['maxlon'], extent['minlat'], extent['maxlat'])
 
     def _get_location_coordinates(self, location, station=False):
-        if station:
+        if location in STATION_LATLON:
+            station = True
             latlon_dict = STATION_LATLON
         else:
             latlon_dict = LOCATION_LATLON
         if location not in latlon_dict:
-            raise ValueError(f"Location {location} not in LOCATION_LATLON, please set X_t manually")
+            raise ValueError(f"Location {location} not in {latlon_dict}, please set X_t manually")
         if station: 
             X_t = np.array([float(latlon_dict[location]['latitude']), float(latlon_dict[location]['longitude'])])
         else:
