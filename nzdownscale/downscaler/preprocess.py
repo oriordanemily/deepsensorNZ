@@ -26,6 +26,7 @@ class PreprocessForDownscaling:
                  val_end_year = None,
                  variable='temperature',
                  use_daily_data=True,
+                 validation = False
                  ) -> None:
         
         """
@@ -43,6 +44,10 @@ class PreprocessForDownscaling:
             self.val_end_year = val_end_year
         self.years = np.arange(start_year, val_end_year+1)
         self.use_daily_data = use_daily_data
+
+        if validation:
+            self.start_year = val_start_year
+            self.end_year = val_end_year
 
         self.dataprocess = utils.DataProcess()
 
