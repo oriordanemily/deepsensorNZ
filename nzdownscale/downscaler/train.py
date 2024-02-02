@@ -72,7 +72,7 @@ class Train:
         self.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix, batch=batch, batch_size=batch_size)
 
 
-    def setup_task_loader(self, verbose=False):
+    def setup_task_loader(self, verbose=False, validation=False):
 
         era5_ds = self.era5_ds
         highres_aux_ds = self.highres_aux_ds
@@ -95,14 +95,16 @@ class Train:
         val_start = f'{val_start_year}-01-01'
         val_end = f'{val_end_year}-12-31'
 
-        train_dates = era5_ds.sel(time=slice(train_start, train_end)).time.values
+        if not validation:
+            train_dates = era5_ds.sel(time=slice(train_start, train_end)).time.values
         val_dates = era5_ds.sel(time=slice(val_start, val_end)).time.values
 
-        train_tasks = []
-        # only loaded every other date to speed up training for now
-        for date in tqdm(train_dates[::2], desc="Loading train tasks..."):
-            task = task_loader(date, context_sampling="all", target_sampling="all")
-            train_tasks.append(task)
+        if not validation:
+            train_tasks = []
+            # only loaded every other date to speed up training for now
+            for date in tqdm(train_dates[::2], desc="Loading train tasks..."):
+                task = task_loader(date, context_sampling="all", target_sampling="all")
+                train_tasks.append(task)
 
         val_tasks = []
         for date in tqdm(val_dates, desc="Loading val tasks..."):
@@ -116,8 +118,9 @@ class Train:
         if verbose:
             print(f"Done in {time.time() - tic:.2f}s")                
 
-        self.task_loader = task_loader    
-        self.train_tasks = train_tasks
+        self.task_loader = task_loader 
+        if not validation:   
+            self.train_tasks = train_tasks
         self.val_tasks = val_tasks
 
         return task_loader     
@@ -140,7 +143,7 @@ class Train:
                     )
     
         # Print number of parameters to check model is not too large for GPU memory
-        _ = model(self.train_tasks[0])
+        _ = model(self.val_tasks[0])
         print(f"Model has {deepsensor.backend.nps.num_params(model.model):,} parameters")
         
         self.convnp_kwargs = dict(convnp_kwargs)
