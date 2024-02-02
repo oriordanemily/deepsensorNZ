@@ -21,6 +21,9 @@ def open_pickle(filename):
         x = pickle.load(pickle_file)
     return x
 
+def rmse(y_true, y_pred):
+    return np.sqrt(np.mean((y_true - y_pred)**2))
+
 
 
 class DataProcess:
