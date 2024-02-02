@@ -16,6 +16,7 @@ import cartopy.feature as cf
 import seaborn as sns
 from scipy.ndimage import gaussian_filter
 import torch
+import pickle
 
 import deepsensor.torch
 from deepsensor.data.loader import TaskLoader
@@ -118,6 +119,7 @@ class ValidateV1:
             val_start_year = self.model_metadata['date_info']['val_start_year'],
             val_end_year = self.model_metadata['date_info']['val_end_year'],
             use_daily_data = self.model_metadata['date_info']['use_daily_data'],
+            validation = True
         )
         data.run_processing_sequence(
             self.model_metadata['data_settings']['topography_highres_coarsen_factor'],
@@ -175,12 +177,32 @@ class ValidateV1:
             _ = model(self.training_dict['train_tasks'][0])   # ? need ? 
         return model
 
-    def calculate_loss(self, dates: list or str = None, 
-                       locations: list or str = None, 
+    def calculate_loss(self, dates: list or str, 
+                       locations: list or str, 
                        function: str = 'l1',
+                       predictions=None,
+                       save_preds=False,
                        return_pred=False,
                        return_station=False,
                        verbose=True):
+        """Calculate loss
+
+        Args:
+            dates (listorstr): List of dates for loss to be calculated. 
+            locations (listorstr): List of locations. 
+            function (str, optional): Function to calculate loss. Defaults to 'l1'.
+            predictions (_type_, optional): _description_. Defaults to None.
+            return_pred (bool, optional): _description_. Defaults to False.
+            return_station (bool, optional): _description_. Defaults to False.
+            verbose (bool, optional): _description_. Defaults to True.
+
+        Raises:
+            ValueError: _description_
+            ValueError: _description_
+
+        Returns:
+            _type_: _description_
+        """        
         
         if isinstance(dates, pd._libs.tslibs.timestamps.Timestamp) or isinstance(dates, str):
             dates = [dates]
@@ -201,14 +223,22 @@ class ValidateV1:
         task_loader = self.task_loader
         model = self.model
         era5_raw_ds = self.processed_dict['era5_raw_ds']
+        print('ERA5 data loaded')
         station_raw_df = self.processed_dict['station_raw_df']
+        print('Station data loaded')
 
         # format date
         dates = [self._format_date(date) for date in dates]
+        print('Dates formatted')
 
         # get predictions and test_task
-        pred, _ = self._get_predictions_and_tasks(dates, task_loader, model, era5_raw_ds, return_dataarray=False, verbose=verbose)
+        if predictions == None:
+            pred, _ = self._get_predictions_and_tasks(dates, task_loader, model, era5_raw_ds, return_dataarray=False, verbose=verbose, save_preds=save_preds)
+        else:
+            with open(predictions, 'rb') as f:
+                pred = pickle.load(f)
         pred_db = pred['dry_bulb']
+        pred_db_mean = pred_db['mean'].sel(time=dates)
 
         # get location if specified
         norms = {}
@@ -237,12 +267,18 @@ class ValidateV1:
                 # Find closest station to desired target location
                 X_t = self._find_closest_station(X_t, station_raw_df)
 
-            pred_db_mean = pred_db['mean'].sel(latitude=X_t[0], longitude=X_t[1], method='nearest')
-            station_val = station_raw_df.loc[dates, 'dry_bulb'].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].groupby('time').mean().values.astype('float')
-
-            norms[location] = np.abs(pred_db_mean - station_val)
+            #get station values
+            try:            
+                station_val = station_raw_df.loc[dates, 'dry_bulb'].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].groupby('time').mean().values.astype('float')
+            except:
+                raise ValueError(f'No station data for {location} on given date(s): {dates}')
+            
+            pred_db_mean_location = pred_db_mean.sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
+            if station_val.shape != pred_db_mean_location.shape:
+                raise ValueError(f'Station and prediction shapes do not match for {location} on given date(s). Station shape: {station_val.shape}, prediction shape: {pred_db_mean_location.shape}')
+            norms[location] = np.abs(pred_db_mean_location - station_val)
             if return_pred:
-                pred_values[location] = pred_db_mean
+                pred_values[location] = pred_db_mean_location
             if return_station:
                 station_values[location] = station_val
 
@@ -257,7 +293,10 @@ class ValidateV1:
         else:
             return items_to_return
 
-    def plot_losses(self, dates, loss_dict, pred_dict=None, station_dict=None, location=None, return_fig=False):
+    def plot_losses(self, dates, loss_dict,
+                    pred_dict=None, station_dict=None, 
+                    location=None, return_fig=False,
+                    return_loss=False):
         """_summary_
 
         Args:
@@ -273,7 +312,7 @@ class ValidateV1:
         fig, ax = plt.subplots()
 
         if location is None:
-            losses = np.nanmean([i for i in loss_dict.values()], axis = 0)
+            losses = np.nansum([i for i in loss_dict.values()], axis = 0)
         else:
             losses = loss_dict[location]
         ax.plot(dates, losses, color='b', label = 'losses')
@@ -302,10 +341,10 @@ class ValidateV1:
         ax.legend(loc='upper left')
         
         if location is None:
-            ax.set_title(f'Average losses for all stations from {dates[0]} to {dates[1]}')
+            ax.set_title(f'Sum of losses for all stations from {dates[0]} to {dates[-1]}')
         else:
-            ax.set_title(f'Losses for {location} from {dates[0]} to {dates[1]}')
-
+            ax.set_title(f'Losses for {location} from {dates[0]} to {dates[-1]}')
+        
         if return_fig:
             if create_ax2:
                 return fig, ax, ax2
@@ -320,6 +359,7 @@ class ValidateV1:
         """
         dates = pd.date_range(date_range[0], date_range[1])
         station_raw_df = self.processed_dict['station_raw_df']
+        station_raw_df_dates = station_raw_df.loc[dates]
 
         dict_location = {}
         success = True
@@ -330,17 +370,19 @@ class ValidateV1:
                 X_t = self._get_location_coordinates(location, station=True)
             try:
                 # is location in station_raw_df?
-                dict_location[location] = station_raw_df.loc[pd.IndexSlice[:, X_t[0], X_t[1]], :]
+                dict_location[location] = station_raw_df_dates.loc[pd.IndexSlice[:, X_t[0], X_t[1]], :]
                 # is location available for all dates?
                 for d in dates:
+                    if not success:
+                        break
                     if d not in dict_location[location].index:
                         success = False
-                        break
             except:
                 success = False
 
             if success:
-                keep_locations.append(location)
+                if len(dict_location[location]) > 1:
+                    keep_locations.append(location)
             success = True
 
         print(f'{len(keep_locations)}/{len(STATION_LATLON)} locations kept')
@@ -445,6 +487,7 @@ class ValidateV1:
             for ax in axes:
                 ax.scatter(X_t[1], X_t[0], marker="s", color="black", transform=self.crs, s=10**2, facecolors='none', linewidth=2)
 
+        fig.suptitle(date)
         if return_fig:
             return fig, axes
 
@@ -510,14 +553,17 @@ class ValidateV1:
     def plot_timeseries_comparison(self, 
                                    location, 
                                    date_range: tuple, 
+                                   predictions=None,
                                    closest_station=True,
                                    return_fig=False):
 
-        # ! need to implement something to indicate how far ERA5/convnp location is from closest station. For now, this function plots ERA5/convnp at the closest station by default (when closest_station=True).
+        # ! need to implement something to indicate how far ERA5/convnp location is from closest station. 
+        # For now, this function plots ERA5/convnp at the closest station by default (when closest_station=True).
 
         # setup
-        task_loader = self.task_loader
-        model = self.model
+        if predictions == None:
+            task_loader = self.task_loader
+            model = self.model
         era5_raw_ds = self.processed_dict['era5_raw_ds']
         station_raw_df = self.processed_dict['station_raw_df']
 
@@ -529,31 +575,39 @@ class ValidateV1:
 
         dates = pd.date_range(date_range[0], date_range[1])
 
-        pred_db, _ = self._get_predictions_and_tasks(dates, task_loader, model, era5_raw_ds)
+        if predictions == None:
+            pred_db, _ = self._get_predictions_and_tasks(dates, task_loader, model, era5_raw_ds)
+        else:
+            print('Loading predictions from file')
+            with open(predictions, 'rb') as f:
+                pred = pickle.load(f)
+            pred_db = pred['dry_bulb'].sel(time=dates)
 
         if closest_station:
             X_station_closest = self._find_closest_station(X_t, station_raw_df)
 
         # Get station data on dates in date_range
         station_closest_df = station_raw_df.reset_index().set_index(["latitude", "longitude"]).loc[tuple(X_station_closest)].set_index("time")
-        intersection = station_closest_df.index.intersection(dates)
-        if intersection.empty:
-            raise ValueError(f"Station {X_station_closest} has no data for dates {dates}")
-        else:
-            station_closest_df = station_closest_df.loc[dates]
+        # intersection = station_closest_df.index.intersection(dates)
+        # if intersection.empty:
+        #     raise ValueError(f"Station {X_station_closest} has no data for dates {dates}")
+        # else:
+        station_closest_df = station_closest_df.loc[dates]
 
         if closest_station:
             X_t = X_station_closest
 
-        era5_raw_df = era5_raw_ds.sel(latitude=X_t[0], longitude=X_t[1], method="nearest").to_dataframe()
-        era5_raw_df = era5_raw_df.loc[dates]
-        era5_raw_df
+        # era5_raw_df = era5_raw_ds.sel(latitude=X_t[0], longitude=X_t[1], method="nearest").to_dataframe()
+        # era5_raw_df = era5_raw_df.loc[dates]
+        # era5_raw_df
+        era5_raw_ds = era5_raw_ds.sel(time=dates, latitude=X_t[0], longitude=X_t[1], method="nearest")
 
         sns.set_style("white")
 
         convnp_mean = pred_db["mean"].sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
         stddev = pred_db["std"].sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
-        era5_vals = era5_raw_df["t2m"].values.astype('float')
+        # era5_vals = era5_raw_df["t2m"].values.astype('float')
+        era5_vals = era5_raw_ds.values.astype('float')
 
         # Plot mean
         fig, ax = plt.subplots(1, 1, figsize=(7*.9, 3*.9))
@@ -567,8 +621,8 @@ class ValidateV1:
         ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02, 1, 0.2), ncol=4, mode="expand", borderaxespad=0)
         ax.set_xlabel("Time")
         ax.set_ylabel("2m temperature [°C]")
-        ax.set_xticks(range(len(era5_raw_df))[::14])
-        ax.set_xticklabels(era5_raw_df.index[::14].strftime("%Y-%m-%d"), rotation=15)
+        ax.set_xticks(range(len(era5_raw_ds.time))[::14])
+        ax.set_xticklabels([str(i)[:10] for i in era5_raw_ds.time.values[::14]], rotation=15)
         ax.set_title(f"ConvNP prediction for {location}", y=1.15)
 
         if return_fig:
@@ -648,16 +702,22 @@ class ValidateV1:
             date = f'{date}T00:00:00.000000000'
         return date
     
-    def _get_predictions_and_tasks(self, dates, task_loader, model, era5_raw_ds, return_dataarray=True, verbose=False):
+    def _get_predictions_and_tasks(self, dates, task_loader, model, era5_raw_ds, return_dataarray=True, verbose=False, save_preds=False):
         if isinstance(dates, str):
             dates = [dates]
 
         test_task = task_loader(dates, ["all", "all"], seed_override=42)
+        if verbose:
+            print('Test tasks loaded')
         if len(dates) == 1:
             test_task = test_task[0]
         if verbose:
             print('Calculating predictions...')
         pred = model.predict(test_task, X_t=era5_raw_ds.sel({'time': dates}), resolution_factor=2)
+
+        if save_preds:
+            with open(f'predictions_{self.training_metadata_path.split("/")[-1]}', 'wb') as f:
+                pickle.dump(pred, f)
         # pred is of type deepsensor.model.pred.Prediction
 
         if return_dataarray:
