@@ -97,15 +97,18 @@ class PreprocessForDownscaling:
 
 
     def load_topography(self):
+        print('Loading topography...')
         self.ds_elev = self.process_top.open_ds()
 
     
     def load_era5(self):
+        print('Loading era5...')
         self.ds_era = self.process_era.load_ds(self.var, self.years)
         self.da_era = self.process_era.ds_to_da(self.ds_era, self.var)
 
     
     def load_stations(self):
+        print('Loading stations...')
         #station_paths = process_stations.get_path_all_stations(var)
         self.station_metadata_all = self.process_stations.get_metadata_df(self.var)
 
@@ -393,6 +396,7 @@ class PreprocessForDownscaling:
                     highres_aux_raw_ds,
                     station_raw_df,
                     test_norm=False,
+                    data_processor=None,
                     ):
         """
         Gets processed data for deepsensor input
@@ -401,6 +405,8 @@ class PreprocessForDownscaling:
 
         #changed the maps here to use the high res topo data as that seems to have the
         #largest extent
+
+        print('Creating DataProcessor...')
         data_processor = DataProcessor(x1_name="latitude", 
                                     x1_map=(era5_raw_ds["latitude"].min(), era5_raw_ds["latitude"].max()),
                                     #    x1_map=(highres_aux_raw_ds["latitude"].min(), 
