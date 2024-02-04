@@ -390,31 +390,38 @@ class PreprocessForDownscaling:
         return station_raw_df
 
 
+    def __str__(self):
+        s = "PreprocessForDownscaling with data_processor:\n"
+        s = s + self.data_processor.__str__
+        return s
+
+
     def process_all_for_training(self,
                     era5_raw_ds,
                     aux_raw_ds,
                     highres_aux_raw_ds,
                     station_raw_df,
                     test_norm=False,
-                    data_processor=None,
+                    data_processor=None,  # ?
                     ):
         """
         Gets processed data for deepsensor input
         Normalises all data and add necessary dims
         """
 
-        #changed the maps here to use the high res topo data as that seems to have the
-        #largest extent
-
         print('Creating DataProcessor...')
-        data_processor = DataProcessor(x1_name="latitude", 
-                                    x1_map=(era5_raw_ds["latitude"].min(), era5_raw_ds["latitude"].max()),
-                                    #    x1_map=(highres_aux_raw_ds["latitude"].min(), 
-                                    #            highres_aux_raw_ds["latitude"].max()),
-                                    x2_name="longitude", 
-                                    x2_map = (era5_raw_ds["longitude"].min(), era5_raw_ds["longitude"].max()))
-                                    #    x2_map=(highres_aux_raw_ds["longitude"].min(), 
-                                            #    highres_aux_raw_ds["longitude"].max()))
+        data_processor = DataProcessor(
+            x1_name="latitude", 
+            # x1_map=(era5_raw_ds["latitude"].min(), 
+            #         era5_raw_ds["latitude"].max()),
+            x1_map=(highres_aux_raw_ds["latitude"].min(), 
+                    highres_aux_raw_ds["latitude"].max()),
+            x2_name="longitude", 
+            # x2_map = (era5_raw_ds["longitude"].min(), 
+            #           era5_raw_ds["longitude"].max()),
+            x2_map=(highres_aux_raw_ds["longitude"].min(), 
+                    highres_aux_raw_ds["longitude"].max()),
+            )
 
         # compute normalisation parameters
         era5_ds, station_df = data_processor([era5_raw_ds, station_raw_df]) #meanstd
