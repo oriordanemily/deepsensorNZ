@@ -466,7 +466,7 @@ class ValidateV1:
             add_colorbar=True,
             var_cbar_label="2m temperature [°C]",
             std_cbar_label="std dev [°C]",
-            std_clim=(None, 2),
+            std_clim=(None, 5),
             figsize=(20, 20/3),
             extent=extent
         )
@@ -612,11 +612,15 @@ class ValidateV1:
         if return_fig:
             return fig, ax
 
-    def gen_test_fig(self, era5_ds_plot=None, mean_ds=None, std_ds=None, samples_ds=None, add_colorbar=False, var_clim=None, std_clim=None, var_cbar_label=None, std_cbar_label=None, fontsize=None, figsize=(15, 5), extent=None):
+    def gen_test_fig(self, era5_ds_plot=None, mean_ds=None, std_ds=None, samples_ds=None, add_colorbar=False, var_clim=None, std_clim=None, var_cbar_label=None, std_cbar_label=None, fontsize=None, figsize=(15, 5), extent=None, remove_sea=True):
         # Plots ERA5, ConvNP mean, ConvNP std dev
-
+        
         if extent is not None:
             NotImplementedError('extent not yet implemented')
+
+        if remove_sea:
+            interpolated_era = era5_ds_plot.interp_like(mean_ds)
+            land_sea_mask = (~ np.isnan(interpolated_era))
 
         if var_clim is None:
             vmin = np.array(mean_ds.min())
@@ -656,6 +660,8 @@ class ValidateV1:
         if mean_ds is not None:
             axis_i += 1
             ax = axes[axis_i]
+            if remove_sea:
+                mean_ds = mean_ds.where(land_sea_mask)
             mean_ds.plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=add_colorbar, cbar_kwargs=dict(label=var_cbar_label))
             ax.set_title("ConvNP mean", fontsize=fontsize)
 
@@ -669,6 +675,8 @@ class ValidateV1:
         if std_ds is not None:
             axis_i += 1
             ax = axes[axis_i]
+            if remove_sea:
+                std_ds = std_ds.where(land_sea_mask)
             std_ds.plot(ax=ax, cmap="Greys", add_colorbar=add_colorbar, vmin=std_vmin, vmax=std_vmax, cbar_kwargs=dict(label=std_cbar_label))
             ax.set_title("ConvNP std dev", fontsize=fontsize)
 
@@ -676,6 +684,7 @@ class ValidateV1:
             ax.add_feature(cf.BORDERS)
             ax.coastlines()
         return fig, axes
+    
     
     ### Plotting utils
     def _format_date(self, date: str = None):
