@@ -98,7 +98,9 @@ class Train:
         val_start_year = self.val_start_year
         val_end_year = self.val_end_year
 
-        context = [era5_ds, aux_ds] if landmask_ds is None else [era5_ds, aux_ds, landmask_ds]
+        context = [era5_ds, aux_ds]
+        if landmask_ds is not None:
+            context += [landmask_ds]
         
         task_loader = TaskLoader(context=context,
                                 target=station_df, 
