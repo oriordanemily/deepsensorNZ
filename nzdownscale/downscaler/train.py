@@ -72,12 +72,16 @@ class Train:
         self.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix, batch=batch, batch_size=batch_size)
 
 
-    def setup_task_loader(self, verbose=False, validation=False):
+    def setup_task_loader(self, 
+                          verbose=False, 
+                          validation=False,
+                          ):
 
         era5_ds = self.era5_ds
         highres_aux_ds = self.highres_aux_ds
         aux_ds = self.aux_ds
         station_df = self.station_df
+        
         start_year = self.start_year
         end_year = self.end_year
         val_start_year = self.val_start_year

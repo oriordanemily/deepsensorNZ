@@ -74,7 +74,10 @@ class DataProcess:
         https://stackoverflow.com/questions/53886153/resample-xarray-object-to-lower-resolution-spatially
         """
         #return da.coarsen(longitude=coarsen_by, boundary=boundary).mean().coarsen(latitude=coarsen_by, boundary=boundary).mean().squeeze()
-        return da.coarsen(latitude=coarsen_by, longitude=coarsen_by, boundary=boundary).mean()
+        if coarsen_by == 1:
+            return da
+        else:
+            return da.coarsen(latitude=coarsen_by, longitude=coarsen_by, boundary=boundary).mean()
 
 
     def rename_xarray_coords(self,

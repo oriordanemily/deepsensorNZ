@@ -13,6 +13,7 @@ from scipy.ndimage import gaussian_filter
 
 from deepsensor.data.processor import DataProcessor
 from deepsensor.data.utils import construct_x1x2_ds
+from deepsensor.data import construct_circ_time_ds
 from nzdownscale.dataprocess import era5, stations, topography, utils, config
 from nzdownscale.dataprocess.config import LOCATION_LATLON
 
@@ -67,8 +68,11 @@ class PreprocessForDownscaling:
         self.aux_ds = None
         self.era5_ds = None
         self.highres_aux_ds = None
+        self.landmask_ds = None
         self.station_raw_df = None
         self.station_df = None
+
+        self._ds_elev_hr = None
 
         self._check_args()
 
@@ -84,6 +88,8 @@ class PreprocessForDownscaling:
         topography_highres_coarsen_factor,
         topography_lowres_coarsen_factor,
         era5_coarsen_factor,
+        include_time_of_year=False,
+        include_landmask=False,
         ):
         
         self.load_topography()
@@ -93,6 +99,15 @@ class PreprocessForDownscaling:
         highres_aux_raw_ds, aux_raw_ds = self.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
         era5_raw_ds = self.preprocess_era5(coarsen_factor=era5_coarsen_factor)
         station_raw_df = self.preprocess_stations()
+
+        if include_time_of_year: 
+            raise NotImplementedError
+            era5_raw_ds = self.add_time_of_year(era5_raw_ds)
+        if include_landmask:
+            raise NotImplementedError
+            land_mask_raw_ds = data.load_landmask()
+            land_mask_ds = data_processor(land_mask_raw_ds, method="min_max")
+
         self.process_all_for_training(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
 
 
@@ -180,15 +195,13 @@ class PreprocessForDownscaling:
         process_top = self.process_top
 
         # Topography = 0.002 degrees (~200m)
-        # coarsen_factor = 30  #5
-        if coarsen_factor == 1:
-            ds_elev_highres = ds_elev
-        else:
-            ds_elev_highres = process_top.coarsen_da(ds_elev, coarsen_factor)
-
-        #fill all nan values with 0 to avoid training error
+        _ds_elev_hr = process_top.coarsen_da(ds_elev, coarsen_factor)
         if fillna:
-            ds_elev_highres = ds_elev_highres.fillna(0)
+            #fill all nan values with 0 to avoid training error
+            ds_elev_highres = _ds_elev_hr.fillna(0)
+        else:
+            ds_elev_highres = _ds_elev_hr
+        self._ds_elev_hr = _ds_elev_hr
 
         if plot:
             da_elev_highres = process_top.ds_to_da(ds_elev_highres)
@@ -202,6 +215,7 @@ class PreprocessForDownscaling:
                     f'lon res: {lonres_topo:.4f} degrees')
             plt.show()
 
+        
         self.ds_elev_highres = ds_elev_highres
         return ds_elev_highres
     
@@ -396,15 +410,39 @@ class PreprocessForDownscaling:
         return s
 
 
+    def load_landmask(self):
+        """ Land mask data array, same resolution as high res topography """ 
+        assert self._ds_elev_hr is not None, "_get_highres_topography() must be run first"
+
+        _da_elev = self.process_top.ds_to_da(self._ds_elev_hr)
+        da_landmask = xr.where(np.isnan(_da_elev), 0, 1)
+        da_landmask.name = 'landmask'
+        # da_landmask variable name convention: land_mask_raw_ds
+        return da_landmask
+
+    
+    def add_time_of_year(self, ds):
+        """ 
+        Add cos_D and sin_D to dataset to be used as context set, original ds must have the time coordinate. Info: https://alan-turing-institute.github.io/deepsensor/user-guide/convnp.html
+        """
+        dates = pd.date_range(ds.time.values.min(), ds.time.values.max(), freq="D")
+        doy_ds = construct_circ_time_ds(dates, freq="D")
+        ds["cos_D"] = doy_ds["cos_D"]
+        ds["sin_D"] = doy_ds["sin_D"]
+        return ds
+
+
     def process_all_for_training(self,
                     era5_raw_ds,
                     aux_raw_ds,
                     highres_aux_raw_ds,
                     station_raw_df,
+                    landmask_raw_ds=None,
                     test_norm=False,
                     data_processor=None,  # ?
                     ):
         """
+        Creates DataProcessor:
         Gets processed data for deepsensor input
         Normalises all data and add necessary dims
         """
@@ -426,6 +464,10 @@ class PreprocessForDownscaling:
         # compute normalisation parameters
         era5_ds, station_df = data_processor([era5_raw_ds, station_raw_df]) #meanstd
         aux_ds, highres_aux_ds = data_processor([aux_raw_ds, highres_aux_raw_ds], method="min_max") #minmax
+        if landmask_raw_ds is not None:
+            landmask_ds = data_processor(landmask_raw_ds, method='min_max')
+        else: 
+            landmask_ds = None
         print(data_processor)
 
         if test_norm: 
@@ -451,6 +493,7 @@ class PreprocessForDownscaling:
         self.era5_ds = era5_ds
         self.highres_aux_ds = highres_aux_ds
         self.station_df = station_df
+        self.landmask_ds = landmask_ds
 
 
     def get_processed_output_dict(self):
@@ -473,9 +516,10 @@ class PreprocessForDownscaling:
 
         processed_output_dict = {
             'data_processor': self.data_processor,
-            'aux_ds': self.aux_ds,
             'era5_ds': self.era5_ds,
             'highres_aux_ds': self.highres_aux_ds,
+            'aux_ds': self.aux_ds,
+            'landmask_ds': self.landmask_ds,
             'station_df': self.station_df,
 
             'station_raw_df': self.station_raw_df,
