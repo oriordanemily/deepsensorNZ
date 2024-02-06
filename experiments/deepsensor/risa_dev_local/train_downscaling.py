@@ -12,7 +12,7 @@ def main():
     """
     Example:
 
-    python experiments/deepsensor/risa_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=30 --topography_lowres_coarsen_factor=30 --era5_coarsen_factor=30 --model_name_prefix='test' --n_epochs=3  --internal_density=5
+    python experiments/deepsensor/risa_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=30 --topography_lowres_coarsen_factor=30 --era5_coarsen_factor=30 --include_time_of_year=True --include_landmask=True --model_name_prefix='test' --n_epochs=3  --internal_density=5
     """
 
     parser = argparse.ArgumentParser()
@@ -68,6 +68,18 @@ def main():
         type=int,
         default=5,
     ),
+
+    parser.add_argument(
+        "--include_time_of_year",
+        type=bool,
+        default=False,
+    ),
+    parser.add_argument(
+        "--include_landmask",
+        type=bool,
+        default=False,
+    ),
+
     parser.add_argument(
         "--model_name_prefix",
         type=str,
@@ -110,6 +122,8 @@ def main():
     val_start_year = args.val_start_year
     val_end_year = args.val_end_year
     use_daily_data = args.use_daily_data
+    include_time_of_year = args.include_time_of_year
+    include_landmask = args.include_landmask
 
     topography_highres_coarsen_factor = args.topography_highres_coarsen_factor
     topography_lowres_coarsen_factor = args.topography_lowres_coarsen_factor
@@ -141,6 +155,8 @@ def main():
         topography_highres_coarsen_factor,
         topography_lowres_coarsen_factor, 
         era5_coarsen_factor,
+        include_time_of_year=include_time_of_year,
+        include_landmask=include_landmask,
         )
     processed_output_dict = data.get_processed_output_dict()
     data.print_resolutions()

@@ -70,8 +70,9 @@ class Train:
 
     
     def _check_inputs(self):
-        if self.landmask_ds is not None:
-            raise NotImplementedError
+        # if self.landmask_ds is not None:
+        #     raise NotImplementedError
+        pass
 
 
     def run_training_sequence(self, n_epochs, model_name_prefix, batch=False, batch_size=1, **convnp_kwargs,):
@@ -90,14 +91,16 @@ class Train:
         highres_aux_ds = self.highres_aux_ds
         aux_ds = self.aux_ds
         station_df = self.station_df
+        landmask_ds = self.landmask_ds
         
         start_year = self.start_year
         end_year = self.end_year
         val_start_year = self.val_start_year
         val_end_year = self.val_end_year
 
+        context = [era5_ds, aux_ds] if landmask_ds is None else [era5_ds, aux_ds, landmask_ds]
         
-        task_loader = TaskLoader(context=[era5_ds, aux_ds],
+        task_loader = TaskLoader(context=context,
                                 target=station_df, 
                                 aux_at_targets=highres_aux_ds)
         if verbose:
@@ -135,6 +138,7 @@ class Train:
         if not validation:   
             self.train_tasks = train_tasks
         self.val_tasks = val_tasks
+        self.context = context
 
         return task_loader     
 
