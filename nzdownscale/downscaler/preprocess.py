@@ -100,15 +100,23 @@ class PreprocessForDownscaling:
         era5_raw_ds = self.preprocess_era5(coarsen_factor=era5_coarsen_factor)
         station_raw_df = self.preprocess_stations()
 
-        if include_time_of_year: 
-            raise NotImplementedError
-            era5_raw_ds = self.add_time_of_year(era5_raw_ds)
+        # if include_time_of_year: 
+        #     raise NotImplementedError
+        # if include_landmask:
+        #     raise NotImplementedError
         if include_landmask:
-            raise NotImplementedError
-            land_mask_raw_ds = data.load_landmask()
-            land_mask_ds = data_processor(land_mask_raw_ds, method="min_max")
+            landmask_raw_ds = self.load_landmask()
+        else:
+            landmask_raw_ds = None
 
-        self.process_all_for_training(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
+        self.process_all_for_training(
+            era5_raw_ds=era5_raw_ds, 
+            highres_aux_raw_ds=highres_aux_raw_ds, 
+            aux_raw_ds=aux_raw_ds, 
+            station_raw_df=station_raw_df,
+            landmask_raw_ds=landmask_raw_ds,
+            include_time_of_year=include_time_of_year,
+            )
 
 
     def load_topography(self):
@@ -421,14 +429,20 @@ class PreprocessForDownscaling:
         return da_landmask
 
     
-    def add_time_of_year(self, ds):
+    def add_time_of_year(self, da):
         """ 
-        Add cos_D and sin_D to dataset to be used as context set, original ds must have the time coordinate. Info: https://alan-turing-institute.github.io/deepsensor/user-guide/convnp.html
+        Add cos_D and sin_D to output dataset to be used as context set, original da must have the time coordinate. Info: https://alan-turing-institute.github.io/deepsensor/user-guide/convnp.html
         """
-        dates = pd.date_range(ds.time.values.min(), ds.time.values.max(), freq="D")
+        dates = pd.date_range(da.time.values.min(), da.time.values.max(), freq="D")
         doy_ds = construct_circ_time_ds(dates, freq="D")
-        ds["cos_D"] = doy_ds["cos_D"]
-        ds["sin_D"] = doy_ds["sin_D"]
+        
+        ds = xr.Dataset({
+            da.name: da,
+            'cos_D': doy_ds["cos_D"], 
+            'sin_D': doy_ds["sin_D"],
+            })
+        # ds["cos_D"] = doy_ds["cos_D"]
+        # ds["sin_D"] = doy_ds["sin_D"]
         return ds
 
 
@@ -438,6 +452,7 @@ class PreprocessForDownscaling:
                     highres_aux_raw_ds,
                     station_raw_df,
                     landmask_raw_ds=None,
+                    include_time_of_year=False,
                     test_norm=False,
                     data_processor=None,  # ?
                     ):
@@ -446,7 +461,6 @@ class PreprocessForDownscaling:
         Gets processed data for deepsensor input
         Normalises all data and add necessary dims
         """
-
         print('Creating DataProcessor...')
         data_processor = DataProcessor(
             x1_name="latitude", 
@@ -461,32 +475,20 @@ class PreprocessForDownscaling:
                     highres_aux_raw_ds["longitude"].max()),
             )
 
-        # compute normalisation parameters
+        # Compute normalisation parameters
         era5_ds, station_df = data_processor([era5_raw_ds, station_raw_df]) #meanstd
         aux_ds, highres_aux_ds = data_processor([aux_raw_ds, highres_aux_raw_ds], method="min_max") #minmax
-        if landmask_raw_ds is not None:
-            landmask_ds = data_processor(landmask_raw_ds, method='min_max')
-        else: 
-            landmask_ds = None
+        landmask_ds = data_processor(landmask_raw_ds, method='min_max') if landmask_raw_ds is not None else None
         print(data_processor)
 
+        # Normalisation test (optional)
         if test_norm: 
-            for ds, raw_ds, ds_name in zip([era5_ds, aux_ds, highres_aux_ds], 
-                        [era5_raw_ds, aux_raw_ds, highres_aux_raw_ds], 
-                        ['ERA5', 'Topography', 'Topography (high res)']):
-                ds_unnormalised = data_processor.unnormalise(ds)
-                xr.testing.assert_allclose(raw_ds, ds_unnormalised, atol=1e-3)
-                print(f"Unnormalised {ds_name} matches raw data")
+            self.test_normalisation(data_processor, era5_ds, aux_ds, highres_aux_ds, station_df, era5_raw_ds, aux_raw_ds, highres_aux_raw_ds, station_raw_df)
 
-            station_df_unnormalised = data_processor.unnormalise(station_df)
-            pd.testing.assert_frame_equal(station_raw_df, station_df_unnormalised)
-            print(f"Unnormalised station_df matches raw data")
-
-        # Generate auxiliary dataset of x1/x2 coordinates to break translation 
-        # equivariance in the model's CNN to enable learning non-stationarity
-        x1x2_ds = construct_x1x2_ds(aux_ds)
-        aux_ds['x1_arr'] = x1x2_ds['x1_arr']
-        aux_ds['x2_arr'] = x1x2_ds['x2_arr']
+        # Generate auxilary datasets with additional data
+        aux_ds = self.add_coordinates(aux_ds)
+        if include_time_of_year:
+            era5_ds = self.add_time_of_year(era5_ds)
 
         self.data_processor = data_processor
         self.aux_ds = aux_ds
@@ -494,6 +496,30 @@ class PreprocessForDownscaling:
         self.highres_aux_ds = highres_aux_ds
         self.station_df = station_df
         self.landmask_ds = landmask_ds
+
+
+    def test_normalisation(self, data_processor, era5_ds, aux_ds, highres_aux_ds, station_df, era5_raw_ds, aux_raw_ds, highres_aux_raw_ds, station_raw_df):
+
+        for ds, raw_ds, ds_name in zip([era5_ds, aux_ds, highres_aux_ds], 
+                    [era5_raw_ds, aux_raw_ds, highres_aux_raw_ds], 
+                    ['ERA5', 'Topography', 'Topography (high res)']):
+            ds_unnormalised = data_processor.unnormalise(ds)
+            xr.testing.assert_allclose(raw_ds, ds_unnormalised, atol=1e-3)
+            print(f"Unnormalised {ds_name} matches raw data")
+
+        station_df_unnormalised = data_processor.unnormalise(station_df)
+        pd.testing.assert_frame_equal(station_raw_df, station_df_unnormalised)
+        print(f"Unnormalised station_df matches raw data")
+
+
+    def add_coordinates(self, ds):
+        """
+        Generate auxiliary dataset of x1/x2 coordinates to break translation equivariance in the model's CNN to enable learning non-stationarity
+        """
+        x1x2_ds = construct_x1x2_ds(ds)
+        ds['x1_arr'] = x1x2_ds['x1_arr']
+        ds['x2_arr'] = x1x2_ds['x2_arr']
+        return ds
 
 
     def get_processed_output_dict(self):

@@ -47,6 +47,8 @@ class Train:
         self.highres_aux_ds = processed_output_dict['highres_aux_ds']
         self.aux_ds = processed_output_dict['aux_ds']
         self.station_df = processed_output_dict['station_df']
+        self.landmask_ds = processed_output_dict['landmask_ds']
+
         self.data_processor = processed_output_dict['data_processor']
 
         self.start_year = processed_output_dict['date_info']['start_year']
@@ -63,6 +65,13 @@ class Train:
         self.val_losses = []
         self.metadata_dict = None
         self.convnp_kwargs = None
+
+        self._check_inputs()
+
+    
+    def _check_inputs(self):
+        if self.landmask_ds is not None:
+            raise NotImplementedError
 
 
     def run_training_sequence(self, n_epochs, model_name_prefix, batch=False, batch_size=1, **convnp_kwargs,):
