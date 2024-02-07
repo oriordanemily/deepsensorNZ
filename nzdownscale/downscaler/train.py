@@ -199,12 +199,9 @@ class Train:
         maxlat = config.PLOT_EXTENT['all']['maxlat']
 
         ax.set_extent([minlon, maxlon, minlat, maxlat], crs)
-        # ax = nzplot.nz_map_with_coastlines()
 
         deepsensor.plot.offgrid_context(ax, val_tasks[0], data_processor, task_loader, plot_target=True, add_legend=True, linewidths=0.5)
         plt.show()
-
-        # fig.savefig("tmp/train_stations.png", bbox_inches="tight")
 
 
     def train_model(self,
@@ -225,6 +222,7 @@ class Train:
             model_name = f'model_{model_id}'
         if model_name_prefix is not None:
             model_name = f'{model_name_prefix}_{model_name}'
+        self.set_save_dir(model_name)
 
         def compute_val_loss(model, val_tasks):
             val_losses = []
@@ -263,27 +261,18 @@ class Train:
 
             if val_loss < val_loss_best:
                 val_loss_best = val_loss
-                if not os.path.exists(self.save_model_path): os.makedirs(self.save_model_path)
-                torch.save(model.model.state_dict(), f"{self.save_model_path}/{model_name}.pt")
-
+                
+                torch.save(model.model.state_dict(), f"{self.save_dir}/{model_name}.pt")
+                self.save_metadata(f"{self.save_dir}", f'metadata_{model_name}')
+                
                 self.train_losses = train_losses
                 self.val_losses = val_losses
 
-                self.save_metadata(f"{self.save_model_path}/metadata", f'{model_name}')
-
-                if plot_losses:
-                    self.make_loss_plot(train_losses, 
-                                    val_losses, 
-                                    f"{self.save_model_path}/losses", 
-                                    f"{model_name}.png")
-
-        #     print(f"Epoch {epoch} train_loss: {train_loss:.2f}, val_loss: {val_loss:.2f}")
-
-        if plot_losses:
-            self.make_loss_plot(train_losses, 
-                             val_losses, 
-                             f"{self.save_model_path}/losses", 
-                             f"{model_name}.png")
+            if plot_losses:
+                self.make_loss_plot(train_losses, 
+                                val_losses, 
+                                f"{self.save_dir}", 
+                                f"losses_{model_name}.png")
 
         self.model = model
         self.train_losses = train_losses
@@ -293,6 +282,12 @@ class Train:
     #     # used for debugging
     #     te = train_epoch(model, train_tasks)
     #     return te 
+
+    def set_save_dir(self, model_name):
+        self.save_dir = f'{self.save_model_path}/{model_name}'
+        if not os.path.exists(self.save_dir): 
+            os.makedirs(self.save_dir)
+
     
     def batch_data_by_num_stations(self, tasks, batch_size=None):
         batched_tasks = {}

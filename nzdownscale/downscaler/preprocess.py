@@ -27,7 +27,9 @@ class PreprocessForDownscaling:
                  val_end_year = None,
                  variable='temperature',
                  use_daily_data=True,
-                 validation = False
+                 validation = False,
+                 lat_lim=None,
+                 lon_lim=None,
                  ) -> None:
         
         """
