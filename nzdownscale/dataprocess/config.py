@@ -38,6 +38,18 @@ PLOT_EXTENT = {
                 'minlat': -42,
                 'maxlat': -34,
             },
+            'christchurch': {
+                'minlon': 171.5,
+                'maxlon': 173.2,
+                'minlat': -44,
+                'maxlat': -43.2,
+            },
+            'auckland': {
+                'minlon': 174.5,
+                'maxlon': 175.5,
+                'minlat': -37.5,
+                'maxlat': -36.5,
+            },
         }
 
 LOCATION_LATLON = {
