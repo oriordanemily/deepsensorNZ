@@ -132,12 +132,15 @@ class PlotData:
         plt.show()
 
 
-    def nz_map_with_coastlines(self):
+    def nz_map_with_coastlines(self, area=None):
         """ Get figure axis with coastlines for NZ """
-        minlon = PLOT_EXTENT['all']['minlon']
-        maxlon = PLOT_EXTENT['all']['maxlon']
-        minlat = PLOT_EXTENT['all']['minlat']
-        maxlat = PLOT_EXTENT['all']['maxlat']
+        if area is None:
+            area = 'all'
+
+        minlon = PLOT_EXTENT[area]['minlon']
+        maxlon = PLOT_EXTENT[area]['maxlon']
+        minlat = PLOT_EXTENT[area]['minlat']
+        maxlat = PLOT_EXTENT[area]['maxlat']
 
         proj = ccrs.PlateCarree()
         fig = plt.figure(figsize=(10, 12))

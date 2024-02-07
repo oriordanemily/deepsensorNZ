@@ -1,4 +1,10 @@
 #%%
+
+# use below when running interactively to reload modules
+%reload_ext autoreload
+%autoreload 2
+
+
 import logging
 logging.captureWarnings(True)
 import os
@@ -40,7 +46,7 @@ if training:
 
     topography_highres_coarsen_factor = 10
     topography_lowres_coarsen_factor = 30
-    era5_coarsen_factor = 10
+    era5_coarsen_factor = 1
 
     model_name_prefix = 'test'
     n_epochs = 2
@@ -76,9 +82,12 @@ if training:
 if training: 
     data.print_resolutions()
 
-    data.plot_dataset('era5')
-    data.plot_dataset('top_highres')
-    data.plot_dataset('top_lowres')
+    area=None #nationwide
+    # area = 'christchurch'
+
+    data.plot_dataset('era5', area=area)
+    data.plot_dataset('top_highres', area=area)
+    data.plot_dataset('top_lowres', area=area)
 
 #%% 
 # Train model

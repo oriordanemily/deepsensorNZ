@@ -564,6 +564,7 @@ class PreprocessForDownscaling:
 
     def plot_dataset(self,
                      type: Literal['era5', 'top_highres', 'top_lowres'],
+                     area=None,
                      with_stations=True):
         """
         Plot heatmap of processed data (input for model training)
@@ -585,7 +586,7 @@ class PreprocessForDownscaling:
         else:
             raise ValueError(f"type={type} not recognised, choose from ['era5', 'top_highres', 'top_lowres']")
 
-        ax = self.nzplot.nz_map_with_coastlines()
+        ax = self.nzplot.nz_map_with_coastlines(area)
         da_plot.plot()
         if with_stations:
             assert self.station_metadata is not None, 'Run process_stations() first or set with_stations=False'
