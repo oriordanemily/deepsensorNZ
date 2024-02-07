@@ -52,6 +52,9 @@ class PreprocessForDownscaling:
             self.start_year = val_start_year
             self.end_year = val_end_year
 
+        self.lat_lim = lat_lim
+        self.lon_lim = lon_lim
+
         self.dataprocess = utils.DataProcess()
 
         self.process_top = topography.ProcessTopography()
@@ -357,8 +360,9 @@ class PreprocessForDownscaling:
         top_min_lon = highres_aux_raw_ds['longitude'].min()
         top_max_lon = highres_aux_raw_ds['longitude'].max()
 
-        era5_raw_ds = da_era.sel(latitude=slice(top_max_lat, top_min_lat), 
-                                longitude=slice(top_min_lon, top_max_lon))
+        era5_raw_ds = da_era.sel(
+            latitude=slice(top_max_lat, top_min_lat),
+            longitude=slice(top_min_lon, top_max_lon))
 
         if plot:
             ax = self.nzplot.nz_map_with_coastlines()

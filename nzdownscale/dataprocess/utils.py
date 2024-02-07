@@ -142,14 +142,19 @@ class PlotData:
         minlat = PLOT_EXTENT[area]['minlat']
         maxlat = PLOT_EXTENT[area]['maxlat']
 
-        proj = ccrs.PlateCarree()
-        fig = plt.figure(figsize=(10, 12))
-        ax = fig.add_subplot(1, 1, 1, projection=proj)
-        ax.coastlines()
-        ax.set_extent([minlon, maxlon, minlat, maxlat], proj)
-        ax.gridlines(draw_labels=True, crs=proj)
+        ax = self.get_ax_nz_map((minlon, maxlon), (minlat, maxlat))
         return ax
 
+
+    def get_ax_nz_map(self, lon_lim, lat_lim):
+        fig = plt.figure(figsize=(10, 12))
+        proj = ccrs.PlateCarree()
+        ax = fig.add_subplot(1, 1, 1, projection=proj)
+        ax.coastlines()
+        ax.set_extent([lon_lim[0], lon_lim[1], lat_lim[0], lat_lim[1]], proj)
+        ax.gridlines(draw_labels=True, crs=proj)
+        return ax
+    
 
     def plot_hist_values(self,
                          da: xr.DataArray,
