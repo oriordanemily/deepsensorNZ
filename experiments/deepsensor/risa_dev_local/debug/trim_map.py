@@ -15,7 +15,7 @@ from nzdownscale.downscaler.train import Train
 from nzdownscale.downscaler.validate import ValidateV1
 from nzdownscale.dataprocess import utils
 
-#%% 
+#
 # Settings
 # ------------------------------------------
 
@@ -26,9 +26,9 @@ val_start_year = 2002
 val_end_year = 2002
 use_daily_data = True
 
-topography_highres_coarsen_factor = 30
-topography_lowres_coarsen_factor = 30
-era5_coarsen_factor = 30
+topography_highres_coarsen_factor = 5
+topography_lowres_coarsen_factor = 5
+era5_coarsen_factor = 1
 
 model_name_prefix = 'new_test'
 n_epochs = 2
@@ -36,7 +36,7 @@ n_epochs = 2
 convnp_kwargs = {
     'unet_channels': (64,)*4,
     'likelihood': 'gnp',
-    'internal_density': 5,
+    'internal_density': None,
 }
 
 #%% 
@@ -50,10 +50,8 @@ data = PreprocessForDownscaling(
     val_start_year = val_start_year,
     val_end_year = val_start_year,
     use_daily_data = use_daily_data,
-    # lat_lim=(-44,-42),
-    # lon_lim=(172.5, 173.5),
-    lat_lim=(-44,-43),
-    lon_lim=(171, 174),
+
+    area = 'christchurch'
 )
 
 ###
@@ -66,10 +64,38 @@ data = PreprocessForDownscaling(
 data.load_topography()
 data.load_stations()
 
+#%% 
+from nzdownscale.dataprocess.config_local import DATA_PATHS
+
+savedir = f'{DATA_PATHS["cache"]}/station_data'
+filepath = f'{savedir}/station_metadata_all.pkl'
+print(f'Loading station metadata from cache: {filepath}, set use_cache=False if you want to manually load them.')
+
+#%% 
+
+
+
+savedir = 'data/.datacache/test2'
+filepath = f'{savedir}/station_metadata_all.pkl'
+if os.path.exists(filepath):
+    pass
+else:
+    os.makedirs(savedir, exist_ok=True)
+    utils.save_pickle(data.station_metadata_all, filepath)
+
+
+#%% dev 
+area = 'christchurch'
+from nzdownscale.dataprocess.config import PLOT_EXTENT
+minlon = PLOT_EXTENT[area]['minlon']
+maxlon = PLOT_EXTENT[area]['maxlon']
+minlat = PLOT_EXTENT[area]['minlat']
+maxlat = PLOT_EXTENT[area]['maxlat']
+
 self = data
 self.ds_elev
 
-ds2 = self.ds_elev.sel(latitude=slice(self.lat_lim[0], self.lat_lim[1]), longitude=slice(self.lon_lim[0], self.lon_lim[1]))
+ds2 = self.ds_elev.sel(latitude=slice(minlat, maxlat), longitude=slice(minlon, maxlon))
 ds2.elevation.plot()
 
 
@@ -79,9 +105,8 @@ ax = self.process_stations.plot_stations(self.station_metadata_all, ax)
 
 #%% 
 
-
 data.load_era5()
-data.load_stations()
+#data.load_stations()
 
 highres_aux_raw_ds, aux_raw_ds = data.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
 era5_raw_ds = data.preprocess_era5(coarsen_factor=era5_coarsen_factor)
@@ -116,6 +141,9 @@ batch_size=1
 
 training.setup_task_loader()
 training.initialise_model(**convnp_kwargs)
+
+#%% 
+
 training.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix, batch=batch, batch_size=batch_size)
 
 training_output_dict = training.get_training_output_dict()

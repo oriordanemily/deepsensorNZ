@@ -3,6 +3,7 @@ logging.captureWarnings(True)
 from typing_extensions import Literal
 from tqdm import tqdm
 import warnings
+import os
 
 import xarray as xr
 import pandas as pd
@@ -15,7 +16,8 @@ from deepsensor.data.processor import DataProcessor
 from deepsensor.data.utils import construct_x1x2_ds
 from deepsensor.data import construct_circ_time_ds
 from nzdownscale.dataprocess import era5, stations, topography, utils, config
-from nzdownscale.dataprocess.config import LOCATION_LATLON
+from nzdownscale.dataprocess.config import LOCATION_LATLON, PLOT_EXTENT
+from nzdownscale.dataprocess.config_local import DATA_PATHS
 
 
 class PreprocessForDownscaling:
@@ -28,8 +30,7 @@ class PreprocessForDownscaling:
                  variable='temperature',
                  use_daily_data=True,
                  validation = False,
-                 lat_lim=None,
-                 lon_lim=None,
+                 area=None
                  ) -> None:
         
         """
@@ -52,8 +53,7 @@ class PreprocessForDownscaling:
             self.start_year = val_start_year
             self.end_year = val_end_year
 
-        self.lat_lim = lat_lim
-        self.lon_lim = lon_lim
+        self.area = area
 
         self.dataprocess = utils.DataProcess()
 
@@ -127,6 +127,12 @@ class PreprocessForDownscaling:
     def load_topography(self):
         print('Loading topography...')
         self.ds_elev = self.process_top.open_ds()
+        if self.area is not None:
+            minlon = PLOT_EXTENT[self.area]['minlon']
+            maxlon = PLOT_EXTENT[self.area]['maxlon']
+            minlat = PLOT_EXTENT[self.area]['minlat']
+            maxlat = PLOT_EXTENT[self.area]['maxlat']
+            self.ds_elev = self.ds_elev.sel(latitude=slice(minlat, maxlat), longitude=slice(minlon, maxlon))
 
     
     def load_era5(self):
@@ -135,10 +141,23 @@ class PreprocessForDownscaling:
         self.da_era = self.process_era.ds_to_da(self.ds_era, self.var)
 
     
-    def load_stations(self):
+    def load_stations(self, use_cache=True):
         print('Loading stations...')
-        #station_paths = process_stations.get_path_all_stations(var)
-        self.station_metadata_all = self.process_stations.get_metadata_df(self.var)
+
+        if use_cache:
+            if "cache" not in DATA_PATHS.keys():
+                raise ValueError("Please set 'cache' path in DATA_PATHS dict e.g. 'cache':'data/.datacache' (recommended) or set use_cache=False ")
+            savedir = f'{DATA_PATHS["cache"]}/station_data'
+            filepath = f'{savedir}/station_metadata_all.pkl'
+            if os.path.exists(filepath):
+                print(f"Loading station metadata from cache: {filepath}, set use_cache=False if you want to manually load them.")
+                self.station_metadata_all = utils.open_pickle(filepath)
+            else:
+                self.station_metadata_all = self.process_stations.get_metadata_df(self.var)
+                os.makedirs(savedir, exist_ok=True)
+                utils.save_pickle(self.station_metadata_all, filepath)
+        else:
+            self.station_metadata_all = self.process_stations.get_metadata_df(self.var)
 
 
     def preprocess_topography(self, 
@@ -287,14 +306,6 @@ class PreprocessForDownscaling:
             highres_aux_raw_ds[f"TPI_{window_size}"] = TPI_da
 
             if plot:
-
-                minlon = config.PLOT_EXTENT['all']['minlon']
-                maxlon = config.PLOT_EXTENT['all']['maxlon']
-                minlat = config.PLOT_EXTENT['all']['minlat']
-                maxlat = config.PLOT_EXTENT['all']['maxlat']
-
-                # fig, ax = plt.subplots(1, 1, subplot_kw=dict(projection=crs))
-                # ax.set_extent([minlon, maxlon, minlat, maxlat], crs)
                 ax = self.nzplot.nz_map_with_coastlines()
                 TPI_da.plot(ax=ax)
                 ax.add_feature(cf.BORDERS)
@@ -574,6 +585,8 @@ class PreprocessForDownscaling:
         Plot heatmap of processed data (input for model training)
         type options: ['era5', 'top_highres', 'top_lowres']
         """
+        if area is None:
+            area = self.area
 
         if type == 'top_highres':
             ds = self.highres_aux_raw_ds
