@@ -403,7 +403,7 @@ class PreprocessForDownscaling:
 
         df_station_metadata_filtered = df_filtered_area
 
-        print(f'Number of stations after filtering: {len(df_station_metadata_filtered)}')
+        print(f'Number of stations used: {len(df_station_metadata_filtered)}')
         self.station_metadata_filtered = df_station_metadata_filtered
 
         return self.station_metadata_filtered
@@ -563,7 +563,8 @@ class PreprocessForDownscaling:
             'era5_coarsen_factor': self.era5_coarsen_factor,
             'topography_highres_coarsen_factor': self.topography_highres_coarsen_factor,
             'topography_lowres_coarsen_factor': self.topography_lowres_coarsen_factor,
-            'resolutions': self._get_resolutions_dict()
+            'resolutions': self._get_resolutions_dict(),
+            'area': self.area,
         }
 
         processed_output_dict = {

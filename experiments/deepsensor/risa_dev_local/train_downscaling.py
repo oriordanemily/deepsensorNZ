@@ -12,7 +12,7 @@ def main():
     """
     Example:
 
-    python experiments/deepsensor/risa_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=30 --topography_lowres_coarsen_factor=30 --era5_coarsen_factor=30 --include_time_of_year=True --include_landmask=True --model_name_prefix='test' --n_epochs=3  --internal_density=5 --area='christchurch' --auto_set_internal_density=True
+    python experiments/deepsensor/risa_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=30 --topography_lowres_coarsen_factor=30 --era5_coarsen_factor=30 --include_time_of_year=True --include_landmask=True --model_name_prefix='test' --n_epochs=3  --internal_density=5 --area='christchurch' --auto_set_internal_density=False
     """
 
     parser = argparse.ArgumentParser()
