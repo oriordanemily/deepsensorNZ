@@ -392,8 +392,17 @@ class PreprocessForDownscaling:
 
         df = df_station_metadata
         years = self.years
+        area = self.area
 
-        df_station_metadata_filtered = df[(df['start_year']<years[-1]) & (df['end_year']>=years[0])]
+        df_filtered_years = df[(df['start_year']<years[-1]) & (df['end_year']>=years[0])]
+
+        if area is not None:
+            df_filtered_area = df_filtered_years[(df_filtered_years['lon'] > PLOT_EXTENT[area]['minlon']) & (df_filtered_years['lon'] < PLOT_EXTENT[area]['maxlon']) & (df_filtered_years['lat'] > PLOT_EXTENT[area]['minlat']) & (df_filtered_years['lat'] < PLOT_EXTENT[area]['maxlat'])]
+        else:
+            df_filtered_area = df_filtered_years
+
+        df_station_metadata_filtered = df_filtered_area
+
         print(f'Number of stations after filtering: {len(df_station_metadata_filtered)}')
         self.station_metadata_filtered = df_station_metadata_filtered
 

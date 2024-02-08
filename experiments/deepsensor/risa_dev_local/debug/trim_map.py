@@ -64,6 +64,29 @@ data = PreprocessForDownscaling(
 data.load_topography()
 data.load_stations()
 
+#%%
+
+station_raw_df = data.preprocess_stations()
+
+#%% 
+
+df = data.station_metadata_all 
+years = data.years
+
+dff = df[(df['start_year']<years[-1]) & (df['end_year']>=years[0])]
+
+from nzdownscale.dataprocess.config import LOCATION_LATLON, PLOT_EXTENT
+
+area = data.area
+dff2 = dff[(dff['lon'] > PLOT_EXTENT[area]['minlon']) & (dff['lon'] < PLOT_EXTENT[area]['maxlon']) & (dff['lat'] > PLOT_EXTENT[area]['minlat']) & (dff['lat'] < PLOT_EXTENT[area]['maxlat'])]
+
+
+minlon = PLOT_EXTENT[area]['minlon']
+maxlon = PLOT_EXTENT[area]['maxlon']
+minlat = PLOT_EXTENT[area]['minlat']
+maxlat = PLOT_EXTENT[area]['maxlat']
+
+
 #%% 
 from nzdownscale.dataprocess.config_local import DATA_PATHS
 
@@ -71,9 +94,7 @@ savedir = f'{DATA_PATHS["cache"]}/station_data'
 filepath = f'{savedir}/station_metadata_all.pkl'
 print(f'Loading station metadata from cache: {filepath}, set use_cache=False if you want to manually load them.')
 
-#%% 
-
-
+#%% cache
 
 savedir = 'data/.datacache/test2'
 filepath = f'{savedir}/station_metadata_all.pkl'
@@ -96,14 +117,19 @@ self = data
 self.ds_elev
 
 ds2 = self.ds_elev.sel(latitude=slice(minlat, maxlat), longitude=slice(minlon, maxlon))
-ds2.elevation.plot()
-
+#ds2.elevation.plot()
 
 ax = self.nzplot.nz_map_with_coastlines(area='christchurch')
 ds2.elevation.plot()
 ax = self.process_stations.plot_stations(self.station_metadata_all, ax)
+plt.show()
 
-#%% 
+ax = self.nzplot.nz_map_with_coastlines(area='christchurch')
+ds2.elevation.plot()
+ax = self.process_stations.plot_stations(self.station_metadata_filtered, ax)
+plt.show()
+
+#%% cont.
 
 data.load_era5()
 #data.load_stations()

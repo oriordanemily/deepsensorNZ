@@ -9,7 +9,7 @@ import cartopy.crs as ccrs
 import seaborn as sns
 
 from nzdownscale.dataprocess.config import PLOT_EXTENT
-
+from nzdownscale.dataprocess.config_local import DATA_PATHS
 
 def save_pickle(x, filename):
     with open(filename, 'wb') as pickle_file:
@@ -24,6 +24,10 @@ def open_pickle(filename):
 def rmse(y_true, y_pred):
     return np.sqrt(np.mean((y_true - y_pred)**2))
 
+
+class Caching:
+    def __init__(self) -> None:
+        pass
 
 
 class DataProcess:
