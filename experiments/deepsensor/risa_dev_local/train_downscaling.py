@@ -12,7 +12,7 @@ def main():
     """
     Example:
 
-    python experiments/deepsensor/risa_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=30 --topography_lowres_coarsen_factor=30 --era5_coarsen_factor=30 --include_time_of_year=True --include_landmask=True --model_name_prefix='test' --n_epochs=3  --internal_density=5
+    python experiments/deepsensor/risa_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=30 --topography_lowres_coarsen_factor=30 --era5_coarsen_factor=30 --include_time_of_year=True --include_landmask=True --model_name_prefix='test' --n_epochs=3  --internal_density=5 --area='christchurch' --auto_set_internal_density=True
     """
 
     parser = argparse.ArgumentParser()
@@ -110,6 +110,18 @@ def main():
         default=None,
         help="ConvNP model argument, uses default CONVNP_KWARGS_DEFAULT if not set",
     ),    
+    parser.add_argument(
+        "--auto_set_internal_density",
+        type=bool,
+        default=False,
+        help="Allow automatic setting of internal density by ConvNP"
+    )
+    parser.add_argument(
+        "--area",
+        type=str,
+        default=None,
+        help="Select area of map",
+    )
 
     args = parser.parse_args()
 
@@ -124,6 +136,7 @@ def main():
     use_daily_data = args.use_daily_data
     include_time_of_year = args.include_time_of_year
     include_landmask = args.include_landmask
+    area = args.area
 
     topography_highres_coarsen_factor = args.topography_highres_coarsen_factor
     topography_lowres_coarsen_factor = args.topography_lowres_coarsen_factor
@@ -139,6 +152,10 @@ def main():
         convnp_kwargs['likelihood'] = args.likelihood
     if args.internal_density is not None:
         convnp_kwargs['internal_density'] = args.internal_density
+    
+    # If not setting internal_density, remove from convnp kwargs
+    if args.auto_set_internal_density:
+        convnp_kwargs = {k: v for k, v in convnp_kwargs.items() if k != 'internal_density'}
 
     # ------------------------------------------
     # Preprocess data
@@ -150,6 +167,7 @@ def main():
         val_start_year = val_start_year,
         val_end_year = val_end_year,
         use_daily_data = use_daily_data,
+        area=area,
     )
     data.run_processing_sequence(
         topography_highres_coarsen_factor,
