@@ -54,7 +54,7 @@ data = PreprocessForDownscaling(
     area = 'christchurch'
 )
 
-###
+### 
 # data.run_processing_sequence(
 #     topography_highres_coarsen_factor,
 #     topography_lowres_coarsen_factor, 
@@ -63,6 +63,10 @@ data = PreprocessForDownscaling(
 
 data.load_topography()
 data.load_stations()
+
+#%% 
+
+plt.hist(data.station_metadata_all['start_year'].values)
 
 #%%
 

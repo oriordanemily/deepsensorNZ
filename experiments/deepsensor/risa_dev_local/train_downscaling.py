@@ -120,7 +120,7 @@ def main():
         "--area",
         type=str,
         default=None,
-        help="Select area of map",
+        help="Select area of map, options specified in: PLOT_EXTENT in nzdownscale.dataprocess.config.py. PLOT_EXTENT['all'] (all of NZ) is used as default",
     )
 
     args = parser.parse_args()
