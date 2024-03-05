@@ -31,6 +31,10 @@ __pycache__
 # wandb
 *wandb*
 
+#NeSI
+*nesi_startup.sh
+*train.sl
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
