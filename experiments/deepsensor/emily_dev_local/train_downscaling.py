@@ -2,17 +2,19 @@
 import logging
 logging.captureWarnings(True)
 import argparse
+import nzdownscale
 
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
 from nzdownscale.dataprocess import config
 
 
+
 def main():
     """
     Example:
 
-    CUDA_VISIBLE_DEVICES=2 python -m memory_profiler experiments/deepsensor/emily_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=10 --topography_lowres_coarsen_factor=15 --era5_coarsen_factor=3 --model_name_prefix='test' --n_epochs=50  --internal_density=500
+    python /nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=30 --topography_lowres_coarsen_factor=30 --era5_coarsen_factor=30 --model_name_prefix='test' --n_epochs=3  --internal_density=500
     """
 
     parser = argparse.ArgumentParser()
@@ -149,7 +151,7 @@ def main():
     # Train model
     # ------------------------------------------
 
-    training = Train(processed_output_dict=processed_output_dict)
+    training = Train(processed_output_dict=processed_output_dict, use_gpu=True)
 
     training.run_training_sequence(n_epochs, model_name_prefix, **convnp_kwargs)
 

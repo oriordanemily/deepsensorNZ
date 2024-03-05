@@ -24,7 +24,7 @@ from nzdownscale.dataprocess import config, utils
 class Train:
     def __init__(self,
                  processed_output_dict,
-                 save_model_path: int = 'models/downscaling',
+                 save_model_path: str = 'models/downscaling', #'/nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/models/downscaling',
                  use_gpu: bool = True,
                  ) -> None:
         """
