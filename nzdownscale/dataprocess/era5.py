@@ -25,6 +25,14 @@ class ProcessERA5(DataProcess):
             var (str): variable
             years (list): specific years, retrieves all if set to None
         """
+        if type(years) == int:
+            years = [years]
+        elif type(years) == str:
+            years = [int(years)]
+        elif type(years) == list:
+            years = [int(year) for year in years]
+        else:
+            ValueError (f'Years should be int, str or list, not {type(years)}')
         filenames = self.get_filenames(var, years)
         return xr.open_mfdataset(filenames)
 
