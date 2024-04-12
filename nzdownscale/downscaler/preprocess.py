@@ -141,7 +141,7 @@ class PreprocessForDownscaling:
         self.da_era = self.process_era.ds_to_da(self.ds_era, self.var)
 
     
-    def load_stations(self, use_cache=True):
+    def load_stations(self, use_cache=False):
         print('Loading stations...')
 
         if use_cache:
