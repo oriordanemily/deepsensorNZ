@@ -3,6 +3,8 @@ logging.captureWarnings(True)
 from typing_extensions import Literal
 from tqdm import tqdm
 import warnings
+from time import time
+import pickle
 import os
 
 import xarray as xr
@@ -95,6 +97,8 @@ class PreprocessForDownscaling:
         era5_coarsen_factor,
         include_time_of_year=False,
         include_landmask=False,
+        data_processor_dict=None,
+        save_data_processor_dict=False
         ):
         
         self.load_topography()
@@ -114,14 +118,24 @@ class PreprocessForDownscaling:
         else:
             landmask_raw_ds = None
 
-        self.process_all_for_training(
-            era5_raw_ds=era5_raw_ds, 
-            highres_aux_raw_ds=highres_aux_raw_ds, 
-            aux_raw_ds=aux_raw_ds, 
-            station_raw_df=station_raw_df,
-            landmask_raw_ds=landmask_raw_ds,
-            include_time_of_year=include_time_of_year,
-            )
+        if data_processor_dict == None:
+            self.process_all_for_training(
+                era5_raw_ds=era5_raw_ds, 
+                highres_aux_raw_ds=highres_aux_raw_ds, 
+                aux_raw_ds=aux_raw_ds, 
+                station_raw_df=station_raw_df,
+                landmask_raw_ds=landmask_raw_ds,
+                include_time_of_year=include_time_of_year,
+                save=save_data_processor_dict
+                )
+        else:
+            self.data_processor = data_processor_dict['data_processor']
+            self.aux_ds = data_processor_dict['aux_ds']
+            self.era5_ds = data_processor_dict['era5_ds']
+            self.highres_aux_ds = data_processor_dict['highres_aux_ds']
+            self.station_df = data_processor_dict['station_df']
+            self.landmask_ds = data_processor_dict['landmask_ds']
+
 
 
     def load_topography(self):
@@ -481,12 +495,14 @@ class PreprocessForDownscaling:
                     include_time_of_year=False,
                     test_norm=False,
                     data_processor=None,  # ?
+                    save=False
                     ):
         """
         Creates DataProcessor:
         Gets processed data for deepsensor input
         Normalises all data and add necessary dims
         """
+        start = time()
         print('Creating DataProcessor...')
         data_processor = DataProcessor(
             x1_name="latitude", 
@@ -500,21 +516,41 @@ class PreprocessForDownscaling:
             x2_map=(highres_aux_raw_ds["longitude"].min(), 
                     highres_aux_raw_ds["longitude"].max()),
             )
+        print('DataProcessor created in', time()-start, 'seconds')
 
         # Compute normalisation parameters
+        start = time()
+        print('Computing normalisation parameters...')
         era5_ds, station_df = data_processor([era5_raw_ds, station_raw_df]) #meanstd
         aux_ds, highres_aux_ds = data_processor([aux_raw_ds, highres_aux_raw_ds], method="min_max") #minmax
         landmask_ds = data_processor(landmask_raw_ds, method='min_max') if landmask_raw_ds is not None else None
         print(data_processor)
+        print('Normalisation parameters computed in', time()-start, 'seconds')
 
         # Normalisation test (optional)
         if test_norm: 
             self.test_normalisation(data_processor, era5_ds, aux_ds, highres_aux_ds, station_df, era5_raw_ds, aux_raw_ds, highres_aux_raw_ds, station_raw_df)
 
+        start = time()
         # Generate auxilary datasets with additional data
+        print('Generating auxiliary datasets...')
         aux_ds = self.add_coordinates(aux_ds)
         if include_time_of_year:
             era5_ds = self.add_time_of_year(era5_ds)
+        print('Auxiliary datasets generated in', time()-start, 'seconds')
+
+        if save:
+            data_processor_dict = {}
+            data_processor_dict['data_processor'] = data_processor
+            data_processor_dict['aux_ds'] = aux_ds
+            data_processor_dict['era5_ds'] = era5_ds
+            data_processor_dict['highres_aux_ds'] = highres_aux_ds
+            data_processor_dict['station_df'] = station_df
+            data_processor_dict['landmask_ds'] = landmask_ds
+            data_processor_dict_fpath = f'data_processor_dict_era1_topohr5_topolr5_2000_2011.pkl'
+            print(f'Saving data_processor_dict to {data_processor_dict_fpath}')
+            with open(data_processor_dict_fpath, 'wb') as f:
+                pickle.dump(data_processor_dict, f)
 
         self.data_processor = data_processor
         self.aux_ds = aux_ds
