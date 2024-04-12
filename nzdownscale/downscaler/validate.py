@@ -39,7 +39,8 @@ class ValidateV1:
                  processed_output_dict: dict = None,
                  training_output_dict: dict = None,
                  training_metadata_path: str = None,
-                 validation_date_range: list = None
+                 validation_date_range: list = None,
+                 data_processor_dict: dict = None
                  ) -> None:
         """
         Args:
@@ -51,12 +52,15 @@ class ValidateV1:
                 (If loading pretrained model) Path to dictionary pickle file for training metadata, saved with model e.g. 'models/downscaling/metadata/test_model_1705594143.pkl'
             validation_date_range (list, optional):
                 List of two years in format 'YYYY' for start and end of validation period (inclusive) e.g. ['2005', '2006']. Only include if different from model training period.
+            data_processor_dict (dict, optional):
+                Dict output from nzdownscale.downscaler.preprocess.PreprocessForDownscaling.process_all_for_training()
         """
         
         self.processed_output_dict = processed_output_dict
         self.training_output_dict = training_output_dict
         self.training_metadata_path = training_metadata_path
         self.validation_date_range = validation_date_range
+        self.data_processor_dict = data_processor_dict
         self.crs = ccrs.PlateCarree()
 
         self._check_args()
@@ -70,11 +74,11 @@ class ValidateV1:
             raise ValueError('Either processed_output_dict or training_metadata_path must be provided')
         
 
-    def load_model(self, load_model_path=None):
+    def load_model(self, load_model_path=None, save_data_processing_dict=False):
 
         self.model_metadata = self.get_metadata()
         
-        self._load_processed_dict_data()
+        self._load_processed_dict_data(save_data_processing_dict=save_data_processing_dict)
         self._load_training_dict_data()
 
         if load_model_path is not None:
@@ -96,34 +100,44 @@ class ValidateV1:
 
         return metadata
 
-    def _load_processed_dict_data(self):
+    def _load_processed_dict_data(self, save_data_processing_dict=False):
         
         if self.processed_output_dict is not None:
             processed_dict = self.processed_output_dict
         else:
-            processed_dict = self._get_processed_output_dict_from_metadata()
+            processed_dict = self._get_processed_output_dict_from_metadata(save_data_processing_dict=save_data_processing_dict)
         
         self.processed_dict = processed_dict 
 
 
-    def _get_processed_output_dict_from_metadata(self):
+    def _get_processed_output_dict_from_metadata(self, save_data_processing_dict=False):
 
         if not hasattr(self, 'model_metadata'):
             self.model_metadata = self.get_metadata()
         
-        data = PreprocessForDownscaling(
-            variable = self.model_metadata['data_settings']['var'],
-            start_year = self.model_metadata['date_info']['start_year'],
-            end_year = self.model_metadata['date_info']['end_year'],
-            val_start_year = self.model_metadata['date_info']['val_start_year'],
-            val_end_year = self.model_metadata['date_info']['val_end_year'],
-            use_daily_data = self.model_metadata['date_info']['use_daily_data'],
-            validation = True
-        )
+        # can run preprocessed data once and try different models
+        try:
+            self.data
+        except: 
+            self.data = PreprocessForDownscaling(
+                variable = self.model_metadata['data_settings']['var'],
+                start_year = self.model_metadata['date_info']['start_year'],
+                end_year = self.model_metadata['date_info']['end_year'],
+                val_start_year = self.model_metadata['date_info']['val_start_year'],
+                val_end_year = self.model_metadata['date_info']['val_end_year'],
+                use_daily_data = self.model_metadata['date_info']['use_daily_data'],
+                validation = True
+            )
+        data = self.data
+
         data.run_processing_sequence(
             self.model_metadata['data_settings']['topography_highres_coarsen_factor'],
             self.model_metadata['data_settings']['topography_lowres_coarsen_factor'], 
             self.model_metadata['data_settings']['era5_coarsen_factor'],
+            include_time_of_year=True,
+            include_landmask=True,
+            data_processor_dict=self.data_processor_dict,
+            save_data_processor_dict=save_data_processing_dict
             )
         processed_output_dict = data.get_processed_output_dict()
         return processed_output_dict
@@ -181,7 +195,8 @@ class ValidateV1:
                        pred=None,
                        return_pred=False,
                        return_station=False,
-                       verbose=True):
+                       verbose=True,
+                       era=False):
         """Calculate loss
 
         Args:
@@ -191,6 +206,7 @@ class ValidateV1:
             return_pred (bool, optional): _description_. Defaults to False.
             return_station (bool, optional): _description_. Defaults to False.
             verbose (bool, optional): _description_. Defaults to True.
+            era (bool, optional): If True, assumes you've given it ERA5 to calculate loss. Defaults to False.
 
         Raises:
             ValueError: _description_
@@ -199,7 +215,7 @@ class ValidateV1:
         Returns:
             _type_: _description_
         """        
-        
+
         if isinstance(dates, pd._libs.tslibs.timestamps.Timestamp) or isinstance(dates, str):
             dates = [dates]
         
@@ -223,7 +239,11 @@ class ValidateV1:
         if not isinstance(pred, xr.core.dataset.Dataset):
             pred, _ = self._get_predictions_and_tasks(dates, task_loader, model, era5_raw_ds, return_dataarray=True, verbose=verbose, save_preds=False)
 
-        pred_db_mean = pred['mean'].sel(time=dates)
+        if era:
+            key = 't2m'
+        else:
+            key = 'mean'
+        pred_db_mean = pred[key].sel(time=dates)
 
         # get location if specified
         norms = {}
@@ -258,7 +278,11 @@ class ValidateV1:
             except:
                 raise ValueError(f'No station data for {location} on given date(s): {dates}')
             
-            pred_db_mean_location = pred_db_mean.sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
+            if era:
+                pred_db_mean_location = pred_db_mean.sel(x1=X_t[0], x2=X_t[1], method='nearest').values.astype('float')
+            else:
+                pred_db_mean_location = pred_db_mean.sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
+                
             if station_val.shape != pred_db_mean_location.shape:
                 raise ValueError(f'Station and prediction shapes do not match for {location} on given date(s). Station shape: {station_val.shape}, prediction shape: {pred_db_mean_location.shape}')
             norms[location] = [utils.rmse(station, pred) for station, pred in zip(station_val, pred_db_mean_location)]
@@ -277,6 +301,93 @@ class ValidateV1:
             return items_to_return[0]
         else:
             return items_to_return
+        
+    def calculate_loss_era5(self, dates, locations, era5):
+        station_raw_df = self.processed_dict['station_raw_df']
+       
+        era5_values = era5['t2m'].sel(time=dates)
+
+        norms_era5 = {}
+        
+        locations_kept = []
+        for location in tqdm(locations, desc='Calculating losses'):
+            # print(location)
+            X_t = self._get_location_coordinates(location, station=True)
+            station_val = station_raw_df.loc[dates, 'dry_bulb'].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].groupby('time').mean().values.astype('float')
+        
+            era5_loc = era5_values.sel(latitude=X_t[0], longitude=X_t[1], method='nearest')
+            if np.isnan(era5_loc).any():
+                print('ERA5 has NANs at ', location)
+            keep_location = True 
+
+            era5_rmse = [utils.rmse(station, era) for station, era in zip(station_val, era5_loc.values)]
+            # if np.isnan(era5_rmse).any():
+            #     print(f'ERA5 RMSE has nans at {location}')
+            # else:
+            norms_era5[location] = era5_rmse
+            locations_kept.append(location)
+    
+        locations_kept = list(set(locations_kept))
+        return norms_era5, locations_kept
+
+    def calculate_loss_era5_pred(self, dates, locations, pred, era5=None, verbose=True):
+        station_raw_df = self.processed_dict['station_raw_df']
+
+        pred_db_mean = pred['mean'].sel(time=dates)
+
+        if era5:
+            era5_values = era5['t2m'].sel(time=dates)
+
+        norms = {}
+        norms_era5 = {}
+
+        for location in tqdm(locations, desc='Calculating losses'):
+            skip_location = False
+            norms[location] = []
+            if isinstance(location, str):
+                if location in STATION_LATLON:
+                    X_t = self._get_location_coordinates(location, station=True)
+                else:
+                    X_t = self._get_location_coordinates(location)
+            else:
+                X_t = location
+            try:            
+                station_val = station_raw_df.loc[dates, 'dry_bulb'].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].groupby('time').mean().values.astype('float')
+            except:
+                raise ValueError(f'No station data for {location} on given date(s): {dates}')
+            
+            if era5:
+                era5_loc = era5_values.sel(x1=X_t[0], x2=X_t[1], method='nearest')#.values.astype('float')
+            
+            pred_db_mean_loc = pred_db_mean.sel(latitude=X_t[0], longitude=X_t[1], method='nearest').values.astype('float')
+
+            if era5:
+                for station, era in zip(station_val, era5_loc):
+                    skip_location = False
+                    era5_rmse = utils.rmse(station, era)
+                    print(location, era5_rmse)
+                    if np.isnan(era5_rmse):
+                        skip_location=True
+                    else:
+                        if location not in norms_era5:
+                            norms_era5[location] = []
+                        if location not in norms:
+                            norms[location] = []
+                        norms_era5[location].append(era5_rmse)
+                        norms[location].append(utils.rmse(station, pred_db_mean_loc))
+
+
+            # if not skip_location:
+            #     norms_era5[location] = [utils.rmse(station, era5) for station, era5 in zip(station_val, era5_loc)]
+
+            norms[location] = [utils.rmse(station, pred) for station, pred in zip(station_val, pred_db_mean_loc)]
+
+        if era5:
+            return norms, norms_era5
+        else:
+            return norms
+                
+
 
     def plot_losses(self, dates, loss_dict,
                     pred_dict=None, station_dict=None, 
@@ -410,8 +521,94 @@ class ValidateV1:
 
         if return_fig:
             return fig
+    
+    def plot_errors_at_stations(self, date: str = None, pred = None, remove_sea=True, var_clim=None, diff_clim=None):
+        #setup
+        import cartopy.crs as ccrs
+        import cartopy.feature as cfeature
+        from matplotlib.colors import TwoSlopeNorm
+        task_loader = self.task_loader
+        model = self.model
+        era5_raw_ds = self.processed_dict['era5_raw_ds']
+        station_raw_df = self.processed_dict['station_raw_df']
+        fontsize=16
 
-    def plot_ERA5_and_prediction(self, date: str = None, pred = None, location=None, closest_station=False, infer_extent=False, return_fig=False):
+        date_str = date
+        date = self._format_date(date)
+
+                # get predictions and test_task
+        if pred is None:
+            pred_db, _ = self._get_predictions_and_tasks(date, task_loader, model, era5_raw_ds)
+        else:
+            pred_db = pred.sel(time=date)
+
+        filtered_station_df = station_raw_df.loc[date]
+        filtered_station_df = filtered_station_df.reset_index()
+
+        filtered_station_df['prediction'] = np.nan
+        filtered_station_df['differences'] = np.nan
+        # Iterate over the filtered DataFrame
+        for index, row in filtered_station_df.iterrows():
+            prediction = pred_db.sel(time=date, 
+                                    latitude=row['latitude'], 
+                                    longitude=row['longitude'],
+                                    method='nearest')['mean'].values.item()
+            
+            # Add the prediction to the DataFrame
+            filtered_station_df.at[index, 'prediction'] = prediction
+            filtered_station_df.at[index, 'differences'] = row['dry_bulb'] - prediction
+
+        ncols = 3
+
+        fig, axes = plt.subplots(1, ncols, subplot_kw=dict(projection=self.crs), figsize=(20, 20/3))
+        ax_content = ['dry_bulb', 'prediction', 'differences']
+        for i, ax in enumerate(axes):
+            # ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+            ax.set_extent([166, 179, -47.5, -34], crs=ccrs.PlateCarree())  # Set the extent to cover New Zealand
+
+            # Add features to the map
+            ax.add_feature(cfeature.LAND)
+            ax.add_feature(cfeature.COASTLINE)
+            ax.add_feature(cfeature.BORDERS, linestyle=':')
+            
+            station_values = filtered_station_df[ax_content[0]]
+            station_vmax = station_values.max()
+            station_vmin = station_values.min()
+
+            # Centre the cmap at 0
+            if ax_content[i] == 'differences':
+                data_values = filtered_station_df[ax_content[i]]
+                vmax = max(data_values.max(), abs(data_values.min()))
+                vmin = -vmax
+                norm = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+                scatter = ax.scatter(filtered_station_df['longitude'], filtered_station_df['latitude'], c=filtered_station_df[ax_content[i]],
+                            cmap='coolwarm', marker='o', norm = norm, edgecolor='k', linewidth=0.5, s=100, transform=ccrs.PlateCarree())
+            else:
+                scatter = ax.scatter(filtered_station_df['longitude'], filtered_station_df['latitude'], c=filtered_station_df[ax_content[i]],
+                            cmap='coolwarm', marker='o', edgecolor='k', vmin=station_vmin, vmax=station_vmax, linewidth=0.5, s=100, transform=ccrs.PlateCarree())
+
+            # Add a colorbar
+            plt.colorbar(scatter, ax=ax, shrink=0.5, label='Dry Bulb Temperature (°C)')
+
+            cbar = ax.collections[0].colorbar  # This assumes your plot is the first (or only) collection added to the axes
+            # cbar.set_label(var_cbar_label, fontsize=fontsize)  # Set your desired fontsize here
+            cbar.ax.tick_params(labelsize=fontsize) 
+            ax.add_feature(cf.BORDERS)
+            ax.coastlines()
+            ax.tick_params(axis='both', labelsize=fontsize)
+            if ax_content[i] == 'prediction':
+                ax.set_title(f'Prediction at {date_str}', fontsize=fontsize)
+            else:
+                ax.set_title(ax_content[i], fontsize=fontsize)
+
+        print('Average difference:' , filtered_station_df['differences'].mean())
+        print('Std difference:', filtered_station_df['differences'].std())
+        return fig, axes
+
+
+
+
+    def plot_ERA5_and_prediction(self, date: str = None, pred = None, era5 = None, location=None, closest_station=False, infer_extent=False, return_fig=False, remove_sea=True):
         """Plot ERA5, and mean and std of model prediction at given date. 
         
         Args:
@@ -424,7 +621,10 @@ class ValidateV1:
         #setup
         task_loader = self.task_loader
         model = self.model
-        era5_raw_ds = self.processed_dict['era5_raw_ds']
+        if era5 == None:
+            era5_raw_ds = self.processed_dict['era5_raw_ds']
+        else:
+            era5_raw_ds = era5
         station_raw_df = self.processed_dict['station_raw_df']
 
         # get location if specified
@@ -452,6 +652,9 @@ class ValidateV1:
         else:
             pred_db = pred.sel(time=date)
 
+        if location is not None:
+            pred_db = pred_db.sel(latitude=lat_slice, longitude=lon_slice)
+
         # plotting extent
         if infer_extent:
             extent = utils._infer_extent()
@@ -468,14 +671,16 @@ class ValidateV1:
             std_cbar_label="std dev [°C]",
             std_clim=(None, 5),
             figsize=(20, 20/3),
-            extent=extent
+            fontsize=16,
+            extent=extent,
+            remove_sea=remove_sea
         )
 
         if location is not None:
             for ax in axes:
                 ax.scatter(X_t[1], X_t[0], marker="s", color="black", transform=self.crs, s=10**2, facecolors='none', linewidth=2)
 
-        fig.suptitle(date)
+        # fig.suptitle(date)
         if return_fig:
             return fig, axes
 
@@ -604,7 +809,7 @@ class ValidateV1:
         # Add legend
         ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02, 1, 0.2), ncol=4, mode="expand", borderaxespad=0)
         ax.set_xlabel("Time")
-        ax.set_ylabel("2m temperature [°C]")
+        ax.set_ylabel("2m temperature [°C]",)
         ax.set_xticks(range(len(era5_raw_ds.time))[::14])
         ax.set_xticklabels([str(i)[:10] for i in era5_raw_ds.time.values[::14]], rotation=15)
         ax.set_title(f"ConvNP prediction for {location}", y=1.15)
@@ -619,8 +824,10 @@ class ValidateV1:
             NotImplementedError('extent not yet implemented')
 
         if remove_sea:
-            interpolated_era = era5_ds_plot.interp_like(mean_ds)
-            land_sea_mask = (~ np.isnan(interpolated_era))
+            topo = self.processed_dict['highres_aux_ds']['elevation']
+            topo_unnorm = self.data_processor.unnormalise(topo)
+            interpolated_topo = topo_unnorm.interp_like(mean_ds)
+            land_sea_mask = ~(interpolated_topo == 0)
 
         if var_clim is None:
             vmin = np.array(mean_ds.min())
@@ -681,8 +888,12 @@ class ValidateV1:
             ax.set_title("ConvNP std dev", fontsize=fontsize)
 
         for ax in axes:
+            cbar = ax.collections[0].colorbar  # This assumes your plot is the first (or only) collection added to the axes
+            cbar.set_label(var_cbar_label, fontsize=fontsize)  # Set your desired fontsize here
+            cbar.ax.tick_params(labelsize=fontsize) 
             ax.add_feature(cf.BORDERS)
             ax.coastlines()
+            ax.tick_params(axis='both', labelsize=fontsize)
         return fig, axes
     
     
@@ -710,7 +921,7 @@ class ValidateV1:
             dates = [dates]
         if verbose:
             print('Loading test tasks...')
-        test_task = task_loader(dates, ["all", "all"], seed_override=42)
+        test_task = task_loader(dates, ["all", "all", "all"], seed_override=42)
         if verbose:
             print('Test tasks loaded')
         if len(dates) == 1:
