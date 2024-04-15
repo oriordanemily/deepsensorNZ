@@ -75,11 +75,11 @@ class Train:
         pass
 
 
-    def run_training_sequence(self, n_epochs, model_name_prefix, batch=False, batch_size=1, **convnp_kwargs,):
+    def run_training_sequence(self, n_epochs, model_name='default', batch=False, batch_size=1, **convnp_kwargs,):
 
         self.setup_task_loader()
         self.initialise_model(**convnp_kwargs)
-        self.train_model(n_epochs=n_epochs, model_name_prefix=model_name_prefix, batch=batch, batch_size=batch_size)
+        self.train_model(n_epochs=n_epochs, model_name=model_name, batch=batch, batch_size=batch_size)
 
 
     def setup_task_loader(self, 
@@ -208,7 +208,7 @@ class Train:
                     n_epochs=30,
                     plot_losses=True,
                     model_name='default',
-                    model_name_prefix=None,
+                    # model_name_prefix=None,
                     batch=False,
                     batch_size=1,
                     ):
@@ -217,11 +217,11 @@ class Train:
         train_tasks = self.train_tasks
         val_tasks = self.val_tasks
         
-        model_id = str(round(time.time()))
         if model_name == 'default':
+            model_id = str(round(time.time()))
             model_name = f'model_{model_id}'
-        if model_name_prefix is not None:
-            model_name = f'{model_name_prefix}_{model_name}'
+        else:
+            model_name = f'model_{model_name}'
         self.set_save_dir(model_name)
 
         def compute_val_loss(model, val_tasks):

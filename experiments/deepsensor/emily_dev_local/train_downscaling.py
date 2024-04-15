@@ -5,7 +5,7 @@ import argparse
 
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
-from nzdownscale.dataprocess import config
+from nzdownscale.dataprocess import config, config_local
 
 
 def main():
@@ -45,13 +45,11 @@ def main():
         default=2002,
         help='Validation end year is inclusive'
     ),
-    
     parser.add_argument(
         "--use_daily_data",
         type=bool,
         default=True,
     )
-
     parser.add_argument(
         "--topography_highres_coarsen_factor",
         type=int,
@@ -68,7 +66,6 @@ def main():
         type=int,
         default=1,
     ),
-
     parser.add_argument(
         "--include_time_of_year",
         type=bool,
@@ -79,19 +76,11 @@ def main():
         type=bool,
         default=True,
     ),
-
-    parser.add_argument(
-        "--model_name_prefix",
-        type=str,
-        default='',
-        help='Prefix string for saved model'
-    ),
     parser.add_argument(
         "--n_epochs",
         type=int,
         default=30,
     ),
-
     parser.add_argument(
         "--unet_channels",
         default=None,
@@ -126,7 +115,13 @@ def main():
         "--remove_stations",
         type=list,
         default=[None],
-        help="List of station names to remove from the dataset"
+        help=" ! CURRENTLY NOT IMPLEMENTED ! List of station names to remove from the dataset"
+    )
+    parser.add_argument(
+        "--model_name",
+        type=str,
+        default='default',
+        help="Name of the model to be saved, if default it will be the time"
     )
 
     args = parser.parse_args()
@@ -144,6 +139,7 @@ def main():
     include_time_of_year = args.include_time_of_year
     include_landmask = args.include_landmask
     area = args.area
+    model_name = args.model_name
     remove_stations = ['TAUPO AWS', 'CHRISTCHURCH AERO', 
                        'KAITAIA AERO', 'MT COOK EWS', 
                        'AUCKLAND AERO', 'ALEXANDRA AWS',  
@@ -155,7 +151,6 @@ def main():
     topography_lowres_coarsen_factor = args.topography_lowres_coarsen_factor
     era5_coarsen_factor = args.era5_coarsen_factor
 
-    model_name_prefix = args.model_name_prefix
     n_epochs = args.n_epochs
 
     convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
@@ -198,8 +193,8 @@ def main():
     # ------------------------------------------
 
     training = Train(processed_output_dict=processed_output_dict)
-
-    training.run_training_sequence(n_epochs, model_name_prefix, **convnp_kwargs)
+    n_epochs=1
+    training.run_training_sequence(n_epochs, model_name, **convnp_kwargs)
 
 
 if __name__ == '__main__':
