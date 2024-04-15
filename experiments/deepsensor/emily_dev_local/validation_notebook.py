@@ -34,17 +34,24 @@ from nzdownscale.dataprocess.config import LOCATION_LATLON, STATION_LATLON
 era5_interp = None
 era5_interp_filled = None
 #%%  Load from saved model
+model_name = 'test_model_1712898775' # 50
 # model_name = 'test_model_1712875091' # 100
 # model_name = 'test_model_1712813969' # 250
 # model_name = 'test_model_1712551308' # 500
 # model_name = 'test_model_1712551280' # 750
-model_name = 'test_model_1712551296' # 1000
+# model_name = 'test_model_1712551296' # 1000
 # model_name = 'test_model_1712647507' # 1500
 # model_name = 'test_model_1712649253' # 2000
 # model_name = 'test_model_1712792079' # 2000
+# model_name = '_model_1713135569'
+# model_name = '_model_1713136369'
+# base = '/home/emily/deepsensor/deepweather-downscaling/'
+
 base = '/home/emily/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/'
+
 train_metadata_path = base + f'models/downscaling/{model_name}/metadata_{model_name}.pkl'
 model_path = base + f'models/downscaling/{model_name}/{model_name}.pt'
+
 
 with open(train_metadata_path, 'rb') as f:
     meta = pickle.load(f)
@@ -56,13 +63,13 @@ filtered_dict = {key: meta[key] for key in meta if key not in keys_to_exclude}
 filtered_dict
 print(f'Metadata: {filtered_dict}')
 #%% Load validation class
-# Takes 10 mins or so to run 
+
 # change the validation date range to a testing range to see how the model performs on unseen data
-# validation_date_range = [meta["date_info"]["val_end_year"] + 1, meta["date_info"]["val_end_year"] + 1] #[start_date, end_date]
 validation_date_range = [2016, 2020] #inclusive
 print(f'Validating model on date range: {validation_date_range[0]} - {validation_date_range[1]}')
 
 save_validate = False
+# load_validate = False
 load_validate = not save_validate
 
 if load_validate:
@@ -123,13 +130,19 @@ else:
     else:
         print('Not saving predictions as number_of_months is not 12')
 
-
+#%% 
+dataprocess = utils.DataProcess()
+resolution = dataprocess.resolution(pred['mean'].isel(time=0), 'latitude')
+print('Prediction resolution:', resolution)
  #%%
 if era5_interp is None:
     era5_unnorm = validate.data_processor.unnormalise(validate.processed_dict['era5_ds'].drop_vars(('cos_D', 'sin_D')))
+    print('ERA5 unnormalised')
+    # pred_coarse = pred.coarsen(latitude=5, longitude=5, boundary='trim').mean()
+    pred_coarse = pred
     era5_interp = era5_unnorm.interp(coords={
-        'latitude': pred['latitude'], 
-        'longitude': pred['longitude']
+        'latitude': pred_coarse['latitude'], 
+        'longitude': pred_coarse['longitude']
         }, 
         method='linear')
     print('ERA5 interpolated')
@@ -137,23 +150,26 @@ if era5_interp is None:
 if era5_interp_filled is None:
     topo = validate.processed_dict['highres_aux_ds']['elevation']
     topo_unnorm = validate.data_processor.unnormalise(topo)
-    interpolated_topo = topo_unnorm.interp_like(pred['mean'])
+    interpolated_topo = topo_unnorm.interp_like(pred_coarse['mean'])
     land_sea_mask = ~(interpolated_topo == 0)
     missing_land_values = xr.where(land_sea_mask & np.isnan(era5_interp),
                                     True, False)
     print('Missing land values calculated')
 
     # Get the coordinates of valid (non-NaN) and invalid (NaN) data points
-    era5_da = era5_interp['t2m'].isel(time=0)
-    valid_points = np.array(np.nonzero(~np.isnan(era5_da))).T
-    missing_land_values_da = missing_land_values['t2m'].isel(time=0)
-    invalid_points = np.array(np.nonzero(missing_land_values_da)).T
-    print('Valid and invalid points calculated')
+    # era5_da = era5_interp['t2m'].isel(time=0)
+    # valid_points = np.array(np.nonzero(~np.isnan(era5_da))).T
+    # missing_land_values_da = missing_land_values['t2m'].isel(time=0)
+    # invalid_points = np.array(np.nonzero(missing_land_values_da)).T
+    # print('Valid and invalid points calculated')
 
     era5_interp_filled = era5_interp.copy()
-    for t in tqdm(era5_interp['t2m'].time):
+    for t in tqdm(era5_interp['t2m'].time, desc='Filling missing values'):
         era5_da = era5_interp['t2m'].sel(time=t)
+        valid_points = np.array(np.nonzero(~np.isnan(era5_da))).T
         valid_values = era5_da.values[~np.isnan(era5_da)]
+        missing_land_values_da = missing_land_values['t2m'].sel(time=t)
+        invalid_points = np.array(np.nonzero(missing_land_values_da)).T
         # Perform nearest neighbor interpolation
         interpolated_values = griddata(valid_points,
                                     valid_values, 
@@ -162,6 +178,8 @@ if era5_interp_filled is None:
         # Fill the era5_interp DataArray with the interpolated values
         era5_interp_filled['t2m'].sel(time=t).values[tuple(invalid_points.T)] = interpolated_values
 
+    with open(base + f'models/downscaling/{model_name}/era5_interp_filled_{date}_{number_of_months}months.pkl', 'wb') as handle:
+        pickle.dump(era5_interp_filled, handle, protocol=pickle.HIGHEST_PROTOCOL)
 #%%
 loss_dict_era5, locations = validate.calculate_loss_era5(dates, validation_stations, era5_interp_filled) 
  #%% 
@@ -261,17 +279,19 @@ ax.set_ylabel('Average loss at stations')
 date = '2016-01-01'
 validate.plot_ERA5_and_prediction(date=date, 
                                   pred=pred, 
-                                  era5=era5_interp_filled, 
+                                #   era5=era5_interp_filled, 
                                   remove_sea=True)
-
-# #at location
-# for location in ['THE BROTHERS LIGHT', 'WHITE ISLAND AWS', 'BROTHERS ISLAND AWS', 'HAWERA AWS', 'FAREWELL SPIT AWS', 'CASTLEPOINT AWS', 'CAPE KIDNAPPERS WXT AWS']:
-#     validate.plot_ERA5_and_prediction(date=date,
-#                                     location=location, 
-#                                     pred=pred, 
-#                                     era5=era5_interp_filled,
-#                                     closest_station=False,
-#                                     remove_sea=True)
+# 'THE BROTHERS LIGHT', 'WHITE ISLAND AWS', 
+# # #at location
+# for location in validation_stations:
+#     if location not in locations:
+#         print(location)
+#         validate.plot_ERA5_and_prediction(date=date,
+#                                         location=location, 
+#                                         pred=pred, 
+#                                         era5=era5_interp_filled,
+#                                         closest_station=False,
+#                                         remove_sea=True)
 #%% 
 # plot errors at stations
 validate.plot_errors_at_stations('2016-01-01')

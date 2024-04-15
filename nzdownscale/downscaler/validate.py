@@ -63,6 +63,8 @@ class ValidateV1:
         self.data_processor_dict = data_processor_dict
         self.crs = ccrs.PlateCarree()
 
+        self.highres_aux_raw_ds = None
+
         self._check_args()
 
 
@@ -317,7 +319,7 @@ class ValidateV1:
         
             era5_loc = era5_values.sel(latitude=X_t[0], longitude=X_t[1], method='nearest')
             if np.isnan(era5_loc).any():
-                print('ERA5 has NANs at ', location)
+                print(f'ERA5 has NANs at {location}: {sum(np.isnan(era5_loc).values)}/{len(era5_loc)}')
             keep_location = True 
 
             era5_rmse = [utils.rmse(station, era) for station, era in zip(station_val, era5_loc.values)]
@@ -379,9 +381,11 @@ class ValidateV1:
 
             # if not skip_location:
             #     norms_era5[location] = [utils.rmse(station, era5) for station, era5 in zip(station_val, era5_loc)]
-
+        
             norms[location] = [utils.rmse(station, pred) for station, pred in zip(station_val, pred_db_mean_loc)]
-
+            if np.isnan(norms[location]).any():
+                print(f'Nans in norms for {location}: {sum(np.isnan(norms[location]))}/{len(norms[location])}')
+                
         if era5:
             return norms, norms_era5
         else:
@@ -648,11 +652,13 @@ class ValidateV1:
 
         # get predictions and test_task
         if pred is None:
-            pred_db, _ = self._get_predictions_and_tasks(date, task_loader, model, era5_raw_ds)
+            NotImplementedError('Need to implement this: swap era5_raw_ds in commented out line for highres_aux_raw_ds')
+            # pred_db, _ = self._get_predictions_and_tasks(date, task_loader, model, era5_raw_ds)
         else:
             pred_db = pred.sel(time=date)
 
         if location is not None:
+            lat_slice = slice(X_t[0] - 2, X_t[0] + 2)
             pred_db = pred_db.sel(latitude=lat_slice, longitude=lon_slice)
 
         # plotting extent
@@ -908,15 +914,19 @@ class ValidateV1:
     
     def get_predictions(self, dates, model, verbose=False, save_preds=False):
         task_loader = self.task_loader
-        era5_raw_ds = self.processed_dict['era5_raw_ds']
+        # era5_raw_ds = self.processed_dict['era5_raw_ds']
+        # highres_aux_raw_ds = self.processed_dict['highres_aux_raw_ds']
+        if self.highres_aux_raw_ds is None:
+            topo = self.processed_dict['highres_aux_ds']
+            self.highres_aux_raw_ds = self.data_processor.unnormalise(topo)
         
-        era5_raw_ds = era5_raw_ds.sel({'time': dates})
+        # era5_raw_ds = era5_raw_ds.sel({'time': dates})
 
-        pred, _ = self._get_predictions_and_tasks(dates, task_loader, model, era5_raw_ds, return_dataarray=True, verbose=verbose, save_preds=save_preds)
+        pred, _ = self._get_predictions_and_tasks(dates, task_loader, model, self.highres_aux_raw_ds, return_dataarray=True, verbose=verbose, save_preds=save_preds)
 
         return pred
     
-    def _get_predictions_and_tasks(self, dates, task_loader, model, era5_raw_ds, return_dataarray=True, verbose=False, save_preds=False):
+    def _get_predictions_and_tasks(self, dates, task_loader, model, highres_aux_raw_ds, return_dataarray=True, verbose=False, save_preds=False):
         if isinstance(dates, str):
             dates = [dates]
         if verbose:
@@ -928,7 +938,8 @@ class ValidateV1:
             test_task = test_task[0]
         if verbose:
             print('Calculating predictions...')
-        pred = model.predict(test_task, X_t=era5_raw_ds.sel({'time': dates}), resolution_factor=2)
+        pred = model.predict(test_task, X_t=highres_aux_raw_ds, progress_bar=1)
+        # X_t=era5_raw_ds.sel({'time': dates}))
 
         if save_preds:
             utils.save_pickle(pred, f'predictions_{self.training_metadata_path.split("/")[-1]}_{dates[0]}.pkl')
