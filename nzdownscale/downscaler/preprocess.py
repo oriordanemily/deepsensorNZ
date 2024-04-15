@@ -221,12 +221,12 @@ class PreprocessForDownscaling:
         return self.era5_raw_ds
 
 
-    def preprocess_stations(self):
+    def preprocess_stations(self, remove_stations=['None']):
         """ Gets self.station_raw_df """
 
         assert self.station_metadata_all is not None, "Run load_stations() first"
         
-        self.station_metadata = self._filter_stations(self.station_metadata_all, remove_stations=[None])
+        self.station_metadata = self._filter_stations(self.station_metadata_all, remove_stations=remove_stations)
         self.station_raw_df = self._get_station_raw_df(self.station_metadata)
         
         return self.station_raw_df

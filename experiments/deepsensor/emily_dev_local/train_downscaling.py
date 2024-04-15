@@ -122,7 +122,7 @@ def main():
         default=None,
         help="Select area of map, options specified in: PLOT_EXTENT in nzdownscale.dataprocess.config.py. PLOT_EXTENT['all'] (all of NZ) is used as default",
     )
-        parser.add_argument(
+    parser.add_argument(
         "--remove_stations",
         type=list,
         default=[None],
@@ -130,6 +130,7 @@ def main():
     )
 
     args = parser.parse_args()
+
 
     # ------------------------------------------
     # Settings
@@ -143,7 +144,12 @@ def main():
     include_time_of_year = args.include_time_of_year
     include_landmask = args.include_landmask
     area = args.area
-    remove_stations = args.remove_stations
+    remove_stations = ['TAUPO AWS', 'CHRISTCHURCH AERO', 
+                       'KAITAIA AERO', 'MT COOK EWS', 
+                       'AUCKLAND AERO', 'ALEXANDRA AWS',  
+                       'TOLAGA BAY WXT AWS', 'WELLINGTON AERO', 
+                       'BLENHEIM AERO', 'DUNEDIN AERO AWS']
+
 
     topography_highres_coarsen_factor = args.topography_highres_coarsen_factor
     topography_lowres_coarsen_factor = args.topography_lowres_coarsen_factor
