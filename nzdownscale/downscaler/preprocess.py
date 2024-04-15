@@ -98,7 +98,8 @@ class PreprocessForDownscaling:
         include_time_of_year=False,
         include_landmask=False,
         data_processor_dict=None,
-        save_data_processor_dict=False
+        save_data_processor_dict=False,
+        remove_stations=[None]
         ):
         
         self.load_topography()
@@ -107,7 +108,7 @@ class PreprocessForDownscaling:
 
         highres_aux_raw_ds, aux_raw_ds = self.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
         era5_raw_ds = self.preprocess_era5(coarsen_factor=era5_coarsen_factor)
-        station_raw_df = self.preprocess_stations()
+        station_raw_df = self.preprocess_stations(remove_stations=remove_stations)
 
         # if include_time_of_year: 
         #     raise NotImplementedError
@@ -225,7 +226,7 @@ class PreprocessForDownscaling:
 
         assert self.station_metadata_all is not None, "Run load_stations() first"
         
-        self.station_metadata = self._filter_stations(self.station_metadata_all)
+        self.station_metadata = self._filter_stations(self.station_metadata_all, remove_stations=[None])
         self.station_raw_df = self._get_station_raw_df(self.station_metadata)
         
         return self.station_raw_df
@@ -397,7 +398,7 @@ class PreprocessForDownscaling:
         return era5_raw_ds
 
 
-    def _filter_stations(self, df_station_metadata):
+    def _filter_stations(self, df_station_metadata, remove_stations=[None]):
         """ filter stations by years used in settings """
 
         # this was only using stations that have data across all years
@@ -407,6 +408,12 @@ class PreprocessForDownscaling:
         df = df_station_metadata
         years = self.years
         area = self.area
+
+        if remove_stations != [None]:
+            from nzdownscale.dataprocess.config import STATION_LATLON
+            for station in remove_stations:
+                station_no = STATION_LATLON[station]['station_no']
+                df = df[df['station_id'] != str(station_no)]
 
         df_filtered_years = df[(df['start_year']<years[-1]) & (df['end_year']>=years[0])]
 

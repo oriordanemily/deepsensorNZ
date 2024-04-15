@@ -55,29 +55,29 @@ def main():
     parser.add_argument(
         "--topography_highres_coarsen_factor",
         type=int,
-        default=10,
+        default=5,
     ),
     parser.add_argument(
         "--topography_lowres_coarsen_factor",
         type=int,
-        default=10,
+        default=5,
         help='Note that the lowres topo is coarsened from the highres topo, so the lowres topo resolution is actually topography_highres_coarsen_factor * topography_lowres_coarsen_factor.'
     ),
     parser.add_argument(
         "--era5_coarsen_factor",
         type=int,
-        default=5,
+        default=1,
     ),
 
     parser.add_argument(
         "--include_time_of_year",
         type=bool,
-        default=False,
+        default=True,
     ),
     parser.add_argument(
         "--include_landmask",
         type=bool,
-        default=False,
+        default=True,
     ),
 
     parser.add_argument(
@@ -107,7 +107,7 @@ def main():
     parser.add_argument(
         "--internal_density",
         type=int,
-        default=None,
+        default=100,
         help="ConvNP model argument, uses default CONVNP_KWARGS_DEFAULT if not set",
     ),    
     parser.add_argument(
@@ -121,6 +121,12 @@ def main():
         type=str,
         default=None,
         help="Select area of map, options specified in: PLOT_EXTENT in nzdownscale.dataprocess.config.py. PLOT_EXTENT['all'] (all of NZ) is used as default",
+    )
+        parser.add_argument(
+        "--remove_stations",
+        type=list,
+        default=[None],
+        help="List of station names to remove from the dataset"
     )
 
     args = parser.parse_args()
@@ -137,6 +143,7 @@ def main():
     include_time_of_year = args.include_time_of_year
     include_landmask = args.include_landmask
     area = args.area
+    remove_stations = args.remove_stations
 
     topography_highres_coarsen_factor = args.topography_highres_coarsen_factor
     topography_lowres_coarsen_factor = args.topography_lowres_coarsen_factor
@@ -175,6 +182,7 @@ def main():
         era5_coarsen_factor,
         include_time_of_year=include_time_of_year,
         include_landmask=include_landmask,
+        remove_stations=remove_stations
         )
     processed_output_dict = data.get_processed_output_dict()
     data.print_resolutions()
