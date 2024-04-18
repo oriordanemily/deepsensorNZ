@@ -108,9 +108,8 @@ class ValidateV1:
             processed_dict = self.processed_output_dict
         else:
             processed_dict = self._get_processed_output_dict_from_metadata(save_data_processing_dict=save_data_processing_dict)
-        
-        self.processed_dict = processed_dict 
 
+        self.processed_dict = processed_dict 
 
     def _get_processed_output_dict_from_metadata(self, save_data_processing_dict=False):
 
@@ -142,6 +141,7 @@ class ValidateV1:
             save_data_processor_dict=save_data_processing_dict
             )
         processed_output_dict = data.get_processed_output_dict()
+
         return processed_output_dict
 
 
@@ -319,15 +319,12 @@ class ValidateV1:
         
             era5_loc = era5_values.sel(latitude=X_t[0], longitude=X_t[1], method='nearest')
             if np.isnan(era5_loc).any():
+                # if era5 is nan, skip location
                 print(f'ERA5 has NANs at {location}: {sum(np.isnan(era5_loc).values)}/{len(era5_loc)}')
-            keep_location = True 
-
-            era5_rmse = [utils.rmse(station, era) for station, era in zip(station_val, era5_loc.values)]
-            # if np.isnan(era5_rmse).any():
-            #     print(f'ERA5 RMSE has nans at {location}')
-            # else:
-            norms_era5[location] = era5_rmse
-            locations_kept.append(location)
+            else:
+                era5_rmse = [utils.rmse(station, era) for station, era in zip(station_val, era5_loc.values)]
+                norms_era5[location] = era5_rmse
+                locations_kept.append(location)
     
         locations_kept = list(set(locations_kept))
         return norms_era5, locations_kept
@@ -756,6 +753,7 @@ class ValidateV1:
                                    location, 
                                    date_range: tuple, 
                                    pred=None,
+                                   era5=None,
                                    closest_station=True,
                                    return_fig=False):
 
@@ -766,7 +764,10 @@ class ValidateV1:
         if not isinstance(pred, xr.core.dataset.Dataset):
             task_loader = self.task_loader
             model = self.model
-        era5_raw_ds = self.processed_dict['era5_raw_ds']
+        if type(era5) != xr.core.dataset.Dataset:
+            era5_raw_ds = self.processed_dict['era5_raw_ds']
+        else:
+            era5_raw_ds = era5['t2m']
         station_raw_df = self.processed_dict['station_raw_df']
 
         # get location
@@ -782,8 +783,7 @@ class ValidateV1:
         else:
             pred_db = pred.sel(time=dates)
 
-        if closest_station:
-            X_station_closest = self._find_closest_station(X_t, station_raw_df)
+        X_station_closest = self._find_closest_station(X_t, station_raw_df)
 
         # Get station data on dates in date_range
         station_closest_df = station_raw_df.reset_index().set_index(["latitude", "longitude"]).loc[tuple(X_station_closest)].set_index("time")
@@ -792,7 +792,6 @@ class ValidateV1:
         #     raise ValueError(f"Station {X_station_closest} has no data for dates {dates}")
         # else:
         station_closest_df = station_closest_df.loc[dates]
-
         if closest_station:
             X_t = X_station_closest
 
@@ -806,24 +805,39 @@ class ValidateV1:
 
         # Plot mean
         fig, ax = plt.subplots(1, 1, figsize=(7*.9, 3*.9))
-        ax.plot(convnp_mean, label="ConvNP", marker="o", markersize=3)
+        ax.plot(convnp_mean, label="ConvNP", marker="o", markersize=3, zorder=2)
         # Make 95% confidence interval
         ax.fill_between(range(len(convnp_mean)), convnp_mean - 2 * stddev, convnp_mean + 2 * stddev, alpha=0.25, label="ConvNP 95% CI")
-        ax.plot(era5_vals, label="ERA5", marker="o", markersize=3)
         # Plot true station data
-        ax.plot(station_closest_df["dry_bulb"].values.astype('float'), label="Station", marker="o", markersize=3)
+        ax.plot(station_closest_df["dry_bulb"].values.astype('float'), label="Station", marker="o", markersize=3, zorder=1)
+        ax.plot(era5_vals, label="ERA5", marker="o", markersize=3, zorder = 0)
         # Add legend
         ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02, 1, 0.2), ncol=4, mode="expand", borderaxespad=0)
         ax.set_xlabel("Time")
         ax.set_ylabel("2m temperature [°C]",)
-        ax.set_xticks(range(len(era5_raw_ds.time))[::14])
-        ax.set_xticklabels([str(i)[:10] for i in era5_raw_ds.time.values[::14]], rotation=15)
+
+        dates_df = pd.DataFrame(index=pd.to_datetime(era5_raw_ds.time.values))
+        first_of_each_month = dates_df.groupby([dates_df.index.year, dates_df.index.month]).apply(lambda x: x.index.min())
+        positions = [dates.get_loc(pd.to_datetime(day)) for day in first_of_each_month]
+
+        ax.set_xticks(positions, 
+                      labels=[str(i)[:10] for i in first_of_each_month],
+                    rotation=25)
+        ax.tick_params(axis='x', which='major', length=10, width=1, 
+                       direction='out')
+
+        # ax.set_xticks(positions,)
+        # ax.set_xticklabels([str(i)[:10] for i in era5_raw_ds.time.values[::30]], rotation=45)
         ax.set_title(f"ConvNP prediction for {location}", y=1.15)
 
         if return_fig:
             return fig, ax
 
-    def gen_test_fig(self, era5_ds_plot=None, mean_ds=None, std_ds=None, samples_ds=None, add_colorbar=False, var_clim=None, std_clim=None, var_cbar_label=None, std_cbar_label=None, fontsize=None, figsize=(15, 5), extent=None, remove_sea=True):
+    def gen_test_fig(self, era5_ds_plot=None, mean_ds=None, std_ds=None, 
+                     samples_ds=None, add_colorbar=False, var_clim=None, 
+                     std_clim=None, var_cbar_label=None, std_cbar_label=None,
+                       fontsize=None, figsize=(15, 5), extent=None, 
+                       remove_sea=True):
         # Plots ERA5, ConvNP mean, ConvNP std dev
         
         if extent is not None:
@@ -860,29 +874,44 @@ class ValidateV1:
         if samples_ds is not None:
             ncols += samples_ds.shape[0]
 
+        cmap = 'RdYlBu_r'
+
         fig, axes = plt.subplots(1, ncols, subplot_kw=dict(projection=self.crs), figsize=figsize)
 
+        cbar_kwargs = {"location": 'right', 
+                'pad': 0.06,
+                'shrink': 0.8,
+                'extend': 'both',
+                'label': var_cbar_label}
+        
         axis_i = 0
         if era5_ds_plot is not None:
             if era5_ds_plot.shape == (0, 0) or era5_ds_plot.shape == (1, 1):
                 raise ValueError('era5_ds_plot resolution too coarse to plot at this scale. Please use a higher resolution or a larger region.')
             ax = axes[axis_i]
-            era5_ds_plot.plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=add_colorbar, cbar_kwargs=dict(label=var_cbar_label))
-            ax.set_title("ERA5", fontsize=fontsize)
+            era5_ds_plot.plot(ax=ax, cmap=cmap, vmin=vmin, vmax=vmax,
+                               add_colorbar=add_colorbar, 
+                               cbar_kwargs=cbar_kwargs)
+            ax.set_title("ERA5-Land", fontsize=fontsize)
 
         if mean_ds is not None:
             axis_i += 1
             ax = axes[axis_i]
             if remove_sea:
                 mean_ds = mean_ds.where(land_sea_mask)
-            mean_ds.plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=add_colorbar, cbar_kwargs=dict(label=var_cbar_label))
+            mean_ds.plot(ax=ax, cmap=cmap, vmin=vmin, vmax=vmax,
+                          add_colorbar=add_colorbar,
+                        cbar_kwargs=cbar_kwargs)
             ax.set_title("ConvNP mean", fontsize=fontsize)
 
         if samples_ds is not None:
             for i in range(samples_ds.shape[0]):
                 axis_i += 1
                 ax = axes[axis_i]
-                samples_ds.isel(sample=i).plot(ax=ax, cmap="jet", vmin=vmin, vmax=vmax, add_colorbar=add_colorbar, cbar_kwargs=dict(label=var_cbar_label))
+                samples_ds.isel(sample=i).plot(ax=ax, cmap="jet", vmin=vmin,
+                                            vmax=vmax, 
+                                            add_colorbar=add_colorbar, 
+                                            cbar_kwargs=cbar_kwargs)
                 ax.set_title(f"ConvNP sample {i+1}", fontsize=fontsize)
 
         if std_ds is not None:
@@ -890,7 +919,9 @@ class ValidateV1:
             ax = axes[axis_i]
             if remove_sea:
                 std_ds = std_ds.where(land_sea_mask)
-            std_ds.plot(ax=ax, cmap="Greys", add_colorbar=add_colorbar, vmin=std_vmin, vmax=std_vmax, cbar_kwargs=dict(label=std_cbar_label))
+            std_ds.plot(ax=ax, cmap="Greys", add_colorbar=add_colorbar, 
+                        vmin=std_vmin, vmax=std_vmax, 
+                        cbar_kwargs=cbar_kwargs)
             ax.set_title("ConvNP std dev", fontsize=fontsize)
 
         for ax in axes:
@@ -912,7 +943,7 @@ class ValidateV1:
             date = f'{date}T00:00:00.000000000'
         return date
     
-    def get_predictions(self, dates, model, verbose=False, save_preds=False):
+    def get_predictions(self, dates, model, verbose=False, save_preds=False, remove_stations_from_tasks=[]):
         task_loader = self.task_loader
         # era5_raw_ds = self.processed_dict['era5_raw_ds']
         # highres_aux_raw_ds = self.processed_dict['highres_aux_raw_ds']
@@ -922,16 +953,26 @@ class ValidateV1:
         
         # era5_raw_ds = era5_raw_ds.sel({'time': dates})
 
-        pred, _ = self._get_predictions_and_tasks(dates, task_loader, model, self.highres_aux_raw_ds, return_dataarray=True, verbose=verbose, save_preds=save_preds)
+        pred, _ = self._get_predictions_and_tasks(dates, task_loader, model, 
+                                                  self.highres_aux_raw_ds,
+                                                    return_dataarray=True, 
+                                                    verbose=verbose, save_preds=save_preds,
+                                                      remove_stations_from_tasks=remove_stations_from_tasks)
 
         return pred
     
-    def _get_predictions_and_tasks(self, dates, task_loader, model, highres_aux_raw_ds, return_dataarray=True, verbose=False, save_preds=False):
+    def _get_predictions_and_tasks(self, dates, task_loader, model, highres_aux_raw_ds, return_dataarray=True, verbose=False, save_preds=False, remove_stations_from_tasks=[]):
         if isinstance(dates, str):
             dates = [dates]
         if verbose:
             print('Loading test tasks...')
-        test_task = task_loader(dates, ["all", "all", "all"], seed_override=42)
+        
+        # remove stations in remove_stations_from_tasks from the station data to be used in test tasks
+        # ! NOTE ! currently predict doesn't use the station data, so this is unnecessary.
+        station_df = self.processed_dict['station_raw_df']
+        self.processed_dict['station_raw_df'] = self._remove_stations_from_station_df(station_df, remove_stations_from_tasks)
+
+        test_task = task_loader(dates, context_sampling = 'all', target_sampling='all',  seed_override=42)
         if verbose:
             print('Test tasks loaded')
         if len(dates) == 1:
@@ -939,7 +980,9 @@ class ValidateV1:
         if verbose:
             print('Calculating predictions...')
         pred = model.predict(test_task, X_t=highres_aux_raw_ds, progress_bar=1)
-        # X_t=era5_raw_ds.sel({'time': dates}))
+         
+        # reset station data to include all for validation
+        self.processed_dict['station_raw_df'] = station_df
 
         if save_preds:
             utils.save_pickle(pred, f'predictions_{self.training_metadata_path.split("/")[-1]}_{dates[0]}.pkl')
@@ -948,6 +991,30 @@ class ValidateV1:
             pred = pred['dry_bulb']
 
         return pred, test_task
+
+    def _remove_stations_from_station_df(self, station_df, stations):
+        """Remove named stations from the station df
+
+        Args:
+            station_df (pd.DataFrame): df with time, latitude, longitude and data columns
+            stations (list): list of station names (in STATION_LATLON) to be removed
+
+        Returns:
+            pd.DataFrame: df with stations removed
+        """
+
+        # create df of latitudes and longitudes of stations to be removed
+        latlon_remove = {'latitude': [], 'longitude': []}
+        for station in stations:
+            latlon_remove['latitude'].append(STATION_LATLON[station]['latitude'])
+            latlon_remove['longitude'].append(STATION_LATLON[station]['longitude'])
+        removal_df = pd.DataFrame(latlon_remove)
+
+        # merge station_df with removal_df to remove stations
+        merged_df = station_df.reset_index().merge(removal_df, on=['latitude', 'longitude'], how='left', indicator=True).set_index(['time', 'latitude', 'longitude'])
+        final_df = merged_df[merged_df['_merge'] == 'left_only'].drop(columns=['_merge'])
+        
+        return final_df
     
     def _infer_extent(self):
         """Get extent from config file. Return as tuple (minlon, maxlon, minlat, maxlat)

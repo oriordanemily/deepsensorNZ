@@ -34,7 +34,9 @@ from nzdownscale.dataprocess.config import LOCATION_LATLON, STATION_LATLON
 era5_interp = None
 era5_interp_filled = None
 #%%  Load from saved model
-model_name = 'test_model_1712898775' # 50
+model_name = 'test_model_1713164678' # 100 - left out stations
+
+# model_name = 'test_model_1712898775' # 50
 # model_name = 'test_model_1712875091' # 100
 # model_name = 'test_model_1712813969' # 250
 # model_name = 'test_model_1712551308' # 500
@@ -65,7 +67,7 @@ print(f'Metadata: {filtered_dict}')
 #%% Load validation class
 
 # change the validation date range to a testing range to see how the model performs on unseen data
-validation_date_range = [2016, 2020] #inclusive
+validation_date_range = [2016, 2018] #inclusive
 print(f'Validating model on date range: {validation_date_range[0]} - {validation_date_range[1]}')
 
 save_validate = False
@@ -81,6 +83,11 @@ else:
     print('Creating validate object without loaded processor dict,\
            may be slow')
 
+remove_stations_list = ['TAUPO AWS', 'CHRISTCHURCH AERO', 
+                       'KAITAIA AERO', 'MT COOK EWS', 
+                       'AUCKLAND AERO', 'ALEXANDRA AWS',  
+                       'TOLAGA BAY WXT AWS', 'WELLINGTON AERO', 
+                       'BLENHEIM AERO', 'DUNEDIN AERO AWS']
 # if not load_validate:
 # if 'validate' not in locals():
 validate = ValidateV1(
@@ -89,7 +96,8 @@ validate = ValidateV1(
     data_processor_dict=data_processor_dict
     )
 validate.load_model(load_model_path=model_path, 
-                    save_data_processing_dict=save_validate)
+                    save_data_processing_dict=save_validate,
+                    )
 
 metadata = validate.get_metadata()
 print(metadata)
@@ -101,7 +109,7 @@ model = validate.model
 # date = f'{validation_date_range[0]}-01-01'
 date = '2016-01-01'
 number_of_months=24
-# note that the stations only have data up to 2018-08-01
+# note that the stations only have data up to 2019-08-01
 
 date_obj = datetime.strptime(date, '%Y-%m-%d')
 new_date_obj = date_obj + relativedelta(months=number_of_months) - relativedelta(days=1)
@@ -123,7 +131,7 @@ if os.path.exists(prediction_fpath):
     save_preds = False
 else:
     print(f'Calculating predictions from {date_range[0]} to {date_range[-1]}')
-    pred = validate.get_predictions(dates, model, verbose=True, save_preds=False)
+    pred = validate.get_predictions(dates, model, verbose=True, save_preds=False, remove_stations=remove_stations_list)
     if number_of_months == 12:
         print(f'Saving to {prediction_fpath}')
         utils.save_pickle(pred, prediction_fpath)
@@ -136,52 +144,70 @@ resolution = dataprocess.resolution(pred['mean'].isel(time=0), 'latitude')
 print('Prediction resolution:', resolution)
  #%%
 if era5_interp is None:
-    era5_unnorm = validate.data_processor.unnormalise(validate.processed_dict['era5_ds'].drop_vars(('cos_D', 'sin_D')))
-    print('ERA5 unnormalised')
-    # pred_coarse = pred.coarsen(latitude=5, longitude=5, boundary='trim').mean()
-    pred_coarse = pred
-    era5_interp = era5_unnorm.interp(coords={
-        'latitude': pred_coarse['latitude'], 
-        'longitude': pred_coarse['longitude']
-        }, 
-        method='linear')
-    print('ERA5 interpolated')
+    era5_interp_path = base + f'models/downscaling/{model_name}/era5_interp_{date}_{number_of_months}months.pkl'
+    if os.path.exists(era5_interp_path):
+        print('Loading interpolated ERA5 from file')
+        with open(era5_interp_path, 'rb') as handle:
+            era5_interp = pickle.load(handle)
+    else:
+        era5_unnorm = validate.data_processor.unnormalise(validate.processed_dict['era5_ds'].drop_vars(('cos_D', 'sin_D')))
+        print('ERA5 unnormalised')
+        pred_coarse = pred.coarsen(latitude=5, longitude=5, boundary='trim').mean()
+        # pred_coarse = pred
+        era5_interp = era5_unnorm.interp(coords={
+            'latitude': pred_coarse['latitude'], 
+            'longitude': pred_coarse['longitude']
+            }, 
+            method='linear')
+        with open(era5_interp_path, 'wb') as handle:
+            pickle.dump(era5_interp, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        print('ERA5 interpolated')
 
 if era5_interp_filled is None:
-    topo = validate.processed_dict['highres_aux_ds']['elevation']
-    topo_unnorm = validate.data_processor.unnormalise(topo)
-    interpolated_topo = topo_unnorm.interp_like(pred_coarse['mean'])
-    land_sea_mask = ~(interpolated_topo == 0)
-    missing_land_values = xr.where(land_sea_mask & np.isnan(era5_interp),
-                                    True, False)
-    print('Missing land values calculated')
+    era5_interp_filled_path = base + f'models/downscaling/{model_name}/era5_interp_filled_{date}_{number_of_months}months.pkl'
+    if os.path.exists(era5_interp_filled_path):
+        print('Loading filled ERA5 from file')
+        with open(era5_interp_filled_path, 'rb') as handle:
+            era5_interp_filled = pickle.load(handle)
+    else:
+        topo = validate.processed_dict['highres_aux_ds']['elevation']
+        topo_unnorm = validate.data_processor.unnormalise(topo)
+        interpolated_topo = topo_unnorm.interp_like(pred_coarse['mean'])
+        land_sea_mask = ~(interpolated_topo == 0)
+        missing_land_values = xr.where(land_sea_mask & np.isnan(era5_interp),
+                                        True, False)
+        print('Missing land values calculated')
 
-    # Get the coordinates of valid (non-NaN) and invalid (NaN) data points
-    # era5_da = era5_interp['t2m'].isel(time=0)
-    # valid_points = np.array(np.nonzero(~np.isnan(era5_da))).T
-    # missing_land_values_da = missing_land_values['t2m'].isel(time=0)
-    # invalid_points = np.array(np.nonzero(missing_land_values_da)).T
-    # print('Valid and invalid points calculated')
+        # Get the coordinates of valid (non-NaN) and invalid (NaN) data points
+        # era5_da = era5_interp['t2m'].isel(time=0)
+        # valid_points = np.array(np.nonzero(~np.isnan(era5_da))).T
+        # missing_land_values_da = missing_land_values['t2m'].isel(time=0)
+        # invalid_points = np.array(np.nonzero(missing_land_values_da)).T
+        # print('Valid and invalid points calculated')
 
-    era5_interp_filled = era5_interp.copy()
-    for t in tqdm(era5_interp['t2m'].time, desc='Filling missing values'):
-        era5_da = era5_interp['t2m'].sel(time=t)
-        valid_points = np.array(np.nonzero(~np.isnan(era5_da))).T
-        valid_values = era5_da.values[~np.isnan(era5_da)]
-        missing_land_values_da = missing_land_values['t2m'].sel(time=t)
-        invalid_points = np.array(np.nonzero(missing_land_values_da)).T
-        # Perform nearest neighbor interpolation
-        interpolated_values = griddata(valid_points,
-                                    valid_values, 
-                                    invalid_points, 
-                                    method='nearest')
-        # Fill the era5_interp DataArray with the interpolated values
-        era5_interp_filled['t2m'].sel(time=t).values[tuple(invalid_points.T)] = interpolated_values
+        era5_interp_filled = era5_interp.copy()
+        for t in tqdm(era5_interp['t2m'].time, desc='Filling missing values'):
+            era5_da = era5_interp['t2m'].sel(time=t)
+            valid_points = np.array(np.nonzero(~np.isnan(era5_da))).T
+            valid_values = era5_da.values[~np.isnan(era5_da)]
+            missing_land_values_da = missing_land_values['t2m'].sel(time=t)
+            invalid_points = np.array(np.nonzero(missing_land_values_da)).T
+            # Perform nearest neighbor interpolation
+            interpolated_values = griddata(valid_points,
+                                        valid_values, 
+                                        invalid_points, 
+                                        method='nearest')
+            # Fill the era5_interp DataArray with the interpolated values
+            era5_interp_filled['t2m'].sel(time=t).values[tuple(invalid_points.T)] = interpolated_values
 
-    with open(base + f'models/downscaling/{model_name}/era5_interp_filled_{date}_{number_of_months}months.pkl', 'wb') as handle:
-        pickle.dump(era5_interp_filled, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(era5_interp_filled_path, 'wb') as handle:
+            pickle.dump(era5_interp_filled, handle, protocol=pickle.HIGHEST_PROTOCOL)
 #%%
-loss_dict_era5, locations = validate.calculate_loss_era5(dates, validation_stations, era5_interp_filled) 
+validation_stations.remove('CAPE CAMPBELL AWS')
+validation_stations.remove('CAPE KIDNAPPERS WXT AWS')
+loss_dict_era5, locations = validate.calculate_loss_era5(dates, 
+                                                         validation_stations, 
+                                                         era5_interp_filled) 
  #%% 
 # could speed this up with multiprocessing ?
 loss_dict, pred_dict, station_dict = validate.calculate_loss(dates, 
@@ -260,6 +286,53 @@ for month in range(1, 13):
     monthly_losses_era5[month] = np.nanmean(monthly_losses_era5_list[month])
     monthly_stds_era5[month] = np.nanstd(monthly_losses_era5_list[month])
     print(f'{months[month -1]}: {monthly_losses_era5[month], monthly_stds_era5[month]}')
+#%%
+df_losses = pd.DataFrame([(location, loss_mean_std[location][0], loss_mean_std_era5[location][0]) 
+                          for location in loss_dict.keys()], 
+                         columns=['Location', 'ConvNP', 'ERA5'])
+df_losses.sort_values(by='ERA5', ascending=False, inplace=True)
+pd.set_option('display.max_rows', None)  # None means show all rows
+
+df_losses
+#%%
+print('------ ConvNP predictions at unseen stations -------')
+loss_mean_std_unseen = {}
+unseen_locations = ['TAUPO AWS', 'CHRISTCHURCH AERO', 
+                    'KAITAIA AERO', 'MT COOK EWS', 
+                    'AUCKLAND AERO', 'ALEXANDRA AWS',  
+                    'TOLAGA BAY WXT AWS', 'WELLINGTON AERO', 
+                    'BLENHEIM AERO', 'DUNEDIN AERO AWS']
+for location, loss in loss_dict.items():
+    if location in unseen_locations:
+        loss_mean_std_unseen[location] = (np.nanmean(loss), np.nanstd(loss))
+
+print(f'Found {len(loss_mean_std_unseen)}/{len(unseen_locations)} unseen stations')
+overall_mean = np.round(np.nanmean([loss_mean_std_unseen[location][0] for location in loss_mean_std_unseen.keys()]), 6)
+overall_std = np.round(np.nanmean([loss_mean_std_unseen[location][1] for location in loss_mean_std_unseen.keys()]), 6)
+
+print(f'Mean loss across all unseen stations: {overall_mean}')
+print(f'Mean of std loss across all unseen stations: {overall_std}')
+
+# total_loss = []
+# for location, loss in loss_dict.items():
+#     if location in unseen_locations:
+#         total_loss.extend(loss)
+# total_loss = np.round(np.nansum(total_loss), 6)
+# print(f'Total loss: {total_loss}')
+
+#%%
+print('------ ERA5-Land at unseen stations -------')
+loss_mean_std_era5_unseen = {}
+for location, loss in loss_dict_era5.items():
+    if location in unseen_locations:
+        loss_mean_std_era5_unseen[location] = (np.nanmean(loss), np.nanstd(loss))
+
+print(f'Found {len(loss_mean_std_era5_unseen)}/{len(unseen_locations)} unseen stations')
+overall_mean = np.round(np.nanmean([loss_mean_std_era5_unseen[location][0] for location in loss_mean_std_era5_unseen.keys()]), 6)
+overall_std = np.round(np.nanmean([loss_mean_std_era5_unseen[location][1] for location in loss_mean_std_era5_unseen.keys()]), 6)
+
+print(f'Mean loss across all unseen stations: {overall_mean}')
+print(f'Mean of std loss across all unseen stations: {overall_std}')
 
 #%%
 fig, ax = plt.subplots()
@@ -297,26 +370,55 @@ validate.plot_ERA5_and_prediction(date=date,
 validate.plot_errors_at_stations('2016-01-01')
 validate.plot_errors_at_stations('2016-07-01')
 #%%
-sample_locations = ['TAUPO AWS', 'CHRISTCHURCH AERO', 'KAITAIA AERO', 'MT COOK EWS']
-if location not in validation_stations:
-    sample_locations.remove(location)
+# sample_locations = ['TAUPO AWS', 'CHRISTCHURCH AERO', 'KAITAIA AERO', 'MT COOK EWS']
+# sample_locations = ['TAUPO AWS', 'MT COOK EWS', 'ALEXANDRA AWS', 'TOLAGA BAY WXT AWS', 'WELLINGTON AERO']
+# sample_locations = ['MILFORD SOUND', 'MT COOK EWS', 'FRANZ JOSEF EWS', 'WELLINGTON AERO AWS', 'TAUPO AERO', 'BLENHEIM AERO', 'DUNEDIN AERO', 'GISBORNE AERO']
+# sample_locations =  ['WELLINGTON AERO']
+sample_locations = ['MT COOK EWS', 'WELLINGTON AERO']
+# sample_locations = ['CAPE REINGA AWS']
+# sample_locations = ['KAIKOURA AWS']
+# sample_locations = ['NEW PLYMOUTH AERO']
+# sample_locations = ['TAUPO AERO']
+# sample_locations = ['SECRETARY ISLAND AWS']
+# sample_locations = ['MT POTTS EWS']
+for location in sample_locations:
+    if location not in validation_stations:
+        sample_locations.remove(location)
 
 for location in tqdm(sample_locations):
-    date_range_location = (date_range, '2017-01-01')
+    date_range_location = (date_range[0], '2016-07-01')
+    # date_range_location = ('2016-07-01', '2016-12-31')
+    # date_range_locations = ('2016-01-01', '2016-12-31')
     validate.plot_timeseries_comparison(location=location, 
-                                        date_range=date_range, 
+                                        date_range=date_range_location, 
                                         pred=pred,
+                                        era5=era5_interp_filled,
                                         return_fig=True)
     
+# %%
+
 #%%
+    
+sample_locations = ['TAUPO AWS', 'CHRISTCHURCH AERO', 
+                       'KAITAIA AERO', 'MT COOK EWS', 
+                    'ALEXANDRA AWS',  
+              'WELLINGTON AERO', 
+               'DUNEDIN AERO AWS', 'AUCKLAND AERO',
+               'BLENHEIM AERO', 'TOLAGA BAY WXT AWS'] 
 
 losses_list = []
 for k, v in loss_dict.items():
-    losses_list.extend(v)
+    # if k in sample_locations:
+    if k != 'WHITE ISLAND AWS':
+        v = [x for x in v if str(x) != 'nan']
+        losses_list.extend(v)
 
 era5_losses_list = []
 for k, v in loss_dict_era5.items():
-    era5_losses_list.extend(v)
+    # if k in sample_locations:
+    if k != 'WHITE ISLAND AWS': 
+        v = [x for x in v if str(x) != 'nan']
+        era5_losses_list.extend(v)
 
 fig, ax = plt.subplots()
 positions = [1, 1.6]
@@ -325,7 +427,7 @@ ax.tick_params(axis='y', labelsize=16)
 ax.set_xticks(positions,
                   labels=['ConvNP', 'ERA5'], fontsize=12)
 ax.set_ylabel('RMSE', fontsize=16)
-# ax.set_title('Violin plot of error for ConvNP and ERA5', fontsize=14)
+ax.set_title('Violin plot of error for ConvNP and ERA5', fontsize=14)
 
 #%%
 import matplotlib.dates as mdates
@@ -429,4 +531,145 @@ for location, losses in loss_dict.items():
 
 ax.set_xlabel('Elevation (m)')
 ax.set_ylabel('Loss (C)')  
+# %%
+
+fig, ax = plt.subplots()
+
+loss_mean = {'low': [], 'mid': [], 'high': []}
+loss_mean_era5 = {'low': [], 'mid': [], 'high': []}
+
+for location, losses in loss_dict.items():
+    elev = STATION_LATLON[location]['elevation']
+    mean_loss = np.nanmean(losses)
+    mean_loss_era5 = np.nanmean(loss_dict_era5[location])
+
+    if not np.isnan(mean_loss):
+        if elev < 500:
+            loss_mean['low'].append(mean_loss)
+            if not np.isnan(mean_loss_era5):
+                loss_mean_era5['low'].append(mean_loss_era5)
+        elif elev > 1000:
+            loss_mean['high'].append(mean_loss)
+            if not np.isnan(mean_loss_era5):
+                loss_mean_era5['high'].append(mean_loss_era5)
+        else:
+            loss_mean['mid'].append(mean_loss)
+            if not np.isnan(mean_loss_era5):
+                loss_mean_era5['mid'].append(mean_loss_era5)
+
+positions = [1, 2, 3]
+positions_era5 = [x + 0.5 for x in positions]
+
+# Using patch_artist to apply fill color
+box1 = ax.boxplot([loss_mean['low'], loss_mean['mid'], loss_mean['high']], positions=positions, widths=0.4, patch_artist=True, boxprops=dict(facecolor='lightblue'))
+box2 = ax.boxplot([loss_mean_era5['low'], loss_mean_era5['mid'], loss_mean_era5['high']], positions=positions_era5, widths=0.4, patch_artist=True, boxprops=dict(facecolor='darkblue'))
+
+ax.set_xticks([np.mean(pair) for pair in zip(positions, positions_era5)])
+ax.set_xticklabels(['Low (<500m)', 'Mid (500m - 1000m)', 'High (>1000m)'], fontsize=10)
+
+# Adding a legend
+ax.legend([box1["boxes"][0], box2["boxes"][0]], ['ConvNP', 'ERA5'], loc='upper left', fontsize=12)
+
+ax.set_xlabel('Elevation (m)', fontsize=14)
+ax.set_ylabel('RMSE', fontsize=14)
+
+plt.show()
+
+# %%
+# bias correction for ERA5 
+era5_interp_filled 
+# %%
+time_slice = slice('2000-01-01', '2011-12-31')
+df = validate.processed_dict['station_raw_df']
+df = df.reset_index()
+df = df[df['time'].between(time_slice.start, time_slice.stop)]
+# station_points = df[['latitude', 'longitude']].drop_duplicates().to_xarray()
+# era5_interpolated = era5_unnorm.interp(latitude=station_points.latitude, longitude=station_points.longitude).sel(time=time_slice)
+if era5_unnorm == None:
+    era5_unnorm = validate.data_processor.unnormalise(validate.processed_dict['era5_ds'].drop_vars(('cos_D', 'sin_D')))
+    print('ERA5 unnormalised')
+
+for row in tqdm(df.iterrows(), total=len(df)):
+    era5_val = era5_unnorm.sel(time = row[1]['time'], latitude=row[1]['latitude'], longitude=row[1]['longitude'], method='nearest')
+    df.at[row[0], 't2m'] = era5_val['t2m'].values
+
+#%%
+print(f'df has {len(df)} rows')
+print(f'There are {len(df[df["t2m"].isna()])} NaN ERA5 values')
+print(f'There are {len(df[df["dry_bulb"].isna()])} NaN station values')
+print('Dropping rows with missing temperature values')
+df_dropped_na = df.dropna(subset=['t2m'])
+df_dropped_na = df_dropped_na.dropna(subset=['dry_bulb'])
+print(f'df_dropped_na has {len(df_dropped_na)} rows')
+# %%
+from sklearn.linear_model import LinearRegression
+import numpy as np
+
+X = df_dropped_na['t2m'].values.reshape(-1, 1)
+y = df_dropped_na['dry_bulb'].values.reshape(-1, 1)
+
+model = LinearRegression().fit(X, y)
+
+slope = model.coef_[0]
+intercept = model.intercept_
+print(f'Slope: {slope}, Intercept: {intercept}')
+# %%
+df = validate.processed_dict['station_raw_df']
+df_test = df.reset_index()
+df_test = df_test[df_test['time'].between('2016-01-01', '2017-12-31')]
+
+for row in tqdm(df_test.iterrows(), total=len(df_test)):
+    era5_val = era5_unnorm.sel(time = row[1]['time'], latitude=row[1]['latitude'], longitude=row[1]['longitude'], method='nearest')
+    df_test.at[row[0], 't2m'] = era5_val['t2m'].values
+    df_test.at[row[0], 'regression'] = (era5_val['t2m'].values * slope) + intercept
+df_test
+# %%
+loss_regression = np.nanmean(utils.rmse(df_test['dry_bulb'], df_test['regression']))
+print(f'Loss for regression: {loss_regression}')
+# %%
+import matplotlib.pyplot as plt
+# Plotting the regression line
+plt.scatter(df_test['t2m'], df_test['dry_bulb'], color='blue', label='Data Points')
+plt.plot(df_test['t2m'], df_test['regression'], color='red', label='Regression Line')
+
+# Plotting 1000 random points
+# random_indices = np.random.choice(len(df_test), size=1000, replace=False)
+# random_points_t2m = df_test.iloc[random_indices]['t2m']
+# random_points_dry_bulb = df_test.iloc[random_indices]['dry_bulb']
+# plt.scatter(random_points_t2m, random_points_dry_bulb, color='green', label='Random Points')
+
+plt.xlabel('t2m')
+plt.ylabel('dry_bulb')
+plt.legend()
+plt.show()
+
+# %%
+era5_hr_path = '/mnt/datasets/ERA5/NZ_land_processed/HiRes_ERA5/'
+dates = pd.date_range('2016-01-01', '2017-09-30')
+era5_hr_files = [f'{era5_hr_path}hires_era5_t2m_{date.year}_{str(date.month).zfill(2)}_{str(date.day).zfill(2)}.nc' for date in dates]
+era5_hr_files
+# %%
+era5_hr = xr.open_mfdataset(era5_hr_files)
+era5_hr
+# %%
+era5_hr_daily = era5_hr.resample(time='1D').mean()
+era5_hr_daily.load()
+era5_hr_daily = era5_hr_daily - 273.15
+
+# %%
+loss_dict_era5_hr, locations = validate.calculate_loss_era5(dates, 
+                                                         locations, 
+                                                         era5_hr_daily) 
+# %%
+print('------ HiRes ERA5 -------')
+loss_mean_std_era5_hr = {}
+for location, loss in loss_dict_era5_hr.items():
+    loss_mean_std_era5_hr[location] = (np.nanmean(loss), np.nanstd(loss))
+
+overall_mean_era5_hr = np.round(np.nanmean([loss_mean_std_era5_hr[location][0] for location in loss_mean_std_era5_hr.keys()]), 6)
+overall_std_era5_hr = np.round(np.nanmean([loss_mean_std_era5_hr[location][1] for location in loss_mean_std_era5_hr.keys()]), 6)
+
+print(f'Mean loss across all stations: {overall_mean_era5_hr}')
+print(f'Mean of std loss across all stations: {overall_std_era5_hr}')
+
 # %%
