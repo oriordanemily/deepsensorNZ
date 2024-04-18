@@ -1,5 +1,5 @@
-
 import logging
+
 logging.captureWarnings(True)
 import argparse
 import nzdownscale
@@ -7,7 +7,6 @@ import nzdownscale
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
 from nzdownscale.dataprocess import config
-
 
 
 def main():
@@ -19,35 +18,26 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            "--var",
-            type=str,
-            default='temperature',
-        )
+        "--var",
+        type=str,
+        default="temperature",
+    )
     parser.add_argument(
-        "--start_year",
-        type=int,
-        default=2000,
-        help='Training start year'
+        "--start_year", type=int, default=2000, help="Training start year"
     ),
     parser.add_argument(
-        "--end_year",
-        type=int,
-        default=2001,
-        help='Training end year is inclusive'
+        "--end_year", type=int, default=2001, help="Training end year is inclusive"
     ),
     parser.add_argument(
-        "--val_start_year",
-        type=int,
-        default=2002,
-        help='Validation start year'
+        "--val_start_year", type=int, default=2002, help="Validation start year"
     ),
     parser.add_argument(
         "--val_end_year",
         type=int,
         default=2002,
-        help='Validation end year is inclusive'
+        help="Validation end year is inclusive",
     ),
-    
+
     parser.add_argument(
         "--use_daily_data",
         type=bool,
@@ -63,7 +53,7 @@ def main():
         "--topography_lowres_coarsen_factor",
         type=int,
         default=10,
-        help='Note that the lowres topo is coarsened from the highres topo, so the lowres topo resolution is actually topography_highres_coarsen_factor * topography_lowres_coarsen_factor.'
+        help="Note that the lowres topo is coarsened from the highres topo, so the lowres topo resolution is actually topography_highres_coarsen_factor * topography_lowres_coarsen_factor.",
     ),
     parser.add_argument(
         "--era5_coarsen_factor",
@@ -73,8 +63,8 @@ def main():
     parser.add_argument(
         "--model_name_prefix",
         type=str,
-        default='',
-        help='Prefix string for saved model'
+        default="",
+        help="Prefix string for saved model",
     ),
     parser.add_argument(
         "--n_epochs",
@@ -110,7 +100,7 @@ def main():
         type=int,
         default=None,
         help="ConvNP model argument, uses default CONVNP_KWARGS_DEFAULT if not set",
-    ),    
+    ),
 
     args = parser.parse_args()
 
@@ -133,28 +123,28 @@ def main():
 
     convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
     if args.unet_channels is not None:
-        convnp_kwargs['unet_channels'] = args.unet_channels
+        convnp_kwargs["unet_channels"] = args.unet_channels
     if args.likelihood is not None:
-        convnp_kwargs['likelihood'] = args.likelihood
+        convnp_kwargs["likelihood"] = args.likelihood
     if args.internal_density is not None:
-        convnp_kwargs['internal_density'] = args.internal_density
+        convnp_kwargs["internal_density"] = args.internal_density
 
     # ------------------------------------------
     # Preprocess data
     # ------------------------------------------
     data = PreprocessForDownscaling(
-        variable = var,
-        start_year = start_year,
-        end_year = end_year,
-        val_start_year = val_start_year,
-        val_end_year = val_end_year,
-        use_daily_data = use_daily_data,
+        variable=var,
+        start_year=start_year,
+        end_year=end_year,
+        val_start_year=val_start_year,
+        val_end_year=val_end_year,
+        use_daily_data=use_daily_data,
     )
     data.run_processing_sequence(
         topography_highres_coarsen_factor,
-        topography_lowres_coarsen_factor, 
+        topography_lowres_coarsen_factor,
         era5_coarsen_factor,
-        )
+    )
     processed_output_dict = data.get_processed_output_dict()
     data.print_resolutions()
 
@@ -167,5 +157,5 @@ def main():
     training.run_training_sequence(n_epochs, model_name_prefix, **convnp_kwargs)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

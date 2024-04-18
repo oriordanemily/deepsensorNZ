@@ -1,4 +1,5 @@
 import logging
+
 logging.captureWarnings(True)
 import argparse
 
@@ -17,26 +18,20 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            "--var",
-            type=str,
-            default='temperature',
-        )
+        "--var",
+        type=str,
+        default="temperature",
+    )
     parser.add_argument(
         "--start_year",
         type=int,
         default=2000,
     ),
     parser.add_argument(
-        "--end_year",
-        type=int,
-        default=2001,
-        help='End year is inclusive'
+        "--end_year", type=int, default=2001, help="End year is inclusive"
     ),
     parser.add_argument(
-        "--val_start_year",
-        type=int,
-        default=2001,
-        help='Validation start year'
+        "--val_start_year", type=int, default=2001, help="Validation start year"
     ),
     parser.add_argument(
         "--topography_highres_coarsen_factor",
@@ -56,8 +51,8 @@ def main():
     parser.add_argument(
         "--model_name_prefix",
         type=str,
-        default='',
-        help='Prefix string for saved model'
+        default="",
+        help="Prefix string for saved model",
     ),
     parser.add_argument(
         "--n_epochs",
@@ -89,22 +84,26 @@ def main():
     # ------------------------------------------
 
     data = PreprocessForDownscaling(
-        variable = var,
-        start_year = start_year,
-        end_year = end_year,
-        val_start_year = val_start_year,
-        use_daily_data = use_daily_data,
+        variable=var,
+        start_year=start_year,
+        end_year=end_year,
+        val_start_year=val_start_year,
+        use_daily_data=use_daily_data,
     )
 
     data.load_topography()
     data.load_era5()
     data.load_stations()
 
-    highres_aux_raw_ds, aux_raw_ds = data.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
+    highres_aux_raw_ds, aux_raw_ds = data.preprocess_topography(
+        topography_highres_coarsen_factor, topography_lowres_coarsen_factor
+    )
     era5_raw_ds = data.preprocess_era5(coarsen_factor=era5_coarsen_factor)
     station_raw_df = data.preprocess_stations()
 
-    data.process_all_for_training(era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df)
+    data.process_all_for_training(
+        era5_raw_ds, highres_aux_raw_ds, aux_raw_ds, station_raw_df
+    )
     processed_output_dict = data.get_processed_output_dict()
 
     # ------------------------------------------
@@ -113,9 +112,9 @@ def main():
 
     data.print_resolutions()
     if False:
-        data.plot_dataset('era5')
-        data.plot_dataset('top_highres')
-        data.plot_dataset('top_lowres')
+        data.plot_dataset("era5")
+        data.plot_dataset("top_highres")
+        data.plot_dataset("top_lowres")
 
     # ------------------------------------------
     # Train model
@@ -142,5 +141,5 @@ def main():
     # validate.initialise(load_model_path='models/downscaling/run1_model_1705453547.pt')
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,5 +1,5 @@
-
 import logging
+
 logging.captureWarnings(True)
 import argparse
 
@@ -12,38 +12,29 @@ def main():
     """
     Example:
 
-    python experiments/deepsensor/risa_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=30 --topography_lowres_coarsen_factor=30 --era5_coarsen_factor=30 --include_time_of_year=True --include_landmask=True --model_name_prefix='test' --n_epochs=3  --internal_density=5 --area='christchurch' --auto_set_internal_density=False
+    python experiments/deepsensor/emily_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=5 --topography_lowres_coarsen_factor=5 --era5_coarsen_factor=1 --include_time_of_year=True --include_landmask=True  --n_epochs=10  --internal_density=250 --auto_set_internal_density=False
     """
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            "--var",
-            type=str,
-            default='temperature',
-        )
+        "--var",
+        type=str,
+        default="temperature",
+    )
     parser.add_argument(
-        "--start_year",
-        type=int,
-        default=2000,
-        help='Training start year'
+        "--start_year", type=int, default=2000, help="Training start year"
     ),
     parser.add_argument(
-        "--end_year",
-        type=int,
-        default=2001,
-        help='Training end year is inclusive'
+        "--end_year", type=int, default=2001, help="Training end year is inclusive"
     ),
     parser.add_argument(
-        "--val_start_year",
-        type=int,
-        default=2002,
-        help='Validation start year'
+        "--val_start_year", type=int, default=2002, help="Validation start year"
     ),
     parser.add_argument(
         "--val_end_year",
         type=int,
         default=2002,
-        help='Validation end year is inclusive'
+        help="Validation end year is inclusive",
     ),
     parser.add_argument(
         "--use_daily_data",
@@ -59,7 +50,7 @@ def main():
         "--topography_lowres_coarsen_factor",
         type=int,
         default=5,
-        help='Note that the lowres topo is coarsened from the highres topo, so the lowres topo resolution is actually topography_highres_coarsen_factor * topography_lowres_coarsen_factor.'
+        help="Note that the lowres topo is coarsened from the highres topo, so the lowres topo resolution is actually topography_highres_coarsen_factor * topography_lowres_coarsen_factor.",
     ),
     parser.add_argument(
         "--era5_coarsen_factor",
@@ -98,12 +89,12 @@ def main():
         type=int,
         default=100,
         help="ConvNP model argument, uses default CONVNP_KWARGS_DEFAULT if not set",
-    ),    
+    ),
     parser.add_argument(
         "--auto_set_internal_density",
         type=bool,
         default=False,
-        help="Allow automatic setting of internal density by ConvNP"
+        help="Allow automatic setting of internal density by ConvNP",
     )
     parser.add_argument(
         "--area",
@@ -115,17 +106,16 @@ def main():
         "--remove_stations",
         type=list,
         default=[None],
-        help=" ! CURRENTLY NOT IMPLEMENTED ! List of station names to remove from the dataset"
+        help=" ! CURRENTLY NOT IMPLEMENTED ! List of station names to remove from the dataset",
     )
     parser.add_argument(
         "--model_name",
         type=str,
-        default='default',
-        help="Name of the model to be saved, if default it will be the time"
+        default="default",
+        help="Name of the model to be saved, if default it will be the time",
     )
 
     args = parser.parse_args()
-
 
     # ------------------------------------------
     # Settings
@@ -140,12 +130,18 @@ def main():
     include_landmask = args.include_landmask
     area = args.area
     model_name = args.model_name
-    remove_stations = ['TAUPO AWS', 'CHRISTCHURCH AERO', 
-                       'KAITAIA AERO', 'MT COOK EWS', 
-                       'AUCKLAND AERO', 'ALEXANDRA AWS',  
-                       'TOLAGA BAY WXT AWS', 'WELLINGTON AERO', 
-                       'BLENHEIM AERO', 'DUNEDIN AERO AWS']
-
+    remove_stations = [
+        "TAUPO AWS",
+        "CHRISTCHURCH AERO",
+        "KAITAIA AERO",
+        "MT COOK EWS",
+        "AUCKLAND AERO",
+        "ALEXANDRA AWS",
+        "TOLAGA BAY WXT AWS",
+        "WELLINGTON AERO",
+        "BLENHEIM AERO",
+        "DUNEDIN AERO AWS",
+    ]
 
     topography_highres_coarsen_factor = args.topography_highres_coarsen_factor
     topography_lowres_coarsen_factor = args.topography_lowres_coarsen_factor
@@ -155,36 +151,38 @@ def main():
 
     convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
     if args.unet_channels is not None:
-        convnp_kwargs['unet_channels'] = args.unet_channels
+        convnp_kwargs["unet_channels"] = args.unet_channels
     if args.likelihood is not None:
-        convnp_kwargs['likelihood'] = args.likelihood
+        convnp_kwargs["likelihood"] = args.likelihood
     if args.internal_density is not None:
-        convnp_kwargs['internal_density'] = args.internal_density
-    
+        convnp_kwargs["internal_density"] = args.internal_density
+
     # If not setting internal_density, remove from convnp kwargs
     if args.auto_set_internal_density:
-        convnp_kwargs = {k: v for k, v in convnp_kwargs.items() if k != 'internal_density'}
+        convnp_kwargs = {
+            k: v for k, v in convnp_kwargs.items() if k != "internal_density"
+        }
 
     # ------------------------------------------
     # Preprocess data
     # ------------------------------------------
     data = PreprocessForDownscaling(
-        variable = var,
-        start_year = start_year,
-        end_year = end_year,
-        val_start_year = val_start_year,
-        val_end_year = val_end_year,
-        use_daily_data = use_daily_data,
+        variable=var,
+        start_year=start_year,
+        end_year=end_year,
+        val_start_year=val_start_year,
+        val_end_year=val_end_year,
+        use_daily_data=use_daily_data,
         area=area,
     )
     data.run_processing_sequence(
         topography_highres_coarsen_factor,
-        topography_lowres_coarsen_factor, 
+        topography_lowres_coarsen_factor,
         era5_coarsen_factor,
         include_time_of_year=include_time_of_year,
         include_landmask=include_landmask,
-        remove_stations=remove_stations
-        )
+        remove_stations=remove_stations,
+    )
     processed_output_dict = data.get_processed_output_dict()
     data.print_resolutions()
 
@@ -193,9 +191,8 @@ def main():
     # ------------------------------------------
 
     training = Train(processed_output_dict=processed_output_dict)
-    n_epochs=1
     training.run_training_sequence(n_epochs, model_name, **convnp_kwargs)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
