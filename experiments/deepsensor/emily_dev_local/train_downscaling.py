@@ -6,6 +6,9 @@ import argparse
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
 from nzdownscale.dataprocess import config, config_local
+from nzdownscale.dataprocess.utils import str2bool
+
+import os 
 
 
 def main():
@@ -38,7 +41,7 @@ def main():
     ),
     parser.add_argument(
         "--use_daily_data",
-        type=bool,
+        type=str2bool,
         default=True,
     )
     parser.add_argument(
@@ -59,12 +62,12 @@ def main():
     ),
     parser.add_argument(
         "--include_time_of_year",
-        type=bool,
+        type=str2bool,
         default=True,
     ),
     parser.add_argument(
         "--include_landmask",
-        type=bool,
+        type=str2bool,
         default=True,
     ),
     parser.add_argument(
@@ -92,7 +95,7 @@ def main():
     ),
     parser.add_argument(
         "--auto_set_internal_density",
-        type=bool,
+        type=str2bool,
         default=False,
         help="Allow automatic setting of internal density by ConvNP",
     )

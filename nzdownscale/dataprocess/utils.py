@@ -10,6 +10,7 @@ import seaborn as sns
 
 from nzdownscale.dataprocess.config import PLOT_EXTENT
 from nzdownscale.dataprocess.config_local import DATA_PATHS
+import argparse
 
 def save_pickle(x, filename):
     with open(filename, 'wb') as pickle_file:
@@ -186,3 +187,12 @@ class PlotData:
         # plt.ylabel('Frequency')
         # plt.show()
 
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
