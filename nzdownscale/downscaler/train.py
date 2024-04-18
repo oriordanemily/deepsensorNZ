@@ -11,6 +11,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cf
 import lab as B
 import torch
+import random
 
 import deepsensor.torch
 from deepsensor.data.loader import TaskLoader
@@ -211,11 +212,16 @@ class Train:
                     # model_name_prefix=None,
                     batch=False,
                     batch_size=1,
+                    shuffle_tasks=True
                     ):
 
         model = self.model
         train_tasks = self.train_tasks
         val_tasks = self.val_tasks
+
+        if shuffle_tasks:
+            random.shuffle(train_tasks)
+            random.shuffle(val_tasks)
         
         if model_name == 'default':
             model_id = str(round(time.time()))
@@ -244,7 +250,8 @@ class Train:
 
         for epoch in tqdm(range(n_epochs)):
             if batch:
-                batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}']) for num_stations in batched_train_tasks.keys()]
+                batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}'], batch_size=len(batched_train_tasks[f'{num_stations}']), lr=1e-4) for num_stations in batched_train_tasks.keys()]
+                # batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}']) for num_stations in batched_train_tasks.keys()]
                 batch_losses = [item for sublist in batch_losses for item in sublist]
             else:
                 batch_losses = train_epoch(model, train_tasks)
@@ -290,6 +297,8 @@ class Train:
 
     
     def batch_data_by_num_stations(self, tasks, batch_size=None):
+        # if batch_size == None, return a dict in which each key value pair is a 
+        # list of *all of the tasks* with the same number of stations
         batched_tasks = {}
         for task in tasks:
             num_stations = task['X_t'][0].shape[1]
@@ -298,6 +307,14 @@ class Train:
             else:
                 batched_tasks[f'{num_stations}'].append(task)
 
+        # if batch_size is not None, return a dict in which each key value pair is a
+        # list of tasks with the same number of stations, but with batch_size number of tasks
+        # e.g. if batch_size = 4 but there are 10 tasks with 100 stations, then there will be 100 keys:
+        # '100_0' with 4 tasks, '100_1' with 4 tasks, '100_2' with 2 tasks
+                
+        # reason for doing it like this: if we set a large batch_size, e.g. 16, and there are 
+        # only 10 tasks with 100 stations, then the deepsensor train_epoch function will 
+        # ignore these tasks 
         if batch_size is not None:
             batched_tasks_copy = batched_tasks.copy()
             batched_tasks = {}

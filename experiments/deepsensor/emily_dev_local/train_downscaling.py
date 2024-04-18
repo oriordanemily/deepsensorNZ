@@ -88,6 +88,18 @@ def main():
         help="ConvNP model argument, uses default CONVNP_KWARGS_DEFAULT if not set",
     ),
     parser.add_argument(
+        "--batch",
+        type=str2bool,
+        default=False, 
+        help="Use batch training (True) or not (False)",
+    ),
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=4,
+        help="Batch size for training, only used if batch=True",
+    ),
+    parser.add_argument(
         "--internal_density",
         type=int,
         default=100,
@@ -132,6 +144,8 @@ def main():
     include_time_of_year = args.include_time_of_year
     include_landmask = args.include_landmask
     area = args.area
+    batch = args.batch
+    batch_size = args.batch_size
     model_name = args.model_name
     remove_stations = [
         "TAUPO AWS",
@@ -194,7 +208,9 @@ def main():
     # ------------------------------------------
 
     training = Train(processed_output_dict=processed_output_dict)
-    training.run_training_sequence(n_epochs, model_name, **convnp_kwargs)
+    # training.run_training_sequence(n_epochs, model_name, batch=False, **convnp_kwargs)
+
+    training.run_training_sequence(n_epochs, model_name, batch=batch, batch_size=batch_size, **convnp_kwargs)
 
 
 if __name__ == "__main__":
