@@ -76,11 +76,11 @@ class Train:
         pass
 
 
-    def run_training_sequence(self, n_epochs, model_name='default', batch=False, batch_size=1, **convnp_kwargs,):
+    def run_training_sequence(self, n_epochs, model_name='default', batch=False, batch_size=1, lr=5e-5, **convnp_kwargs,):
 
         self.setup_task_loader()
         self.initialise_model(**convnp_kwargs)
-        self.train_model(n_epochs=n_epochs, model_name=model_name, batch=batch, batch_size=batch_size)
+        self.train_model(n_epochs=n_epochs, model_name=model_name, batch=batch, batch_size=batch_size, lr=lr)
 
 
     def setup_task_loader(self, 
@@ -212,7 +212,8 @@ class Train:
                     # model_name_prefix=None,
                     batch=False,
                     batch_size=1,
-                    shuffle_tasks=True
+                    shuffle_tasks=True,
+                    lr=5e-5 
                     ):
 
         model = self.model
@@ -250,7 +251,7 @@ class Train:
 
         for epoch in tqdm(range(n_epochs)):
             if batch:
-                batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}'], batch_size=len(batched_train_tasks[f'{num_stations}']), lr=1e-4) for num_stations in batched_train_tasks.keys()]
+                batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}'], batch_size=len(batched_train_tasks[f'{num_stations}']), lr=lr) for num_stations in batched_train_tasks.keys()]
                 # batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}']) for num_stations in batched_train_tasks.keys()]
                 batch_losses = [item for sublist in batch_losses for item in sublist]
             else:

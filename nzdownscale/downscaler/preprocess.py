@@ -120,22 +120,23 @@ class PreprocessForDownscaling:
             landmask_raw_ds = None
 
         if data_processor_dict == None:
-            self.process_all_for_training(
+            data_processor_dict = self.process_all_for_training(
                 era5_raw_ds=era5_raw_ds, 
                 highres_aux_raw_ds=highres_aux_raw_ds, 
                 aux_raw_ds=aux_raw_ds, 
                 station_raw_df=station_raw_df,
                 landmask_raw_ds=landmask_raw_ds,
                 include_time_of_year=include_time_of_year,
-                save=save_data_processor_dict
+                save=save_data_processor_dict,
+                # data_processor=data_processor_dict
                 )
-        else:
-            self.data_processor = data_processor_dict['data_processor']
-            self.aux_ds = data_processor_dict['aux_ds']
-            self.era5_ds = data_processor_dict['era5_ds']
-            self.highres_aux_ds = data_processor_dict['highres_aux_ds']
-            self.station_df = data_processor_dict['station_df']
-            self.landmask_ds = data_processor_dict['landmask_ds']
+            
+        self.data_processor = data_processor_dict['data_processor']
+        self.aux_ds = data_processor_dict['aux_ds']
+        self.era5_ds = data_processor_dict['era5_ds']
+        self.highres_aux_ds = data_processor_dict['highres_aux_ds']
+        self.station_df = data_processor_dict['station_df']
+        self.landmask_ds = data_processor_dict['landmask_ds']
 
 
 
@@ -501,7 +502,7 @@ class PreprocessForDownscaling:
                     landmask_raw_ds=None,
                     include_time_of_year=False,
                     test_norm=False,
-                    data_processor=None,  # ?
+                    # data_processor_dict=None,  # ?
                     save=False
                     ):
         """
@@ -510,6 +511,7 @@ class PreprocessForDownscaling:
         Normalises all data and add necessary dims
         """
         start = time()
+        # if data_processor_dict is None:
         print('Creating DataProcessor...')
         data_processor = DataProcessor(
             x1_name="latitude", 
@@ -545,7 +547,7 @@ class PreprocessForDownscaling:
         if include_time_of_year:
             era5_ds = self.add_time_of_year(era5_ds)
         print('Auxiliary datasets generated in', time()-start, 'seconds')
-
+    
         if save:
             data_processor_dict = {}
             data_processor_dict['data_processor'] = data_processor
@@ -554,17 +556,18 @@ class PreprocessForDownscaling:
             data_processor_dict['highres_aux_ds'] = highres_aux_ds
             data_processor_dict['station_df'] = station_df
             data_processor_dict['landmask_ds'] = landmask_ds
-            data_processor_dict_fpath = f'data_processor_dict_era1_topohr5_topolr5_2000_2011.pkl'
+            data_processor_dict_fpath = f'data_processor_dict_era1_topohr5_topolr5_2000_2001.pkl'
             print(f'Saving data_processor_dict to {data_processor_dict_fpath}')
             with open(data_processor_dict_fpath, 'wb') as f:
                 pickle.dump(data_processor_dict, f)
-
-        self.data_processor = data_processor
-        self.aux_ds = aux_ds
-        self.era5_ds = era5_ds
-        self.highres_aux_ds = highres_aux_ds
-        self.station_df = station_df
-        self.landmask_ds = landmask_ds
+         
+        return data_processor_dict
+        # self.data_processor = data_processor
+        # self.aux_ds = aux_ds
+        # self.era5_ds = era5_ds
+        # self.highres_aux_ds = highres_aux_ds
+        # self.station_df = station_df
+        # self.landmask_ds = landmask_ds
 
 
     def test_normalisation(self, data_processor, era5_ds, aux_ds, highres_aux_ds, station_df, era5_raw_ds, aux_raw_ds, highres_aux_raw_ds, station_raw_df):
@@ -694,3 +697,7 @@ class PreprocessForDownscaling:
         if resolutions['topography_high_res']['lon'] > resolutions['topography_low_res']['lon'] or resolutions['topography_high_res']['lat'] > resolutions['topography_low_res']['lon']:
             warnings.warn("lowres topography resolution is higher than highres topography resolution", UserWarning)
 
+    def load_data_processor_dict(self, fpath):
+        with open(fpath, 'rb') as f:
+            data_processor_dict = pickle.load(f)
+        return data_processor_dict

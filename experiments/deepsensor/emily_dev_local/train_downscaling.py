@@ -129,6 +129,12 @@ def main():
         default="default",
         help="Name of the model to be saved, if default it will be the time",
     )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=5e-5,
+        help="Learning rate for training",
+    )
 
     args = parser.parse_args()
 
@@ -146,7 +152,8 @@ def main():
     area = args.area
     batch = args.batch
     batch_size = args.batch_size
-    model_name = args.model_name
+    model_name = f'{args.model_name}'
+    lr = args.lr
     remove_stations = [
         "TAUPO AWS",
         "CHRISTCHURCH AERO",
@@ -192,6 +199,14 @@ def main():
         use_daily_data=use_daily_data,
         area=area,
     )
+    if True:
+        data_processor_dict_fpath = 'data_processor_dict_era1_topohr5_topolr5_2000_2001.pkl'
+        data_processor_dict = data.load_data_processor_dict(data_processor_dict_fpath)
+        save_data_processor_dict=False
+    else:
+        data_processor_dict = None
+        save_data_processor_dict = True
+        
     data.run_processing_sequence(
         topography_highres_coarsen_factor,
         topography_lowres_coarsen_factor,
@@ -199,6 +214,8 @@ def main():
         include_time_of_year=include_time_of_year,
         include_landmask=include_landmask,
         remove_stations=remove_stations,
+        save_data_processor_dict=save_data_processor_dict,
+        data_processor_dict=data_processor_dict
     )
     processed_output_dict = data.get_processed_output_dict()
     data.print_resolutions()
@@ -209,8 +226,7 @@ def main():
 
     training = Train(processed_output_dict=processed_output_dict)
     # training.run_training_sequence(n_epochs, model_name, batch=False, **convnp_kwargs)
-
-    training.run_training_sequence(n_epochs, model_name, batch=batch, batch_size=batch_size, **convnp_kwargs)
+    training.run_training_sequence(n_epochs, model_name, batch=batch, batch_size=batch_size, lr=lr, **convnp_kwargs)
 
 
 if __name__ == "__main__":
