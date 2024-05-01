@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nzdownscale"
+version = "0.1.0"
+authors = [
+    { name = "Risa Ueno", email = "risno@bas.ac.uk" },
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "xarray",
+    "pandas",
+    "tqdm",
+    "matplotlib",
+    "cartopy",
+    "seaborn",
+    "torch",
+    "backends",
+    "backends-matrix",
+    "deepsensor"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pip-tools",
+    "ruff",
+    "pdbpp",
+    "memray",
+    "pyinstrument"
+]
+
+[tool.ruff]
+lint.select = ["E", "F"]
+lint.ignore = ["E203"]
+extend-exclude = [".ipynb_checkpoints"]
+extend-include = ["*.ipynb"]
