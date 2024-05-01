@@ -1,0 +1,12 @@
+numpy
+scipy
+xarray
+pandas
+tqdm
+matplotlib
+cartopy
+seaborn
+torch
+backends
+backends-matrix
+deepsensor
