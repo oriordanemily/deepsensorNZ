@@ -1,3 +1,7 @@
+ruff
+pdbpp
+memray
+pyinstrument
 numpy
 scipy
 xarray
