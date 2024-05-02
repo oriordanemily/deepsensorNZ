@@ -9,6 +9,7 @@ authors = [
     { name = "Risa Ueno", email = "risno@bas.ac.uk" },
 ]
 dependencies = [
+    "defopt",
     "numpy",
     "scipy",
     "xarray",

@@ -19,15 +19,15 @@ nvidia-smi --query-gpu=timestamp,utilization.gpu,utilization.memory,memory.used,
 
 venv/bin/python train_downscaling.py \
     --var='temperature' \
-    --start_year=2000 \
-    --end_year=2011 \
-    --val_start_year=2012 \
-    --val_end_year=2015 \
-    --topography_highres_coarsen_factor=5 \
-    --topography_lowres_coarsen_factor=5 \
-    --era5_coarsen_factor=1 \
-    --include_time_of_year=True \
-    --include_landmask=True \
-    --model_name=$SLURM_JOB_ID \
-    --n_epochs=10 \
-    --internal_density=250 
+    --start-year=2000 \
+    --end-year=2011 \
+    --val-start-year=2012 \
+    --val-end-year=2015 \
+    --topography-highres-coarsen-factor=5 \
+    --topography-lowres-coarsen-factor=5 \
+    --era5-coarsen-factor=1 \
+    --include-time-of-year \
+    --include-landmask \
+    --model-name=$SLURM_JOB_ID \
+    --n-epochs=1 \
+    --internal-density=250

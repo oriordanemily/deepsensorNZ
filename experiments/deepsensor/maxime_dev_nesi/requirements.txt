@@ -76,8 +76,12 @@ decorator==5.1.1
     # via gcsfs
 deepsensor==0.3.6
     # via nzdownscale (pyproject.toml)
+defopt==6.4.0
+    # via nzdownscale (pyproject.toml)
 distributed==2024.4.2
     # via deepsensor
+docutils==0.21.2
+    # via defopt
 fancycompleter==0.9.1
     # via pdbpp
 fasteners==0.19
@@ -285,6 +289,8 @@ plum-dispatch==2.3.5
     #   stheno
     #   varz
     #   wbml
+pockets==0.9.1
+    # via sphinxcontrib-napoleon
 pooch==1.8.1
     # via deepsensor
 proto-plus==1.23.0
@@ -371,10 +377,14 @@ shapely==2.0.4
     # via cartopy
 six==1.16.0
     # via
+    #   pockets
     #   python-dateutil
+    #   sphinxcontrib-napoleon
     #   wbml
 sortedcontainers==2.4.0
     # via distributed
+sphinxcontrib-napoleon==0.7
+    # via defopt
 stheno==1.4.1
     # via
     #   neuralprocesses
