@@ -1,13 +1,58 @@
-from typing import Iterable
+import os
 import logging
-
-logging.captureWarnings(True)
+from pathlib import Path
+from typing import Iterable
 
 import defopt
+import joblib
 
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
 from nzdownscale.dataprocess import config, config_local
+
+logging.captureWarnings(True)
+
+
+def preprocess(
+    var,
+    start_year,
+    end_year,
+    val_start_year,
+    val_end_year,
+    use_daily_data,
+    area,
+    topography_highres_coarsen_factor,
+    topography_lowres_coarsen_factor,
+    era5_coarsen_factor,
+    include_time_of_year,
+    include_landmask,
+    remove_stations,
+):
+    data = PreprocessForDownscaling(
+        variable=var,
+        start_year=start_year,
+        end_year=end_year,
+        val_start_year=val_start_year,
+        val_end_year=val_end_year,
+        use_daily_data=use_daily_data,
+        area=area,
+    )
+    data.run_processing_sequence(
+        topography_highres_coarsen_factor,
+        topography_lowres_coarsen_factor,
+        era5_coarsen_factor,
+        include_time_of_year=include_time_of_year,
+        include_landmask=include_landmask,
+        remove_stations=remove_stations,
+    )
+    processed_output_dict = data.get_processed_output_dict()
+    data.print_resolutions()
+    return processed_output_dict
+
+
+if "JOBLIB_CACHEDIR" in os.environ:
+    memory = joblib.Memory(os.environ["JOBLIB_CACHEDIR"], verbose=10, compress=3)
+    preprocess = memory.cache(preprocess)
 
 
 DEFAULT_REMOVED_STATIONS = (
@@ -45,6 +90,7 @@ def main(
     area: str | None = None,
     remove_stations: Iterable[str] = DEFAULT_REMOVED_STATIONS,
     model_name: str = "default",
+    cachedir: Path | None = None,
 ):
     """
     Note: the lowres topography is coarsened from the highres topography, so the
@@ -64,6 +110,7 @@ def main(
                  PLOT_EXTENT['all'] (all of NZ) is used as default
     :param remove_stations: ! CURRENTLY NOT IMPLEMENTED ! List of station names to remove from the dataset
     :param model_name: Name of the model to be saved, if default it will be the time
+    :param cachedir: folder used to store cached preprocessed data
     """
 
     convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
@@ -83,25 +130,21 @@ def main(
     # ------------------------------------------
     # Preprocess data
     # ------------------------------------------
-    data = PreprocessForDownscaling(
-        variable=var,
-        start_year=start_year,
-        end_year=end_year,
-        val_start_year=val_start_year,
-        val_end_year=val_end_year,
-        use_daily_data=use_daily_data,
-        area=area,
-    )
-    data.run_processing_sequence(
+    processed_output_dict = preprocess(
+        var,
+        start_year,
+        end_year,
+        val_start_year,
+        val_end_year,
+        use_daily_data,
+        area,
         topography_highres_coarsen_factor,
         topography_lowres_coarsen_factor,
         era5_coarsen_factor,
-        include_time_of_year=include_time_of_year,
-        include_landmask=include_landmask,
-        remove_stations=remove_stations,
+        include_time_of_year,
+        include_landmask,
+        remove_stations,
     )
-    processed_output_dict = data.get_processed_output_dict()
-    data.print_resolutions()
 
     # ------------------------------------------
     # Train model

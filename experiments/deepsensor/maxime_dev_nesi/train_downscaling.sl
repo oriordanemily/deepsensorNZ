@@ -17,6 +17,8 @@ scontrol write batch_script $SLURM_JOB_ID -
 nvidia-smi --query-gpu=timestamp,utilization.gpu,utilization.memory,memory.used,memory.total \
     --format=csv,nounits -l 5 > "logs/gpustats-${SLURM_JOB_ID}.csv" &
 
+export JOBLIB_CACHEDIR=cache
+
 venv/bin/python train_downscaling.py \
     --var='temperature' \
     --start-year=2000 \
