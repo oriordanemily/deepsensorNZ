@@ -31,5 +31,5 @@ venv/bin/python train_downscaling.py \
     --include-time-of-year \
     --include-landmask \
     --model-name=$SLURM_JOB_ID \
-    --n-epochs=1 \
+    --n-epochs=10 \
     --internal-density=250
