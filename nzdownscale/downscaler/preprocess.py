@@ -120,7 +120,7 @@ class PreprocessForDownscaling:
         else:
             landmask_raw_ds = None
 
-        if data_processor_dict == None:
+        if data_processor_dict is None:
             self.process_all_for_training(
                 era5_raw_ds=era5_raw_ds,
                 highres_aux_raw_ds=highres_aux_raw_ds,
@@ -258,7 +258,7 @@ class PreprocessForDownscaling:
             da_elev_highres = process_top.ds_to_da(ds_elev_highres)
             latres_topo = self.dataprocess.resolution(ds_elev_highres, "latitude")
             lonres_topo = self.dataprocess.resolution(ds_elev_highres, "longitude")
-            ax = self.nzplot.nz_map_with_coastlines()
+            self.nzplot.nz_map_with_coastlines()
             da_elev_highres.plot()
             str_coarsened = "Coarsened " if coarsen_factor != 1 else ""
             plt.title(
@@ -284,7 +284,7 @@ class PreprocessForDownscaling:
             aux_raw_da = self.process_top.ds_to_da(aux_raw_ds)
             latres = self.dataprocess.resolution(aux_raw_da, "latitude")
             lonres = self.dataprocess.resolution(aux_raw_da, "longitude")
-            ax = self.nzplot.nz_map_with_coastlines()
+            self.nzplot.nz_map_with_coastlines()
             aux_raw_da.plot()
             plt.title(
                 f"Low-res topography\nLat res: {latres:.4f} degrees, lon res: {lonres:.4f} degrees"
@@ -369,7 +369,7 @@ class PreprocessForDownscaling:
         if plot:
             latres_era = self.dataprocess.resolution(da_era_coarse, "latitude")
             lonres_era = self.dataprocess.resolution(da_era_coarse, "longitude")
-            ax = self.nzplot.nz_map_with_coastlines()
+            self.nzplot.nz_map_with_coastlines()
             da_era_coarse.isel(time=0).plot()
             str_coarsened = "Coarsened " if coarsen_factor_era != 1 else " "
             plt.title(
@@ -595,7 +595,7 @@ class PreprocessForDownscaling:
             data_processor_dict["station_df"] = station_df
             data_processor_dict["landmask_ds"] = landmask_ds
             data_processor_dict_fpath = (
-                f"data_processor_dict_era1_topohr5_topolr5_2000_2011.pkl"
+                "data_processor_dict_era1_topohr5_topolr5_2000_2011.pkl"
             )
             print(f"Saving data_processor_dict to {data_processor_dict_fpath}")
             with open(data_processor_dict_fpath, "wb") as f:
@@ -631,7 +631,7 @@ class PreprocessForDownscaling:
 
         station_df_unnormalised = data_processor.unnormalise(station_df)
         pd.testing.assert_frame_equal(station_raw_df, station_df_unnormalised)
-        print(f"Unnormalised station_df matches raw data")
+        print("Unnormalised station_df matches raw data")
 
     def add_coordinates(self, ds):
         """
