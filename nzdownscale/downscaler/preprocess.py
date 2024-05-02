@@ -98,7 +98,7 @@ class PreprocessForDownscaling:
         include_landmask=False,
         data_processor_dict=None,
         save_data_processor_dict=False,
-        remove_stations=[None],
+        remove_stations=(),
     ):
         self.load_topography()
         self.load_era5()
@@ -223,7 +223,7 @@ class PreprocessForDownscaling:
         self.era5_raw_ds = da_era_trimmed
         return self.era5_raw_ds
 
-    def preprocess_stations(self, remove_stations=("None",)):
+    def preprocess_stations(self, remove_stations=()):
         """Gets self.station_raw_df"""
 
         assert self.station_metadata_all is not None, "Run load_stations() first"
@@ -404,7 +404,7 @@ class PreprocessForDownscaling:
 
         return era5_raw_ds
 
-    def _filter_stations(self, df_station_metadata, remove_stations=[None]):
+    def _filter_stations(self, df_station_metadata, remove_stations):
         """filter stations by years used in settings"""
 
         # this was only using stations that have data across all years
@@ -415,7 +415,7 @@ class PreprocessForDownscaling:
         years = self.years
         area = self.area
 
-        if remove_stations != [None]:
+        if len(remove_stations) > 0:
             from nzdownscale.dataprocess.config import STATION_LATLON
 
             for station in remove_stations:

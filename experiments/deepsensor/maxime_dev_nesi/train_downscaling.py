@@ -107,8 +107,8 @@ def main(
     :param auto_set_internal_density: allow automatic setting of internal density by ConvNP
     :param area: select area of map, options specified in PLOT_EXTENT in nzdownscale.dataprocess.config.py,
                  PLOT_EXTENT['all'] (all of NZ) is used as default
-    :param remove_stations: ! CURRENTLY NOT IMPLEMENTED ! List of station names to remove from the dataset
-    :param model_name: Name of the model to be saved, if default it will be the time
+    :param remove_stations: list of station names to remove from the dataset
+    :param model_name: name of the model to be saved, if default it will be the time
     """
 
     convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
