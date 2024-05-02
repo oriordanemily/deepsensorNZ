@@ -256,6 +256,7 @@ class Train:
                 ]
                 batch_losses = [item for sublist in batch_losses for item in sublist]
             else:
+                breakpoint()
                 batch_losses = train_epoch(model, train_tasks)
             batch_losses_not_nan = [arr for arr in batch_losses if ~np.isnan(arr)]
             train_loss = np.mean(batch_losses_not_nan)

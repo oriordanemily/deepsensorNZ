@@ -90,7 +90,6 @@ def main(
     area: str | None = None,
     remove_stations: Iterable[str] = DEFAULT_REMOVED_STATIONS,
     model_name: str = "default",
-    cachedir: Path | None = None,
 ):
     """
     Note: the lowres topography is coarsened from the highres topography, so the
@@ -110,7 +109,6 @@ def main(
                  PLOT_EXTENT['all'] (all of NZ) is used as default
     :param remove_stations: ! CURRENTLY NOT IMPLEMENTED ! List of station names to remove from the dataset
     :param model_name: Name of the model to be saved, if default it will be the time
-    :param cachedir: folder used to store cached preprocessed data
     """
 
     convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
