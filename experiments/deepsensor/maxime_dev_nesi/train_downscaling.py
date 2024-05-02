@@ -192,7 +192,6 @@ def main():
     # ------------------------------------------
 
     training = Train(processed_output_dict=processed_output_dict)
-    n_epochs=1
     training.run_training_sequence(n_epochs, model_name, **convnp_kwargs)
 
 
