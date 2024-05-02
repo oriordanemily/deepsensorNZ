@@ -13,15 +13,14 @@ import matplotlib.pyplot as plt
 import cartopy.feature as cf
 from scipy.ndimage import gaussian_filter
 
+logging.captureWarnings(True)
+
 from deepsensor.data.processor import DataProcessor
 from deepsensor.data.utils import construct_x1x2_ds
 from deepsensor.data import construct_circ_time_ds
 from nzdownscale.dataprocess import era5, stations, topography, utils, config
 from nzdownscale.dataprocess.config import LOCATION_LATLON, PLOT_EXTENT
 from nzdownscale.dataprocess.config_local import DATA_PATHS
-
-
-logging.captureWarnings(True)
 
 
 class PreprocessForDownscaling:

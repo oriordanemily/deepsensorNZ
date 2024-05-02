@@ -6,11 +6,11 @@ from typing import Iterable
 import defopt
 import joblib
 
+logging.captureWarnings(True)
+
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
 from nzdownscale.dataprocess import config, config_local
-
-logging.captureWarnings(True)
 
 
 def preprocess(
