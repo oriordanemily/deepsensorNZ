@@ -148,19 +148,21 @@ def main(
     )
 
     # replace missing stations with mean of variable
-    dset = processed_output_dict["station_raw_df"]
+    dset = processed_output_dict["station_df"]
 
     time = dset.reset_index()["time"].unique()
-    latlon = list(dset.reset_index().groupby(["latitude", "longitude"]).groups.keys())
+    latlon = list(dset.reset_index().groupby(["x1", "x2"]).groups.keys())
     index = pd.MultiIndex.from_tuples(
         [(time, lat, lon) for time, (lat, lon) in it.product(time, latlon)],
-        names=["time", "latitude", "longitude"],
+        names=["time", "x1", "x2"],
     )
 
-    dset_full = pd.DataFrame(data=dset.mean().to_dict(), index=index)
+    mean_val = dset.mean().to_dict()
+    dset_full = pd.DataFrame(data=mean_val, index=index)
     dset_full.loc[dset.index] = dset
+    dset_full.fillna(mean_val, inplace=True)
 
-    processed_output_dict["station_raw_df"] = dset_full
+    processed_output_dict["station_df"] = dset_full
 
     # ------------------------------------------
     # Train model
