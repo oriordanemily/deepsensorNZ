@@ -1,6 +1,5 @@
 import os
 import logging
-from pathlib import Path
 from typing import Iterable
 
 logging.captureWarnings(True)
@@ -90,6 +89,7 @@ def main(
     area: str | None = None,
     remove_stations: Iterable[str] = DEFAULT_REMOVED_STATIONS,
     model_name: str = "default",
+    batch_size: int | None = None,
 ):
     """
     Note: the lowres topography is coarsened from the highres topography, so the
@@ -109,6 +109,7 @@ def main(
                  PLOT_EXTENT['all'] (all of NZ) is used as default
     :param remove_stations: list of station names to remove from the dataset
     :param model_name: name of the model to be saved, if default it will be the time
+    :param batch_size: batch size, disable by default
     """
 
     convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
@@ -144,11 +145,18 @@ def main(
         remove_stations,
     )
 
+    # replace observation NaNs with mean value
+    processed_output_dict["station_raw_df"].fillna(
+        processed_output_dict["station_raw_df"].mean(), inplace=True
+    )
+
     # ------------------------------------------
     # Train model
     # ------------------------------------------
     training = Train(processed_output_dict=processed_output_dict)
-    training.run_training_sequence(n_epochs, model_name, **convnp_kwargs)
+    training.run_training_sequence(
+        n_epochs, model_name, batch_size=batch_size, **convnp_kwargs
+    )
 
 
 if __name__ == "__main__":
