@@ -2,6 +2,8 @@ import os
 import time
 import logging
 
+logging.captureWarnings(True)
+
 import numpy as np
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
@@ -16,8 +18,6 @@ from tqdm import tqdm
 from deepsensor.model.convnp import ConvNP
 from deepsensor.train.train import train_epoch, set_gpu_default_device
 from nzdownscale.dataprocess import config, utils
-
-logging.captureWarnings(True)
 
 
 class Train:
@@ -153,7 +153,8 @@ class Train:
         """
         Args:
             convnp_kwargs (dict):
-                Inputs to deepsensor.model.convnp.ConvNP(). Uses default CONVNP_KWARGS_DEFAULT if not provided.
+                Inputs to deepsensor.model.convnp.ConvNP(). Uses default
+                CONVNP_KWARGS_DEFAULT if not provided.
         """
 
         if convnp_kwargs is None:

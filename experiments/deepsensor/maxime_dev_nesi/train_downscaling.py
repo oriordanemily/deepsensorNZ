@@ -3,10 +3,10 @@ import logging
 from pathlib import Path
 from typing import Iterable
 
+logging.captureWarnings(True)
+
 import defopt
 import joblib
-
-logging.captureWarnings(True)
 
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train

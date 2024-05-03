@@ -4,16 +4,16 @@ import warnings
 import logging
 from time import time
 from typing_extensions import Literal
-from tqdm import tqdm
 
+logging.captureWarnings(True)
+
+from tqdm import tqdm
 import xarray as xr
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import cartopy.feature as cf
 from scipy.ndimage import gaussian_filter
-
-logging.captureWarnings(True)
 
 from deepsensor.data.processor import DataProcessor
 from deepsensor.data.utils import construct_x1x2_ds
