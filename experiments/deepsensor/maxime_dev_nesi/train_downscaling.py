@@ -1,11 +1,13 @@
 import os
 import logging
+import itertools as it
 from typing import Iterable
 
 logging.captureWarnings(True)
 
 import defopt
 import joblib
+import pandas as pd
 
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
@@ -145,10 +147,20 @@ def main(
         remove_stations,
     )
 
-    # replace observation NaNs with mean value
-    processed_output_dict["station_raw_df"].fillna(
-        processed_output_dict["station_raw_df"].mean(), inplace=True
+    # replace missing stations with mean of variable
+    dset = processed_output_dict["station_raw_df"]
+
+    time = dset.reset_index()["time"].unique()
+    latlon = list(dset.reset_index().groupby(["latitude", "longitude"]).groups.keys())
+    index = pd.MultiIndex.from_tuples(
+        [(time, lat, lon) for time, (lat, lon) in it.product(time, latlon)],
+        names=["time", "latitude", "longitude"],
     )
+
+    dset_full = pd.DataFrame(data=dset.mean().to_dict(), index=index)
+    dset_full.loc[dset.index] = dset
+
+    processed_output_dict["station_raw_df"] = dset_full
 
     # ------------------------------------------
     # Train model
