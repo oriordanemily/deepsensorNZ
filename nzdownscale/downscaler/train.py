@@ -49,6 +49,7 @@ class Train:
         self.aux_ds = processed_output_dict['aux_ds']
         self.station_df = processed_output_dict['station_df']
         self.landmask_ds = processed_output_dict['landmask_ds']
+        self.station_as_context = processed_output_dict['station_as_context']
 
         self.data_processor = processed_output_dict['data_processor']
 
@@ -93,6 +94,7 @@ class Train:
         aux_ds = self.aux_ds
         station_df = self.station_df
         landmask_ds = self.landmask_ds
+        station_as_context = False# self.station_as_context
         
         start_year = self.start_year
         end_year = self.end_year
@@ -100,12 +102,20 @@ class Train:
         val_end_year = self.val_end_year
 
         context = [era5_ds, aux_ds]
+        context_sampling = ["all", "all"]
+        if station_as_context:
+            context += [station_df]          
+            if validation:
+                context_sampling += ["all"]
+            else: 
+                context_sampling += ["all"]    
         if landmask_ds is not None:
             context += [landmask_ds]
+            context_sampling += ["all"]
         
         task_loader = TaskLoader(context=context,
                                 target=station_df, 
-                                aux_at_targets=highres_aux_ds)
+                                aux_at_targets=highres_aux_ds,)
         if verbose:
             print(task_loader)
 
@@ -122,12 +132,14 @@ class Train:
             train_tasks = []
             # only loaded every other date to speed up training for now
             for date in tqdm(train_dates[::2], desc="Loading train tasks..."):
-                task = task_loader(date, context_sampling="all", target_sampling="all")
+                task = task_loader(date, context_sampling=context_sampling, target_sampling="all")
+                # task["ops"] = ["numpy_mask", "nps_mask"]
                 train_tasks.append(task)
 
         val_tasks = []
         for date in tqdm(val_dates, desc="Loading val tasks..."):
-            task = task_loader(date, context_sampling="all", target_sampling="all")
+            task = task_loader(date, context_sampling=context_sampling, target_sampling="all")
+            # task["ops"] = ["numpy_mask", "nps_mask"]
             val_tasks.append(task)
 
         if verbose:
@@ -358,6 +370,7 @@ class Train:
         metadata_dict['convnp_kwargs'] = self.convnp_kwargs
         metadata_dict['train_losses'] = self.train_losses
         metadata_dict['val_losses'] = self.val_losses
+        metadata_dict['station_as_context'] = self.station_as_context
         self.metadata_dict = metadata_dict
 
 

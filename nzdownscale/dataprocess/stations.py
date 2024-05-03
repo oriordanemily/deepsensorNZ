@@ -54,6 +54,7 @@ class ProcessStations(DataProcess):
                         filepath: str,
                         var: str,
                         daily: bool = False,
+                        fill_missing: bool = True
                         ) -> pd.DataFrame:
         ds = self.load_station(filepath)
         da = self.ds_to_da(ds, var)

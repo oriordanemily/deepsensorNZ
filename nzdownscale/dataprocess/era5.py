@@ -75,7 +75,11 @@ class ProcessERA5(DataProcess):
     def get_parent_path(self,
                         var: Literal[tuple(VARIABLE_OPTIONS)],
                         ):
-        return f'{DATA_PATHS["ERA5"]["parent"]}/{VAR_ERA5[var]["subdir"]}'
+        if var == "precipitation":
+            parent = "parent_processed"
+        else:
+            parent = "parent"
+        return f'{DATA_PATHS["ERA5"][parent]}/{VAR_ERA5[var]["subdir"]}'
     
 
     def get_filenames(self,

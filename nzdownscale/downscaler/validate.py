@@ -242,7 +242,7 @@ class ValidateV1:
             pred, _ = self._get_predictions_and_tasks(dates, task_loader, model, era5_raw_ds, return_dataarray=True, verbose=verbose, save_preds=False)
 
         if era:
-            key = 't2m'
+            key = self.get_variable_name('era5')
         else:
             key = 'mean'
         pred_db_mean = pred[key].sel(time=dates)
@@ -254,6 +254,7 @@ class ValidateV1:
         if return_station:
             station_values = {}
 
+        station_var = self.get_variable_name('station')
         for location in tqdm(locations, desc='Calculating losses'):
             # if verbose:
             #     print(f'Calculating loss for {location}')
@@ -276,7 +277,7 @@ class ValidateV1:
 
             #get station values
             try:            
-                station_val = station_raw_df.loc[dates, 'dry_bulb'].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].groupby('time').mean().values.astype('float')
+                station_val = station_raw_df.loc[dates, station_var].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].groupby('time').mean().values.astype('float')
             except:
                 raise ValueError(f'No station data for {location} on given date(s): {dates}')
             
@@ -306,25 +307,31 @@ class ValidateV1:
         
     def calculate_loss_era5(self, dates, locations, era5):
         station_raw_df = self.processed_dict['station_raw_df']
-       
-        era5_values = era5['t2m'].sel(time=dates)
+
+        era5_name = self.get_variable_name('era5')
+        station_name = self.get_variable_name('station')
+
+        era5_values = era5[era5_name].sel(time=dates)
 
         norms_era5 = {}
         
         locations_kept = []
         for location in tqdm(locations, desc='Calculating losses'):
             # print(location)
-            X_t = self._get_location_coordinates(location, station=True)
-            station_val = station_raw_df.loc[dates, 'dry_bulb'].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].groupby('time').mean().values.astype('float')
-        
-            era5_loc = era5_values.sel(latitude=X_t[0], longitude=X_t[1], method='nearest')
-            if np.isnan(era5_loc).any():
-                # if era5 is nan, skip location
-                print(f'ERA5 has NANs at {location}: {sum(np.isnan(era5_loc).values)}/{len(era5_loc)}')
-            else:
-                era5_rmse = [utils.rmse(station, era) for station, era in zip(station_val, era5_loc.values)]
-                norms_era5[location] = era5_rmse
-                locations_kept.append(location)
+            try:
+                X_t = self._get_location_coordinates(location, station=True)
+                station_val = station_raw_df.loc[dates, station_name].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].groupby('time').mean().values.astype('float')
+            
+                era5_loc = era5_values.sel(latitude=X_t[0], longitude=X_t[1], method='nearest')
+                if np.isnan(era5_loc).any():
+                    # if era5 is nan, skip location
+                    print(f'ERA5 has NANs at {location}: {sum(np.isnan(era5_loc).values)}/{len(era5_loc)}')
+                else:
+                    era5_rmse = [utils.rmse(station, era) for station, era in zip(station_val, era5_loc.values)]
+                    norms_era5[location] = era5_rmse
+                    locations_kept.append(location)
+            except:
+                print(f"Couldn't find station {location}")
     
         locations_kept = list(set(locations_kept))
         return norms_era5, locations_kept
@@ -335,10 +342,12 @@ class ValidateV1:
         pred_db_mean = pred['mean'].sel(time=dates)
 
         if era5:
-            era5_values = era5['t2m'].sel(time=dates)
+            era5_name = self.get_variable_name('era5')
+            era5_values = era5[era5_name].sel(time=dates)
 
         norms = {}
         norms_era5 = {}
+        station_var = self.get_variable_name('station')
 
         for location in tqdm(locations, desc='Calculating losses'):
             skip_location = False
@@ -351,7 +360,7 @@ class ValidateV1:
             else:
                 X_t = location
             try:            
-                station_val = station_raw_df.loc[dates, 'dry_bulb'].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].groupby('time').mean().values.astype('float')
+                station_val = station_raw_df.loc[dates, station_var].loc[pd.IndexSlice[:, X_t[0], X_t[1]]].groupby('time').mean().values.astype('float')
             except:
                 raise ValueError(f'No station data for {location} on given date(s): {dates}')
             
@@ -548,6 +557,7 @@ class ValidateV1:
 
         filtered_station_df['prediction'] = np.nan
         filtered_station_df['differences'] = np.nan
+        station_var = self.get_variable_name('station')
         # Iterate over the filtered DataFrame
         for index, row in filtered_station_df.iterrows():
             prediction = pred_db.sel(time=date, 
@@ -557,12 +567,13 @@ class ValidateV1:
             
             # Add the prediction to the DataFrame
             filtered_station_df.at[index, 'prediction'] = prediction
-            filtered_station_df.at[index, 'differences'] = row['dry_bulb'] - prediction
+            filtered_station_df.at[index, 'differences'] = row[station_var] - prediction
 
         ncols = 3
 
         fig, axes = plt.subplots(1, ncols, subplot_kw=dict(projection=self.crs), figsize=(20, 20/3))
-        ax_content = ['dry_bulb', 'prediction', 'differences']
+        station_var = self.get_variable_name('station')
+        ax_content = [station_var, 'prediction', 'differences']
         for i, ax in enumerate(axes):
             # ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
             ax.set_extent([166, 179, -47.5, -34], crs=ccrs.PlateCarree())  # Set the extent to cover New Zealand
@@ -589,7 +600,11 @@ class ValidateV1:
                             cmap='coolwarm', marker='o', edgecolor='k', vmin=station_vmin, vmax=station_vmax, linewidth=0.5, s=100, transform=ccrs.PlateCarree())
 
             # Add a colorbar
-            plt.colorbar(scatter, ax=ax, shrink=0.5, label='Dry Bulb Temperature (°C)')
+            if station_var == 'dry_bulb':
+                label = 'Dry Bulb Temperature (°C)'
+            elif station_var == 'precipitation':
+                label = 'Precipitation (mm)'
+            plt.colorbar(scatter, ax=ax, shrink=0.5, label=label)
 
             cbar = ax.collections[0].colorbar  # This assumes your plot is the first (or only) collection added to the axes
             # cbar.set_label(var_cbar_label, fontsize=fontsize)  # Set your desired fontsize here
@@ -664,14 +679,21 @@ class ValidateV1:
         else:
             extent = None
 
+        era5_var = self.get_variable_name('era5')
+        if era5_var == 't2m':
+            label = '2m temperature [°C]'
+            std_unit = '°C'
+        elif era5_var == 'precipitation':
+            label = 'Precipitation [mm]'
+            std_unit = 'mm'
         # use test figure plot
         fig, axes = self.gen_test_fig(
             era5_raw_ds.sel(time=date), 
             pred_db["mean"],
             pred_db["std"],
             add_colorbar=True,
-            var_cbar_label="2m temperature [°C]",
-            std_cbar_label="std dev [°C]",
+            var_cbar_label=label,
+            std_cbar_label=f"std dev [{std_unit}]",
             std_clim=(None, 5),
             figsize=(20, 20/3),
             fontsize=16,
@@ -767,8 +789,10 @@ class ValidateV1:
         if type(era5) != xr.core.dataset.Dataset:
             era5_raw_ds = self.processed_dict['era5_raw_ds']
         else:
-            era5_raw_ds = era5['t2m']
+            era5_name = self.get_variable_name('era5')
+            era5_raw_ds = era5[era5_name]
         station_raw_df = self.processed_dict['station_raw_df']
+        station_var = self.get_variable_name('station')
 
         # get location
         if isinstance(location, str):
@@ -809,7 +833,7 @@ class ValidateV1:
         # Make 95% confidence interval
         ax.fill_between(range(len(convnp_mean)), convnp_mean - 2 * stddev, convnp_mean + 2 * stddev, alpha=0.25, label="ConvNP 95% CI")
         # Plot true station data
-        ax.plot(station_closest_df["dry_bulb"].values.astype('float'), label="Station", marker="o", markersize=3, zorder=1)
+        ax.plot(station_closest_df[station_var].values.astype('float'), label="Station", marker="o", markersize=3, zorder=1)
         ax.plot(era5_vals, label="ERA5", marker="o", markersize=3, zorder = 0)
         # Add legend
         ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02, 1, 0.2), ncol=4, mode="expand", borderaxespad=0)
@@ -969,10 +993,11 @@ class ValidateV1:
         
         # remove stations in remove_stations_from_tasks from the station data to be used in test tasks
         # ! NOTE ! currently predict doesn't use the station data, so this is unnecessary.
-        station_df = self.processed_dict['station_raw_df']
+        station_df = self.processed_dict['station_raw_df'].copy()
         self.processed_dict['station_raw_df'] = self._remove_stations_from_station_df(station_df, remove_stations_from_tasks)
+        
 
-        test_task = task_loader(dates, context_sampling = 'all', target_sampling='all',  seed_override=42)
+        test_task = task_loader(dates, context_sampling = ['all', 'all', 'all'], target_sampling='all',  seed_override=42)
         if verbose:
             print('Test tasks loaded')
         if len(dates) == 1:
@@ -988,7 +1013,8 @@ class ValidateV1:
             utils.save_pickle(pred, f'predictions_{self.training_metadata_path.split("/")[-1]}_{dates[0]}.pkl')
 
         if return_dataarray:
-            pred = pred['dry_bulb']
+            var_ID = self.task_loader.target_var_IDs[0][0]
+            pred = pred[var_ID]
 
         return pred, test_task
 
@@ -1052,4 +1078,9 @@ class ValidateV1:
         locs = set(zip(stations_raw_df.reset_index()["latitude"], stations_raw_df.reset_index()["longitude"]))
         return locs
 
+    def get_variable_name(self, dataset):
+        if dataset == 'era5':
+            return self.processed_dict['era5_raw_ds'].name
+        elif dataset == 'station':
+            return self.processed_dict['station_df'].columns[0]
 # %%

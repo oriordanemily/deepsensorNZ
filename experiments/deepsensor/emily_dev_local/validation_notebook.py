@@ -1,7 +1,7 @@
 # %%
 # use below when running interactively to reload modules
-# %reload_ext autoreload
-# %autoreload 2
+%reload_ext autoreload
+%autoreload 2
 
 import logging
 
@@ -36,8 +36,14 @@ from nzdownscale.dataprocess.config import LOCATION_LATLON, STATION_LATLON
 era5_interp = None
 era5_interp_filled = None
 # %%  Load from saved model
-model_name = "test_model_1713164678"  # 100 - left out stations
+# model_name = "test_model_1713164678"  # 100 - left out stations
+# model_name = "model_test_var_batching"
+# model_name = 'model_temp_incstations'
+# model_name = 'model_all_stations_context'
+model_name = 'model_1714684457'
 
+
+# --- from mahuika ----
 # model_name = 'test_model_1712898775' # 50
 # model_name = 'test_model_1712875091' # 100
 # model_name = 'test_model_1712813969' # 250
@@ -49,9 +55,10 @@ model_name = "test_model_1713164678"  # 100 - left out stations
 # model_name = 'test_model_1712792079' # 2000
 # model_name = '_model_1713135569'
 # model_name = '_model_1713136369'
-# base = '/home/emily/deepsensor/deepweather-downscaling/'
+base = '/home/emily/deepsensor/deepweather-downscaling/'
 
-base = "/home/emily/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/"
+
+base2 = "/home/emily/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/"
 
 train_metadata_path = (
     base + f"models/downscaling/{model_name}/metadata_{model_name}.pkl"
@@ -81,12 +88,12 @@ print(
 )
 
 save_validate = False
-# load_validate = False
-load_validate = not save_validate
+load_validate = False
+# load_validate = not save_validate
 
 if load_validate:
     with open(
-        base + "data_processor_dict_era1_topohr5_topolr5_2000_2011.pkl", "rb"
+        base2 + "data_processor_dict_era1_topohr5_topolr5_2000_2011.pkl", "rb"
     ) as handle:
         data_processor_dict = pickle.load(handle)
         print("Creating validate object using loaded processor dict")
@@ -116,6 +123,7 @@ validate = ValidateV1(
     validation_date_range=validation_date_range,
     data_processor_dict=data_processor_dict,
 )
+validate.station_as_context = True
 validate.load_model(
     load_model_path=model_path,
     save_data_processing_dict=save_validate,
@@ -146,7 +154,7 @@ print(f"Validating for dates between {date_range}")
 validation_stations = validate.stations_in_date_range(date_range)
 
 # %%
-prediction_fpath = f"/home/emily/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/predictions_{model_name}_{validation_date_range[0]}.pkl"
+prediction_fpath = f"/home/emily/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/predictions_{model_name}_{validation_date_range[0]}_1.pkl"
 if os.path.exists(prediction_fpath):
     print("Loading predictions from file")
     pred = utils.open_pickle(prediction_fpath)
@@ -158,7 +166,7 @@ else:
         model,
         verbose=True,
         save_preds=False,
-        remove_stations=remove_stations_list,
+        remove_stations_from_tasks=remove_stations_list,
     )
     if number_of_months == 12:
         print(f"Saving to {prediction_fpath}")
@@ -197,7 +205,7 @@ if era5_interp is None:
         with open(era5_interp_path, "wb") as handle:
             pickle.dump(era5_interp, handle, protocol=pickle.HIGHEST_PROTOCOL)
         print("ERA5 interpolated")
-
+#%%
 if era5_interp_filled is None:
     era5_interp_filled_path = (
         base
@@ -217,26 +225,20 @@ if era5_interp_filled is None:
         )
         print("Missing land values calculated")
 
-        # Get the coordinates of valid (non-NaN) and invalid (NaN) data points
-        # era5_da = era5_interp['t2m'].isel(time=0)
-        # valid_points = np.array(np.nonzero(~np.isnan(era5_da))).T
-        # missing_land_values_da = missing_land_values['t2m'].isel(time=0)
-        # invalid_points = np.array(np.nonzero(missing_land_values_da)).T
-        # print('Valid and invalid points calculated')
-
         era5_interp_filled = era5_interp.copy()
-        for t in tqdm(era5_interp["t2m"].time, desc="Filling missing values"):
-            era5_da = era5_interp["t2m"].sel(time=t)
+        era5_var = validate.get_variable_name('era5')
+        for t in tqdm(era5_interp[era5_var].time, desc="Filling missing values"):
+            era5_da = era5_interp[era5_var].sel(time=t)
             valid_points = np.array(np.nonzero(~np.isnan(era5_da))).T
             valid_values = era5_da.values[~np.isnan(era5_da)]
-            missing_land_values_da = missing_land_values["t2m"].sel(time=t)
+            missing_land_values_da = missing_land_values[era5_var].sel(time=t)
             invalid_points = np.array(np.nonzero(missing_land_values_da)).T
             # Perform nearest neighbor interpolation
             interpolated_values = griddata(
                 valid_points, valid_values, invalid_points, method="nearest"
             )
             # Fill the era5_interp DataArray with the interpolated values
-            era5_interp_filled["t2m"].sel(time=t).values[tuple(invalid_points.T)] = (
+            era5_interp_filled[era5_var].sel(time=t).values[tuple(invalid_points.T)] = (
                 interpolated_values
             )
 
@@ -245,6 +247,7 @@ if era5_interp_filled is None:
 # %%
 validation_stations.remove("CAPE CAMPBELL AWS")
 validation_stations.remove("CAPE KIDNAPPERS WXT AWS")
+#%%
 loss_dict_era5, locations = validate.calculate_loss_era5(
     dates, validation_stations, era5_interp_filled
 )

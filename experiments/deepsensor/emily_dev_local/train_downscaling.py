@@ -23,19 +23,32 @@ def main():
         "--var",
         type=str,
         default="temperature",
+        # default="precipitation"
     )
     parser.add_argument(
-        "--start_year", type=int, default=2000, help="Training start year"
+        "--start_year", 
+        type=int, 
+        default=2000, 
+        help="Training start year"
     ),
     parser.add_argument(
-        "--end_year", type=int, default=2001, help="Training end year is inclusive"
+        "--end_year",
+        type=int, 
+        # default=2005, 
+        default=2001,
+        help="Training end year is inclusive"
     ),
     parser.add_argument(
-        "--val_start_year", type=int, default=2002, help="Validation start year"
+        "--val_start_year", 
+        type=int, 
+        # default=2006,
+        default=2002, 
+        help="Validation start year"
     ),
     parser.add_argument(
         "--val_end_year",
         type=int,
+        # default=2007,
         default=2002,
         help="Validation end year is inclusive",
     ),
@@ -178,8 +191,13 @@ def main():
         convnp_kwargs["unet_channels"] = args.unet_channels
     if args.likelihood is not None:
         convnp_kwargs["likelihood"] = args.likelihood
+    # else:
+        # if precipitation, use bernoulli likelihood, otherwise default to cnp
+        # if var == "precipitation": 
+        #     convnp_kwargs["likelihood"] = "bernoulli-gamma"
     if args.internal_density is not None:
         convnp_kwargs["internal_density"] = args.internal_density
+    
 
     # If not setting internal_density, remove from convnp kwargs
     if args.auto_set_internal_density:
@@ -199,7 +217,7 @@ def main():
         use_daily_data=use_daily_data,
         area=area,
     )
-    if True:
+    if False:
         data_processor_dict_fpath = 'data_processor_dict_era1_topohr5_topolr5_2000_2001.pkl'
         data_processor_dict = data.load_data_processor_dict(data_processor_dict_fpath)
         save_data_processor_dict=False
@@ -215,7 +233,8 @@ def main():
         include_landmask=include_landmask,
         remove_stations=remove_stations,
         save_data_processor_dict=save_data_processor_dict,
-        data_processor_dict=data_processor_dict
+        data_processor_dict=data_processor_dict,
+        station_as_context=False
     )
     processed_output_dict = data.get_processed_output_dict()
     data.print_resolutions()

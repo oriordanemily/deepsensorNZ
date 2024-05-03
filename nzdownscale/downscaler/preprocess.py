@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cartopy.feature as cf
 from scipy.ndimage import gaussian_filter
+from sklearn.neighbors import NearestNeighbors
 
 from deepsensor.data.processor import DataProcessor
 from deepsensor.data.utils import construct_x1x2_ds
@@ -81,7 +82,7 @@ class PreprocessForDownscaling:
 
         self._ds_elev_hr = None
 
-        self._check_args()
+        # self._check_args()
 
     
     def _check_args(self):
@@ -99,7 +100,8 @@ class PreprocessForDownscaling:
         include_landmask=False,
         data_processor_dict=None,
         save_data_processor_dict=False,
-        remove_stations=[None]
+        remove_stations=[None],
+        station_as_context=True
         ):
         
         self.load_topography()
@@ -108,7 +110,7 @@ class PreprocessForDownscaling:
 
         highres_aux_raw_ds, aux_raw_ds = self.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
         era5_raw_ds = self.preprocess_era5(coarsen_factor=era5_coarsen_factor)
-        station_raw_df = self.preprocess_stations(remove_stations=remove_stations)
+        station_raw_df = self.preprocess_stations(remove_stations=remove_stations, fill_missing=True)
 
         # if include_time_of_year: 
         #     raise NotImplementedError
@@ -128,8 +130,9 @@ class PreprocessForDownscaling:
                 landmask_raw_ds=landmask_raw_ds,
                 include_time_of_year=include_time_of_year,
                 save=save_data_processor_dict,
-                # data_processor=data_processor_dict
+                station_as_context=station_as_context
                 )
+                # data_processor=data_processor_dict
             
         self.data_processor = data_processor_dict['data_processor']
         self.aux_ds = data_processor_dict['aux_ds']
@@ -137,6 +140,7 @@ class PreprocessForDownscaling:
         self.highres_aux_ds = data_processor_dict['highres_aux_ds']
         self.station_df = data_processor_dict['station_df']
         self.landmask_ds = data_processor_dict['landmask_ds']
+        self.station_as_context = data_processor_dict['station_as_context']
 
 
 
@@ -222,15 +226,15 @@ class PreprocessForDownscaling:
         return self.era5_raw_ds
 
 
-    def preprocess_stations(self, remove_stations=['None']):
+    def preprocess_stations(self, remove_stations=['None'], fill_missing=False):
         """ Gets self.station_raw_df """
 
         assert self.station_metadata_all is not None, "Run load_stations() first"
         
         self.station_metadata = self._filter_stations(self.station_metadata_all, remove_stations=remove_stations)
-        self.station_raw_df = self._get_station_raw_df(self.station_metadata)
+        self.station_raw_df = self._get_station_raw_df(self.station_metadata, fill_missing=fill_missing)
         
-        return self.station_raw_df
+        return self.station_raw_df 
         
 
     def _get_highres_topography(self,
@@ -337,7 +341,6 @@ class PreprocessForDownscaling:
             function = 'mean'
         elif self.var == 'precipitation':
             function = 'sum'  # ? 
-            raise NotImplementedError
         da = self.process_era.convert_hourly_to_daily(da_era, function)
         return da
     
@@ -416,6 +419,7 @@ class PreprocessForDownscaling:
                 station_no = STATION_LATLON[station]['station_no']
                 df = df[df['station_id'] != str(station_no)]
 
+        # ! Eventually change this so that stations only partially available are still used
         df_filtered_years = df[(df['start_year']<years[-1]) & (df['end_year']>=years[0])]
 
         if area is not None:
@@ -431,7 +435,7 @@ class PreprocessForDownscaling:
         return self.station_metadata_filtered
     
 
-    def _get_station_raw_df(self, df_station_metadata):
+    def _get_station_raw_df(self, df_station_metadata, fill_missing=True):
 
         var = self.var
         years = self.years
@@ -456,14 +460,86 @@ class PreprocessForDownscaling:
                                                     'latitude', 
                                                     'longitude']).sort_index()
         
-        # self.station_raw_df = station_raw_df
+        if fill_missing:
+            station_raw_df = self._fill_missing_stations_with_nans(station_raw_df)
+
+            # Fill NaNs with nearest neighbours
+            # station_raw_df = station_raw_df.groupby('time').apply(self.fill_missing_values).reset_index(drop=True)
+            station_raw_df.set_index(['time', 'latitude', 'longitude'], inplace=True)
+
+            # self.station_raw_df = station_raw_df
+            counts_per_date = station_raw_df.groupby(level='time').size()
+            assert (counts_per_date == counts_per_date[0]).all(), "Number of stations per date is not consistent"
         return station_raw_df
 
+    
+    def _fill_missing_stations_with_nans(self, station_raw_df):
+        """Returns a dataframe with all combinations of times, latitudes and longitudes
+         Those without real data in station_raw_df will be filled in with nans"""
+        
+         # get all times in station_raw_df
+        times_df = pd.DataFrame({'time': station_raw_df.index.get_level_values('time').unique()})
+
+        # get all latitudes and longitudes in station_raw_df
+        lat_lon_df = pd.DataFrame(list(station_raw_df.index.droplevel(0).unique()), columns=['latitude', 'longitude'])
+        
+        # create a df with all combinations of times, latitudes and longitudes
+        all_combinations_df = pd.merge(times_df.assign(key=1), lat_lon_df.assign(key=1), on='key').drop('key', axis=1)
+
+        station_raw_df_reset = station_raw_df.reset_index()
+        # merge all_combinations_df with station_raw_df to fill in missing values
+        complete_df = pd.merge(all_combinations_df, station_raw_df_reset, on=['time', 'latitude', 'longitude'], how='left')
+        complete_df = complete_df.drop_duplicates(subset=['time', 'latitude', 'longitude'], keep='first')
+
+        #convert to datetime
+        complete_df['time'] = pd.to_datetime(complete_df['time'])
+
+        return complete_df
 
     def __str__(self):
         s = "PreprocessForDownscaling with data_processor:\n"
         s = s + self.data_processor.__str__
         return s
+
+    def adjust_duplicates(self, df, increment=0.00001):
+        # Create a key column for identifying duplicates based on time, latitude, and longitude
+        df['key'] = df['time'].astype(str) + '_' + df['latitude'].astype(str) + '_' + df['longitude'].astype(str)
+        
+        # Find all keys with duplicates
+        duplicate_keys = df['key'].value_counts()
+        duplicate_keys = duplicate_keys[duplicate_keys > 1]
+        
+        # Loop through all duplicate keys and increment latitudes
+        for key, count in tqdm(duplicate_keys.items(), total=len(duplicate_keys), desc='Adjusting duplicates'):
+            indices = df[df['key'] == key].index
+            for i, idx in enumerate(indices):
+                df.at[idx, 'latitude'] += i * increment
+        
+        # Drop the temporary key column
+        df.drop(columns=['key'], inplace=True)
+        return df
+    
+    def fill_missing_values(self, group):
+        # Filter out rows where 'dry_bulb' is not NaN
+        with_data = group.dropna(subset=['dry_bulb'])
+        without_data = group[group['dry_bulb'].isna()]
+        
+        # Check if there are missing values and valid data to train on
+        if without_data.empty or with_data.empty:
+            return group
+
+        # Train NearestNeighbors on available data
+        neigh = NearestNeighbors(n_neighbors=1, metric='haversine')
+        neigh.fit(np.radians(with_data[['latitude', 'longitude']].values))
+
+        # Find nearest neighbors for NaN 'dry_bulb' entries
+        _, indices = neigh.kneighbors(np.radians(without_data[['latitude', 'longitude']].values))
+
+        # Impute missing 'dry_bulb' using the values from the nearest neighbors
+        without_data['dry_bulb'] = with_data.iloc[indices.flatten()]['dry_bulb'].values
+
+        # Combine the results back together
+        return pd.concat([with_data, without_data])
 
 
     def load_landmask(self):
@@ -503,7 +579,8 @@ class PreprocessForDownscaling:
                     include_time_of_year=False,
                     test_norm=False,
                     # data_processor_dict=None,  # ?
-                    save=False
+                    save=False,
+                    station_as_context=False
                     ):
         """
         Creates DataProcessor:
@@ -548,15 +625,16 @@ class PreprocessForDownscaling:
             era5_ds = self.add_time_of_year(era5_ds)
         print('Auxiliary datasets generated in', time()-start, 'seconds')
     
+        data_processor_dict = {}
+        data_processor_dict['data_processor'] = data_processor
+        data_processor_dict['aux_ds'] = aux_ds
+        data_processor_dict['era5_ds'] = era5_ds
+        data_processor_dict['highres_aux_ds'] = highres_aux_ds
+        data_processor_dict['station_df'] = station_df
+        data_processor_dict['landmask_ds'] = landmask_ds
+        data_processor_dict['station_as_context'] = station_as_context
         if save:
-            data_processor_dict = {}
-            data_processor_dict['data_processor'] = data_processor
-            data_processor_dict['aux_ds'] = aux_ds
-            data_processor_dict['era5_ds'] = era5_ds
-            data_processor_dict['highres_aux_ds'] = highres_aux_ds
-            data_processor_dict['station_df'] = station_df
-            data_processor_dict['landmask_ds'] = landmask_ds
-            data_processor_dict_fpath = f'data_processor_dict_era1_topohr5_topolr5_2000_2001.pkl'
+            data_processor_dict_fpath = f'data_processor_dict_precip_era1_topohr5_topolr5_2000_2001.pkl'
             print(f'Saving data_processor_dict to {data_processor_dict_fpath}')
             with open(data_processor_dict_fpath, 'wb') as f:
                 pickle.dump(data_processor_dict, f)
@@ -620,6 +698,7 @@ class PreprocessForDownscaling:
             'aux_ds': self.aux_ds,
             'landmask_ds': self.landmask_ds,
             'station_df': self.station_df,
+            'station_as_context': self.station_as_context,
 
             'station_raw_df': self.station_raw_df,
             'era5_raw_ds': self.era5_raw_ds,
