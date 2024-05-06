@@ -107,7 +107,7 @@ class Train:
             context += [landmask_ds]
 
         task_loader = TaskLoader(
-            context=context, target=station_df,  # aux_at_targets=highres_aux_ds
+            context=context, target=station_df, aux_at_targets=highres_aux_ds
         )
         if verbose:
             print(task_loader)
