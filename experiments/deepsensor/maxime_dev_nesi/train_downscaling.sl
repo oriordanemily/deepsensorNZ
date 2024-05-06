@@ -1,7 +1,7 @@
 #!/bin/bash -e
 #SBATCH --time=02:00:00
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=15G
+#SBATCH --mem=70GB
 #SBATCH --gpus-per-node=A100:1
 #SBATCH --partition=hgx,gpu
 #SBATCH --output logs/%j-%x.out
