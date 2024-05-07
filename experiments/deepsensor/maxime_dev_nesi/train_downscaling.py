@@ -7,6 +7,7 @@ logging.captureWarnings(True)
 
 import defopt
 import joblib
+import numpy as np
 import pandas as pd
 
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
@@ -147,7 +148,7 @@ def main(
         remove_stations,
     )
 
-    # replace missing stations with mean of variable
+    # replace missing stations with NaNs
     dset = processed_output_dict["station_df"]
 
     time = dset.reset_index()["time"].unique()
@@ -157,17 +158,16 @@ def main(
         names=["time", "x1", "x2"],
     )
 
-    mean_val = dset.mean().to_dict()
-    dset_full = pd.DataFrame(data=mean_val, index=index)
+    dset_full = pd.DataFrame(data={col: np.NaN for col in dset.columns}, index=index)
     dset_full.loc[dset.index] = dset
-    dset_full.fillna(mean_val, inplace=True)
+    dset_full.fillna(np.NaN, inplace=True)
 
     processed_output_dict["station_df"] = dset_full
 
     # ------------------------------------------
     # Train model
     # ------------------------------------------
-    training = Train(processed_output_dict=processed_output_dict)
+    training = Train(processed_output_dict=processed_output_dict, use_gpu=False)
     training.run_training_sequence(
         n_epochs, model_name, batch_size=batch_size, **convnp_kwargs
     )
