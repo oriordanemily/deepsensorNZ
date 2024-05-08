@@ -32,4 +32,5 @@ venv/bin/python train_downscaling.py \
     --include-landmask \
     --model-name=$SLURM_JOB_ID \
     --n-epochs=10 \
-    --internal-density=250
+    --internal-density=250 \
+    --use-gpu

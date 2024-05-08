@@ -10,14 +10,54 @@ import cartopy.crs as ccrs
 import cartopy.feature as cf
 import lab as B
 import torch
-
 import deepsensor.torch
-from deepsensor.data.loader import TaskLoader
 from tqdm import tqdm
-
+from deepsensor.data.loader import TaskLoader
 from deepsensor.model.convnp import ConvNP
 from deepsensor.train.train import train_epoch, set_gpu_default_device
+from neuralprocesses.model.loglik import loglik
+from neuralprocesses.dist import MultiOutputNormal
+from matrix import Diagonal
+
 from nzdownscale.dataprocess import config, utils
+
+
+class MaskedModel:
+    def __init__(self, model):
+        self._model = model
+
+    def __call__(self, context, xt, *args, **kwargs):
+        mvn = self._model(context, xt, *args, **kwargs)
+        with B.on_device(mvn.vectorised_normal.var_diag):
+            return MultiOutputNormal(
+                mvn._mean,
+                mvn._var,
+                Diagonal(mvn._noise.diag),  # TODO replace some values
+                mvn.shape,
+            )
+
+    @property
+    def parameters(self):
+        return self._model.parameters
+
+    def state_dict(self):
+        return self._model.state_dict()
+
+
+@deepsensor.torch.nps.num_params.dispatch
+def num_params(model: MaskedModel):
+    return num_params(model._model)
+
+
+@loglik.dispatch
+def loglik(model: MaskedModel, *args, **kwargs):
+    return loglik(model._model, *args, **kwargs)
+
+
+class MyConvNP(ConvNP):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.model = MaskedModel(self.model)
 
 
 class Train:
@@ -160,7 +200,7 @@ class Train:
             convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
 
         # Set up model
-        model = ConvNP(self.data_processor, self.task_loader, **convnp_kwargs)
+        model = MyConvNP(self.data_processor, self.task_loader, **convnp_kwargs)
 
         # Print number of parameters to check model is not too large for GPU memory
         _ = model(self.val_tasks[0])
