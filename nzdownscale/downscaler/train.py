@@ -10,54 +10,85 @@ import cartopy.crs as ccrs
 import cartopy.feature as cf
 import lab as B
 import torch
-import deepsensor.torch
+import deepsensor.torch  # noqa
 from tqdm import tqdm
-from deepsensor.data.loader import TaskLoader
-from deepsensor.model.convnp import ConvNP
+from deepsensor.data.loader import TaskLoader, Task
+from deepsensor.model.convnp import ConvNP, convert_task_to_nps_args
 from deepsensor.train.train import train_epoch, set_gpu_default_device
-from neuralprocesses.model.loglik import loglik
 from neuralprocesses.dist import MultiOutputNormal
 from matrix import Diagonal
 
 from nzdownscale.dataprocess import config, utils
 
 
-class MaskedModel:
-    def __init__(self, model):
-        self._model = model
+def run_nps_model(
+    neural_process,
+    task: Task,
+    n_samples: int | None = None,
+    requires_grad: bool = False,
+):
+    """
+    Run ``neuralprocesses`` model.
 
-    def __call__(self, context, xt, *args, **kwargs):
-        mvn = self._model(context, xt, *args, **kwargs)
-        with B.on_device(mvn.vectorised_normal.var_diag):
-            return MultiOutputNormal(
-                mvn._mean,
-                mvn._var,
-                Diagonal(mvn._noise.diag),  # TODO replace some values
-                mvn.shape,
+    Args:
+        neural_process (neuralprocesses.Model):
+            Neural process model.
+        task (:class:`~.data.task.Task`):
+            Task object containing context and target sets.
+        n_samples (int, optional):
+            Number of samples to draw from the model. Defaults to ``None``
+            (single sample).
+        requires_grad (bool, optional):
+            Whether to require gradients. Defaults to ``False``.
+
+    Returns:
+        neuralprocesses.distributions.Distribution:
+            Distribution object containing the model's predictions.
+    """
+    context_data, xt, _, model_kwargs = convert_task_to_nps_args(task)
+
+    if not requires_grad:
+        # turn off grad
+        with torch.no_grad():
+            dist = neural_process(
+                context_data, xt, **model_kwargs, num_samples=n_samples
             )
+    else:
+        dist = neural_process(context_data, xt, **model_kwargs, num_samples=n_samples)
 
-    @property
-    def parameters(self):
-        return self._model.parameters
+    # TODO check if need `B.on_device(d.vectorised_normal.var_diag)`
+    mask = context_data[0][1]
+    diag = dist._noise.diag
+    diag[mask == 1.0] = 100.0  # TODO make it a parameter
+    dist = MultiOutputNormal(
+        dist._mean,
+        dist._var,
+        Diagonal(diag),
+        dist.shape,
+    )
 
-    def state_dict(self):
-        return self._model.state_dict()
-
-
-@deepsensor.torch.nps.num_params.dispatch
-def num_params(model: MaskedModel):
-    return num_params(model._model)
-
-
-@loglik.dispatch
-def loglik(model: MaskedModel, *args, **kwargs):
-    return loglik(model._model, *args, **kwargs)
+    return dist
 
 
-class MyConvNP(ConvNP):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.model = MaskedModel(self.model)
+class MaskedConvNP(ConvNP):
+    def __call__(self, task, n_samples=10, requires_grad=False):
+        """
+        Compute ConvNP distribution.
+
+        Args:
+            task (:class:`~.data.task.Task`):
+                ...
+            n_samples (int, optional):
+                Number of samples to draw from the distribution, by default 10.
+            requires_grad (bool, optional):
+                Whether to compute gradients, by default False.
+
+        Returns:
+            ...: The ConvNP distribution.
+        """
+        task = ConvNP.modify_task(task)
+        dist = run_nps_model(self.model, task, n_samples, requires_grad)
+        return dist
 
 
 class Train:
@@ -87,6 +118,7 @@ class Train:
         self.highres_aux_ds = processed_output_dict["highres_aux_ds"]
         self.aux_ds = processed_output_dict["aux_ds"]
         self.station_df = processed_output_dict["station_df"]
+        self.station_df_mask = processed_output_dict["station_df_mask"]
         self.landmask_ds = processed_output_dict["landmask_ds"]
 
         self.data_processor = processed_output_dict["data_processor"]
@@ -131,35 +163,27 @@ class Train:
         verbose=False,
         validation=False,
     ):
-        era5_ds = self.era5_ds
-        highres_aux_ds = self.highres_aux_ds
-        aux_ds = self.aux_ds
-        station_df = self.station_df
-        landmask_ds = self.landmask_ds
-
-        start_year = self.start_year
-        end_year = self.end_year
-        val_start_year = self.val_start_year
-        val_end_year = self.val_end_year
-
-        context = [era5_ds, aux_ds]
-        if landmask_ds is not None:
-            context += [landmask_ds]
+        context = [self.station_df_mask, self.era5_ds, self.aux_ds]
+        if self.landmask_ds is not None:
+            context += [self.landmask_ds]
 
         task_loader = TaskLoader(
-            context=context, target=station_df, aux_at_targets=highres_aux_ds
+            context=context,
+            target=self.station_df,
+            aux_at_targets=self.highres_aux_ds,
         )
         if verbose:
             print(task_loader)
 
-        train_start = f"{start_year}-01-01"
-        train_end = f"{end_year}-12-31"
-        val_start = f"{val_start_year}-01-01"
-        val_end = f"{val_end_year}-12-31"
+        train_start = f"{self.start_year}-01-01"
+        train_end = f"{self.end_year}-12-31"
+        val_start = f"{self.val_start_year}-01-01"
+        val_end = f"{self.val_end_year}-12-31"
 
         if not validation:
-            train_dates = era5_ds.sel(time=slice(train_start, train_end)).time.values
-        val_dates = era5_ds.sel(time=slice(val_start, val_end)).time.values
+            train_slice = slice(train_start, train_end)
+            train_dates = self.era5_ds.sel(time=train_slice).time.values
+        val_dates = self.era5_ds.sel(time=slice(val_start, val_end)).time.values
 
         if not validation:
             train_tasks = []
@@ -200,7 +224,7 @@ class Train:
             convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
 
         # Set up model
-        model = MyConvNP(self.data_processor, self.task_loader, **convnp_kwargs)
+        model = MaskedConvNP(self.data_processor, self.task_loader, **convnp_kwargs)
 
         # Print number of parameters to check model is not too large for GPU memory
         _ = model(self.val_tasks[0])

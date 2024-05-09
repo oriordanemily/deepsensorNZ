@@ -162,9 +162,11 @@ def main(
     mean_val = dset.mean().to_dict()
     dset_full = pd.DataFrame(data=mean_val, index=index)
     dset_full.loc[dset.index] = dset
+    dset_mask = dset_full.isna()
     dset_full.fillna(mean_val, inplace=True)
 
     processed_output_dict["station_df"] = dset_full
+    processed_output_dict["station_df_mask"] = dset_mask
 
     # ------------------------------------------
     # Train model
