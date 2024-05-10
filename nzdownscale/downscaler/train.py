@@ -12,83 +12,55 @@ import lab as B
 import torch
 import deepsensor.torch  # noqa
 from tqdm import tqdm
-from deepsensor.data.loader import TaskLoader, Task
-from deepsensor.model.convnp import ConvNP, convert_task_to_nps_args
+from deepsensor.data.loader import TaskLoader
+from deepsensor.model.convnp import ConvNP
 from deepsensor.train.train import train_epoch, set_gpu_default_device
+from neuralprocesses.model.loglik import loglik
 from neuralprocesses.dist import MultiOutputNormal
 from matrix import Diagonal
 
 from nzdownscale.dataprocess import config, utils
 
 
-def run_nps_model(
-    neural_process,
-    task: Task,
-    n_samples: int | None = None,
-    requires_grad: bool = False,
-):
-    """
-    Run ``neuralprocesses`` model.
+class MaskedModel:
+    def __init__(self, model):
+        self._model = model
 
-    Args:
-        neural_process (neuralprocesses.Model):
-            Neural process model.
-        task (:class:`~.data.task.Task`):
-            Task object containing context and target sets.
-        n_samples (int, optional):
-            Number of samples to draw from the model. Defaults to ``None``
-            (single sample).
-        requires_grad (bool, optional):
-            Whether to require gradients. Defaults to ``False``.
-
-    Returns:
-        neuralprocesses.distributions.Distribution:
-            Distribution object containing the model's predictions.
-    """
-    context_data, xt, _, model_kwargs = convert_task_to_nps_args(task)
-
-    if not requires_grad:
-        # turn off grad
-        with torch.no_grad():
-            dist = neural_process(
-                context_data, xt, **model_kwargs, num_samples=n_samples
+    def __call__(self, context, xt, *args, **kwargs):
+        mvn = self._model(context, xt, *args, **kwargs)
+        with B.on_device(mvn.vectorised_normal.var_diag):
+            mask = context[0][1] > 0
+            diag = mvn._noise.diag
+            diag[mask] = 100.0  # TODO make it a parameter
+            return MultiOutputNormal(
+                mvn._mean,
+                mvn._var,
+                Diagonal(diag),
+                mvn.shape,
             )
-    else:
-        dist = neural_process(context_data, xt, **model_kwargs, num_samples=n_samples)
 
-    # TODO check if need `B.on_device(d.vectorised_normal.var_diag)`
-    mask = context_data[0][1]
-    diag = dist._noise.diag
-    diag[mask == 1.0] = 100.0  # TODO make it a parameter
-    dist = MultiOutputNormal(
-        dist._mean,
-        dist._var,
-        Diagonal(diag),
-        dist.shape,
-    )
+    @property
+    def parameters(self):
+        return self._model.parameters
 
-    return dist
+    def state_dict(self):
+        return self._model.state_dict()
+
+
+@deepsensor.torch.nps.num_params.dispatch
+def num_params(model: MaskedModel):
+    return num_params(model._model)
+
+
+@loglik.dispatch
+def loglik(model: MaskedModel, *args, **kwargs):
+    return loglik(model._model, *args, **kwargs)
 
 
 class MaskedConvNP(ConvNP):
-    def __call__(self, task, n_samples=10, requires_grad=False):
-        """
-        Compute ConvNP distribution.
-
-        Args:
-            task (:class:`~.data.task.Task`):
-                ...
-            n_samples (int, optional):
-                Number of samples to draw from the distribution, by default 10.
-            requires_grad (bool, optional):
-                Whether to compute gradients, by default False.
-
-        Returns:
-            ...: The ConvNP distribution.
-        """
-        task = ConvNP.modify_task(task)
-        dist = run_nps_model(self.model, task, n_samples, requires_grad)
-        return dist
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.model = MaskedModel(self.model)
 
 
 class Train:
