@@ -150,7 +150,6 @@ def main(
     )
 
     # TODO move this into nzdownscale.downscaler.preprocess
-    # TODO implement nearest neighbor
 
     # replace missing stations with mean of variable
     dset = processed_output_dict["station_df"]

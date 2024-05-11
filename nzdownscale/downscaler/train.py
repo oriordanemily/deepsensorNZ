@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+from pathlib import Path
 
 logging.captureWarnings(True)
 
@@ -54,6 +55,14 @@ class MaskedConvNP(ConvNP):
         self.model = MaskedModel(self.model)
 
 
+def make_loss_plot(train_losses, val_losses, filename="model_loss.png"):
+    fig, ax = plt.subplots()
+    ax.plot(train_losses, label="Train loss")
+    ax.plot(val_losses, label="Val loss")
+    ax.legend()
+    fig.savefig(filename, bbox_inches="tight")
+
+
 class Train:
     def __init__(
         self,
@@ -65,7 +74,7 @@ class Train:
         Args:
             processed_output_dict (dict):
                 Output from nzdownscale.downscaler.getdata.GetData()
-            save_model_path (int):
+            save_model_path (str):
                 Best models are saved in this directory
             use_gpu (bool):
                 Uses GPU if True
@@ -74,7 +83,7 @@ class Train:
         if use_gpu:
             set_gpu_default_device()
 
-        self.save_model_path = save_model_path
+        self.save_model_path = Path(save_model_path)
         self.processed_output_dict = processed_output_dict
 
         self.era5_ds = processed_output_dict["era5_ds"]
@@ -98,10 +107,19 @@ class Train:
         self.task_loader = None
         self.train_losses = []
         self.val_losses = []
-        self.metadata_dict = None
         self.convnp_kwargs = None
 
         self._check_inputs()
+
+    @property
+    def metadata_dict(self):
+        metadata = {
+            k: self.processed_output_dict[k] for k in ["data_settings", "date_info"]
+        }
+        metadata["convnp_kwargs"] = self.convnp_kwargs
+        metadata["train_losses"] = self.train_losses
+        metadata["val_losses"] = self.val_losses
+        return metadata
 
     def _check_inputs(self):
         # if self.landmask_ds is not None:
@@ -199,16 +217,12 @@ class Train:
         self.model = model
 
     def plot_context_encodings(self):
-        model = self.model
-        train_tasks = self.train_tasks
-        val_tasks = self.val_tasks
-        task_loader = self.task_loader
-        data_processor = self.data_processor
-
-        fig = deepsensor.plot.context_encoding(model, train_tasks[0], task_loader)
+        fig = deepsensor.plot.context_encoding(
+            self.model, self.train_tasks[0], self.task_loader
+        )
         plt.show()
 
-        fig = deepsensor.plot.task(train_tasks[0], task_loader)
+        fig = deepsensor.plot.task(self.train_tasks[0], self.task_loader)
         plt.show()
 
         crs = ccrs.PlateCarree()
@@ -225,9 +239,9 @@ class Train:
 
         deepsensor.plot.offgrid_context(
             ax,
-            val_tasks[0],
-            data_processor,
-            task_loader,
+            self.val_tasks[0],
+            self.data_processor,
+            self.task_loader,
             plot_target=True,
             add_legend=True,
             linewidths=0.5,
@@ -235,80 +249,57 @@ class Train:
         plt.show()
 
     def train_model(
-        self,
-        n_epochs=30,
-        plot_losses=True,
-        model_name="default",
-        batch_size=None,
+        self, n_epochs=30, plot_losses=True, model_name="default", batch_size=None
     ):
-        model = self.model
-        train_tasks = self.train_tasks
-        val_tasks = self.val_tasks
-
         if model_name == "default":
             model_id = str(round(time.time()))
             model_name = f"model_{model_id}"
         else:
             model_name = f"model_{model_name}"
-        self.set_save_dir(model_name)
 
-        def compute_val_loss(model, val_tasks):
-            val_losses = []
-            for task in val_tasks:
-                val_losses.append(B.to_numpy(model.loss_fn(task, normalise=True)))
-                val_losses_not_nan = [arr for arr in val_losses if ~np.isnan(arr)]
-            return np.mean(val_losses_not_nan)
+        save_dir = self.save_model_path / model_name
+        save_dir.mkdir(parents=True, exist_ok=True)
 
-        train_losses = []
-        val_losses = []
-
-        val_loss_best = np.inf
+        val_loss_best = min(self.val_losses) if self.val_losses else np.inf
 
         for epoch in tqdm(range(n_epochs)):
-            batch_losses = train_epoch(model, train_tasks, batch_size=batch_size)
-            # TODO keep nans?
-            batch_losses_not_nan = [arr for arr in batch_losses if ~np.isnan(arr)]
-            train_loss = np.mean(batch_losses_not_nan)
-            train_losses.append(train_loss)
+            train_losses = train_epoch(
+                self.model, self.train_tasks, batch_size=batch_size
+            )
+            assert not np.isnan(train_losses).any(), "NaN train loss"
+            train_loss = np.mean(train_losses)
+            self.train_losses.append(train_loss)
 
-            val_loss = compute_val_loss(model, val_tasks)
-            val_losses.append(val_loss)
+            val_losses = [
+                B.to_numpy(self.model.loss_fn(task, normalise=True))
+                for task in self.val_tasks
+            ]
+            assert not np.isnan(val_losses).any(), "NaN validation loss"
+            val_loss = np.mean(val_losses)
+            self.val_losses.append(val_loss)
 
             if val_loss < val_loss_best:
                 val_loss_best = val_loss
+                model_state = self.model.model.state_dict()
+                torch.save(model_state, self.save_dir / f"{model_name}.pt")
 
-                torch.save(model.model.state_dict(), f"{self.save_dir}/{model_name}.pt")
-                self.save_metadata(f"{self.save_dir}", f"metadata_{model_name}")
+        if plot_losses:
+            make_loss_plot(
+                self.train_losses,
+                self.val_losses,
+                save_dir / f"losses_{model_name}.png",
+            )
 
-                self.train_losses = train_losses
-                self.val_losses = val_losses
-
-            if plot_losses:
-                self.make_loss_plot(
-                    train_losses,
-                    val_losses,
-                    f"{self.save_dir}",
-                    f"losses_{model_name}.png",
-                )
-
-        self.model = model
-        self.train_losses = train_losses
-        self.val_losses = val_losses
+        utils.save_pickle(
+            self.metadata_dict, self.save_dir / f"metadata_{model_name}.pkl"
+        )
 
     # def train_epoch_and_print(self, model, train_tasks):
     #     # used for debugging
     #     te = train_epoch(model, train_tasks)
     #     return te
 
-    def set_save_dir(self, model_name):
-        self.save_dir = f"{self.save_model_path}/{model_name}"
-        if not os.path.exists(self.save_dir):
-            os.makedirs(self.save_dir)
-
     def get_training_output_dict(self):
-        if self.metadata_dict is None:
-            self._construct_metadata_dict()
-
         training_output_dict = {
             "model": self.model,
             "train_losses": self.train_losses,
@@ -320,31 +311,3 @@ class Train:
             "metadata_dict": self.metadata_dict,
         }
         return training_output_dict
-
-    def save_metadata(self, folder, name):
-        self._construct_metadata_dict()
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-        utils.save_pickle(self.metadata_dict, f"{folder}/{name}.pkl")
-
-    def _construct_metadata_dict(self):
-        metadata_dict = {
-            k: self.processed_output_dict[k] for k in ["data_settings", "date_info"]
-        }
-        metadata_dict["convnp_kwargs"] = self.convnp_kwargs
-        metadata_dict["train_losses"] = self.train_losses
-        metadata_dict["val_losses"] = self.val_losses
-        self.metadata_dict = metadata_dict
-
-    def make_loss_plot(
-        self, train_losses, val_losses, folder="tmp", save_name="model_loss.png"
-    ):
-        fig = plt.figure()
-        plt.plot(train_losses, label="Train loss")
-        plt.plot(val_losses, label="Val loss")
-        plt.show()
-
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-        fig.savefig(f"{folder}/{save_name}", bbox_inches="tight")
-        print(f"Saved: {folder}/{save_name}")
