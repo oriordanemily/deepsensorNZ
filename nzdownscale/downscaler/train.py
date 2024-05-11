@@ -16,8 +16,6 @@ from deepsensor.data.loader import TaskLoader
 from deepsensor.model.convnp import ConvNP
 from deepsensor.train.train import train_epoch, set_gpu_default_device
 from neuralprocesses.model.loglik import loglik
-from neuralprocesses.dist import MultiOutputNormal
-from matrix import Diagonal
 
 from nzdownscale.dataprocess import config, utils
 
@@ -26,18 +24,8 @@ class MaskedModel:
     def __init__(self, model):
         self._model = model
 
-    def __call__(self, context, xt, *args, **kwargs):
-        mvn = self._model(context, xt, *args, **kwargs)
-        with B.on_device(mvn.vectorised_normal.var_diag):
-            mask = context[0][1] > 0
-            diag = mvn._noise.diag
-            diag[mask] = 100.0  # TODO make it a parameter
-            return MultiOutputNormal(
-                mvn._mean,
-                mvn._var,
-                Diagonal(diag),
-                mvn.shape,
-            )
+    def __call__(self, *args, **kwargs):
+        return self._model(*args, **kwargs)
 
     @property
     def parameters(self):
@@ -53,8 +41,11 @@ def num_params(model: MaskedModel):
 
 
 @loglik.dispatch
-def loglik(model: MaskedModel, *args, **kwargs):
-    return loglik(model._model, *args, **kwargs)
+def loglik(model: MaskedModel, contexts: list, xt, yt, **kwargs):
+    mask = contexts[0][1] > 0
+    yt[mask] = B.nan
+    logpdfs = loglik(model._model, contexts, xt, yt, **kwargs)
+    return logpdfs
 
 
 class MaskedConvNP(ConvNP):
