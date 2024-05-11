@@ -1,4 +1,3 @@
-import os
 import time
 import logging
 from pathlib import Path
@@ -86,21 +85,6 @@ class Train:
         self.save_model_path = Path(save_model_path)
         self.processed_output_dict = processed_output_dict
 
-        self.era5_ds = processed_output_dict["era5_ds"]
-        self.highres_aux_ds = processed_output_dict["highres_aux_ds"]
-        self.aux_ds = processed_output_dict["aux_ds"]
-        self.station_df = processed_output_dict["station_df"]
-        self.station_df_mask = processed_output_dict["station_df_mask"]
-        self.landmask_ds = processed_output_dict["landmask_ds"]
-
-        self.data_processor = processed_output_dict["data_processor"]
-
-        self.start_year = processed_output_dict["date_info"]["start_year"]
-        self.end_year = processed_output_dict["date_info"]["end_year"]
-        self.val_start_year = processed_output_dict["date_info"]["val_start_year"]
-        self.val_end_year = processed_output_dict["date_info"]["val_end_year"]
-        self.years = np.arange(self.start_year, self.end_year + 1)
-
         self.model = None
         self.train_tasks = None
         self.val_tasks = None
@@ -110,6 +94,10 @@ class Train:
         self.convnp_kwargs = None
 
         self._check_inputs()
+
+    @property
+    def data_processor(self):
+        return self.processed_output_dict["data_processor"]
 
     @property
     def metadata_dict(self):
@@ -144,54 +132,61 @@ class Train:
         verbose=False,
         validation=False,
     ):
-        context = [self.station_df_mask, self.era5_ds, self.aux_ds]
-        if self.landmask_ds is not None:
-            context += [self.landmask_ds]
+        # extract datasets from the data preprocessing output dictionary
+        era5_ds = self.processed_output_dict["era5_ds"]
+        highres_aux_ds = self.processed_output_dict["highres_aux_ds"]
+        aux_ds = self.processed_output_dict["aux_ds"]
+        station_df = self.processed_output_dict["station_df"]
+        station_df_mask = self.processed_output_dict["station_df_mask"]
+        landmask_ds = self.processed_output_dict["landmask_ds"]
 
-        task_loader = TaskLoader(
-            context=context,
-            target=self.station_df,
-            aux_at_targets=self.highres_aux_ds,
+        context = [station_df_mask, era5_ds, aux_ds]
+        if landmask_ds is not None:
+            context += [landmask_ds]
+
+        self.task_loader = TaskLoader(
+            context=context, target=station_df, aux_at_targets=highres_aux_ds
         )
         if verbose:
-            print(task_loader)
+            print(self.task_loader)
 
-        train_start = f"{self.start_year}-01-01"
-        train_end = f"{self.end_year}-12-31"
-        val_start = f"{self.val_start_year}-01-01"
-        val_end = f"{self.val_end_year}-12-31"
-
+        # create training tasks
         if not validation:
+            start_year = self.processed_output_dict["date_info"]["start_year"]
+            end_year = self.processed_output_dict["date_info"]["end_year"]
+            train_start = f"{start_year}-01-01"
+            train_end = f"{end_year}-12-31"
+
             train_slice = slice(train_start, train_end)
-            train_dates = self.era5_ds.sel(time=train_slice).time.values
-        val_dates = self.era5_ds.sel(time=slice(val_start, val_end)).time.values
-
-        if not validation:
-            train_tasks = []
+            train_dates = era5_ds.sel(time=train_slice).time.values
+            self.train_tasks = []
             # only loaded every other date to speed up training for now
             for date in tqdm(train_dates[::2], desc="Loading train tasks..."):
-                task = task_loader(date, context_sampling="all", target_sampling="all")
-                train_tasks.append(task)
+                task = self.task_loader(
+                    date, context_sampling="all", target_sampling="all"
+                )
+                self.train_tasks.append(task)
 
-        val_tasks = []
+        # create validation tasks
+        val_start_year = self.processed_output_dict["date_info"]["val_start_year"]
+        val_end_year = self.processed_output_dict["date_info"]["val_end_year"]
+        val_start = f"{val_start_year}-01-01"
+        val_end = f"{val_end_year}-12-31"
+
+        val_dates = era5_ds.sel(time=slice(val_start, val_end)).time.values
+        self.val_tasks = []
         for date in tqdm(val_dates, desc="Loading val tasks..."):
-            task = task_loader(date, context_sampling="all", target_sampling="all")
-            val_tasks.append(task)
+            task = self.task_loader(date, context_sampling="all", target_sampling="all")
+            self.val_tasks.append(task)
 
         if verbose:
             print("Loading Dask arrays...")
-        task_loader.load_dask()
+        self.task_loader.load_dask()
         tic = time.time()
         if verbose:
             print(f"Done in {time.time() - tic:.2f}s")
 
-        self.task_loader = task_loader
-        if not validation:
-            self.train_tasks = train_tasks
-        self.val_tasks = val_tasks
-        self.context = context
-
-        return task_loader
+        return self.task_loader
 
     def initialise_model(self, **convnp_kwargs):
         """
