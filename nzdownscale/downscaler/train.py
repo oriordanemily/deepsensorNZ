@@ -255,7 +255,7 @@ class Train:
             if val_loss < val_loss_best:
                 val_loss_best = val_loss
                 model_state = self.model.model.state_dict()
-                torch.save(model_state, self.save_dir / f"{model_name}.pt")
+                torch.save(model_state, save_dir / f"{model_name}.pt")
 
         if plot_losses:
             make_loss_plot(
@@ -264,9 +264,7 @@ class Train:
                 save_dir / f"losses_{model_name}.png",
             )
 
-        utils.save_pickle(
-            self.metadata_dict, self.save_dir / f"metadata_{model_name}.pkl"
-        )
+        utils.save_pickle(self.metadata_dict, save_dir / f"metadata_{model_name}.pkl")
 
     # def train_epoch_and_print(self, model, train_tasks):
     #     # used for debugging
