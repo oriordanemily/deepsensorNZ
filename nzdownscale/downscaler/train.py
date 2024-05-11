@@ -16,42 +16,21 @@ from deepsensor.data.loader import TaskLoader
 from deepsensor.model.convnp import ConvNP
 from deepsensor.train.train import train_epoch, set_gpu_default_device
 from neuralprocesses.model.loglik import loglik
+from neuralprocesses.model import Model
 
 from nzdownscale.dataprocess import config, utils
 
 
-class MaskedModel:
-    def __init__(self, model):
-        self._model = model
-
-    def __call__(self, *args, **kwargs):
-        return self._model(*args, **kwargs)
-
-    @property
-    def parameters(self):
-        return self._model.parameters
-
-    def state_dict(self):
-        return self._model.state_dict()
-
-
-@deepsensor.torch.nps.num_params.dispatch
-def num_params(model: MaskedModel):
-    return num_params(model._model)
-
-
 @loglik.dispatch
-def loglik(model: MaskedModel, contexts: list, xt, yt, **kwargs):
+def loglik(model: Model, contexts: list, xt, yt, **kwargs):
     mask = contexts[0][1] > 0
     yt[mask] = B.nan
-    logpdfs = loglik(model._model, contexts, xt, yt, **kwargs)
+
+    state = B.global_random_state(B.dtype(xt))
+    state, logpdfs = loglik(state, model, contexts, xt, yt, **kwargs)
+    B.set_global_random_state(state)
+
     return logpdfs
-
-
-class MaskedConvNP(ConvNP):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.model = MaskedModel(self.model)
 
 
 def make_loss_plot(train_losses, val_losses, filename="model_loss.png"):
@@ -200,7 +179,7 @@ class Train:
             convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
 
         # Set up model
-        model = MaskedConvNP(self.data_processor, self.task_loader, **convnp_kwargs)
+        model = ConvNP(self.data_processor, self.task_loader, **convnp_kwargs)
 
         # Print number of parameters to check model is not too large for GPU memory
         _ = model(self.val_tasks[0])
