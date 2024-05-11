@@ -98,12 +98,13 @@ class Train:
         n_epochs,
         model_name="default",
         batch_size=None,
+        lr=5e-5,
         **convnp_kwargs,
     ):
         self.setup_task_loader()
         self.initialise_model(**convnp_kwargs)
         self.train_model(
-            n_epochs=n_epochs, model_name=model_name, batch_size=batch_size
+            n_epochs=n_epochs, model_name=model_name, batch_size=batch_size, lr=lr
         )
 
     def setup_task_loader(
@@ -223,7 +224,12 @@ class Train:
         plt.show()
 
     def train_model(
-        self, n_epochs=30, plot_losses=True, model_name="default", batch_size=None
+        self,
+        n_epochs=30,
+        plot_losses=True,
+        model_name="default",
+        batch_size=None,
+        lr=5e-5,
     ):
         if model_name == "default":
             model_id = str(round(time.time()))
@@ -238,7 +244,7 @@ class Train:
 
         for epoch in tqdm(range(n_epochs)):
             train_losses = train_epoch(
-                self.model, self.train_tasks, batch_size=batch_size
+                self.model, self.train_tasks, batch_size=batch_size, lr=lr
             )
             assert not np.isnan(train_losses).any(), "NaN train loss"
             train_loss = np.mean(train_losses)

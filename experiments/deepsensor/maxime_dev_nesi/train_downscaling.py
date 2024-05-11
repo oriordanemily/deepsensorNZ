@@ -93,6 +93,7 @@ def main(
     model_name: str = "default",
     batch_size: int | None = None,
     use_gpu: bool = False,
+    lr: float = 5e-5,
 ):
     """
     Note: the lowres topography is coarsened from the highres topography, so the
@@ -114,6 +115,7 @@ def main(
     :param model_name: name of the model to be saved, if default it will be the time
     :param batch_size: batch size, disable by default
     :param use_gpu: use a GPU for model training
+    :param lr: learning rate
     """
 
     convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
@@ -175,7 +177,7 @@ def main(
     # ------------------------------------------
     training = Train(processed_output_dict=processed_output_dict, use_gpu=use_gpu)
     training.run_training_sequence(
-        n_epochs, model_name, batch_size=batch_size, **convnp_kwargs
+        n_epochs, model_name, batch_size=batch_size, lr=lr, **convnp_kwargs
     )
 
 
