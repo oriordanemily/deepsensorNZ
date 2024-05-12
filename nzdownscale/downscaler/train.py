@@ -14,7 +14,7 @@ import deepsensor.torch  # noqa
 from tqdm import tqdm
 from deepsensor.data.loader import TaskLoader
 from deepsensor.model.convnp import ConvNP
-from deepsensor.train.train import train_epoch, set_gpu_default_device
+from deepsensor.train import Trainer, set_gpu_default_device
 from neuralprocesses.model.loglik import loglik
 from neuralprocesses.model import Model
 from neuralprocesses.mask import Masked
@@ -252,11 +252,10 @@ class Train:
         save_dir.mkdir(parents=True, exist_ok=True)
 
         val_loss_best = min(self.val_losses) if self.val_losses else np.inf
+        trainer = Trainer(self.model, lr=lr)
 
         for epoch in tqdm(range(n_epochs)):
-            train_losses = train_epoch(
-                self.model, self.train_tasks, batch_size=batch_size, lr=lr
-            )
+            train_losses = trainer(self.train_tasks, batch_size=batch_size)
             assert not np.isnan(train_losses).any(), "NaN train loss"
             train_loss = np.mean(train_losses)
             self.train_losses.append(train_loss)
