@@ -34,4 +34,4 @@ venv/bin/python train_downscaling.py \
     --n-epochs=50 \
     --internal-density=250 \
     --use-gpu \
-    --lr 1e-5
+    --lr 5e-5
