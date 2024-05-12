@@ -17,20 +17,32 @@ from deepsensor.model.convnp import ConvNP
 from deepsensor.train.train import train_epoch, set_gpu_default_device
 from neuralprocesses.model.loglik import loglik
 from neuralprocesses.model import Model
+from neuralprocesses.mask import Masked
 
 from nzdownscale.dataprocess import config, utils
 
 
 @loglik.dispatch
-def loglik(model: Model, contexts: list, xt, yt, **kwargs):
-    mask = contexts[0][1] > 0
-    yt[mask] = B.nan
-
+def loglik(model: Model, contexts: list, xt, yt: Masked, **kwargs):
+    yt = torch.where(yt.mask > 0, yt.y, B.nan)
     state = B.global_random_state(B.dtype(xt))
     state, logpdfs = loglik(state, model, contexts, xt, yt, **kwargs)
     B.set_global_random_state(state)
-
     return logpdfs
+
+
+class NaNTaskLoader(TaskLoader):
+    def sample_df(self, df, sampling_strat, seed):
+        assert sampling_strat == "all", "Only sampling strategy 'all' is supported."
+
+        X_c = df.reset_index()[["x1", "x2"]].values.T.astype(self.dtype)
+        Y_c = df.values.T
+
+        if Y_c.ndim == 1:
+            # returned a 1D array, but we need a 2D array of shape (variable, N)
+            Y_c = Y_c.reshape(1, *Y_c.shape)
+
+        return X_c, Y_c
 
 
 def make_loss_plot(train_losses, val_losses, filename="model_loss.png"):
@@ -117,14 +129,13 @@ class Train:
         highres_aux_ds = self.processed_output_dict["highres_aux_ds"]
         aux_ds = self.processed_output_dict["aux_ds"]
         station_df = self.processed_output_dict["station_df"]
-        station_df_mask = self.processed_output_dict["station_df_mask"]
         landmask_ds = self.processed_output_dict["landmask_ds"]
 
-        context = [station_df_mask, era5_ds, aux_ds]
+        context = [era5_ds, aux_ds]
         if landmask_ds is not None:
             context += [landmask_ds]
 
-        self.task_loader = TaskLoader(
+        self.task_loader = NaNTaskLoader(
             context=context, target=station_df, aux_at_targets=highres_aux_ds
         )
         if verbose:
