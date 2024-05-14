@@ -1,7 +1,7 @@
 #!/bin/bash -e
-#SBATCH --time=3:00:00
+#SBATCH --time=2:00:00
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=120GB
+#SBATCH --mem=20GB
 #SBATCH --gpus-per-node=A100:1
 #SBATCH --partition=hgx,gpu
 #SBATCH --output logs/%j-%x.out
@@ -31,8 +31,8 @@ venv/bin/python train_downscaling.py \
     --include-time-of-year \
     --include-landmask \
     --model-name=$SLURM_JOB_ID \
-    --n-epochs=50 \
+    --n-epochs=25 \
     --internal-density=250 \
     --use-gpu \
     --lr 5e-5 \
-    --batch-size 8
+    --batch-size 1
