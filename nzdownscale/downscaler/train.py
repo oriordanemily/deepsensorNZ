@@ -13,6 +13,7 @@ import torch
 import deepsensor.torch  # noqa
 from tqdm import tqdm
 from deepsensor.data.loader import TaskLoader
+from deepsensor.data.task import Task, concat_tasks
 from deepsensor.model.convnp import ConvNP
 from deepsensor.train import Trainer, set_gpu_default_device
 from neuralprocesses.model.loglik import loglik
@@ -43,6 +44,106 @@ class NaNTaskLoader(TaskLoader):
             Y_c = Y_c.reshape(1, *Y_c.shape)
 
         return X_c, Y_c
+
+
+def train_epoch(
+    model: ConvNP,
+    tasks: list[Task],
+    lr: float = 5e-5,
+    batch_size: int = None,
+    opt=None,
+    progress_bar=False,
+    tqdm_notebook=False,
+) -> list[float]:
+    """
+    Train model for one epoch.
+
+    Args:
+        model (:class:`~.model.convnp.ConvNP`):
+            Model to train.
+        tasks (list[:class:`~.data.task.Task`]):
+            List of tasks to train on.
+        lr (float, optional):
+            Learning rate, by default 5e-5.
+        batch_size (int, optional):
+            Batch size. Defaults to None. If None, no batching is performed.
+        opt (Optimizer, optional):
+            TF or Torch optimizer. Defaults to None. If None,
+            :class:`tensorflow:tensorflow.keras.optimizer.Adam` is used.
+        progress_bar (bool, optional):
+            Whether to display a progress bar. Defaults to False.
+        tqdm_notebook (bool, optional):
+            Whether to use a notebook progress bar. Defaults to False.
+
+    Returns:
+        list[float]: List of losses for each task/batch.
+    """
+    import torch.optim as optim
+
+    if opt is None:
+        opt = optim.Adam(model.model.parameters(), lr=lr)
+
+    def train_step(tasks):
+        if not isinstance(tasks, list):
+            tasks = [tasks]
+        opt.zero_grad()
+        task_losses = []
+        for task in tasks:
+            task_losses.append(model.loss_fn(task, normalise=True))
+        mean_batch_loss = B.mean(B.stack(*task_losses))
+        mean_batch_loss.backward()
+        opt.step()
+        return mean_batch_loss.detach().cpu().numpy()
+
+    tasks = np.random.permutation(tasks)
+
+    if batch_size is not None:
+        n_batches = len(tasks) // batch_size  # Note that this will drop the remainder
+    else:
+        n_batches = len(tasks)
+
+    if tqdm_notebook:
+        from tqdm.notebook import tqdm
+    else:
+        from tqdm import tqdm
+
+    batch_losses = []
+    for batch_i in tqdm(range(n_batches), disable=not progress_bar):
+        if batch_size is not None:
+            tasks_batch = tasks[batch_i * batch_size : (batch_i + 1) * batch_size]
+
+            # pretend that NaNs have been removed to allow concatenation
+            tasks_batch = [
+                task.op(lambda x: x, "target_nans_removed") for task in tasks_batch
+            ]
+            task = concat_tasks(tasks_batch)
+            task["Y_t_aux"] = B.concat(*[t["Y_t_aux"] for t in tasks_batch])
+
+        else:
+            task = tasks[batch_i]
+
+        batch_loss = train_step(task)
+        batch_losses.append(batch_loss)
+
+    return batch_losses
+
+
+class BatchTrainer(Trainer):
+    def __call__(
+        self,
+        tasks: list[Task],
+        batch_size: int = None,
+        progress_bar: bool = False,
+        tqdm_notebook: bool = False,
+    ) -> list[float]:
+        return train_epoch(
+            model=self.model,
+            tasks=tasks,
+            batch_size=batch_size,
+            opt=self.opt,
+            progress_bar=progress_bar,
+            tqdm_notebook=tqdm_notebook,
+        )
 
 
 def make_loss_plot(train_losses, val_losses, filename="model_loss.png"):
@@ -252,7 +353,7 @@ class Train:
         save_dir.mkdir(parents=True, exist_ok=True)
 
         val_loss_best = min(self.val_losses) if self.val_losses else np.inf
-        trainer = Trainer(self.model, lr=lr)
+        trainer = BatchTrainer(self.model, lr=lr)
 
         for epoch in tqdm(range(n_epochs)):
             train_losses = trainer(self.train_tasks, batch_size=batch_size)
