@@ -1,7 +1,7 @@
 #!/bin/bash -e
-#SBATCH --time=10:00:00
+#SBATCH --time=3:00:00
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=15GB
+#SBATCH --mem=60GB
 #SBATCH --gpus-per-node=A100:1
 #SBATCH --partition=hgx,gpu
 #SBATCH --output logs/%j-%x.out
@@ -34,4 +34,5 @@ venv/bin/python train_downscaling.py \
     --n-epochs=50 \
     --internal-density=250 \
     --use-gpu \
-    --lr 5e-5
+    --lr 5e-5 \
+    --batch-size 4
