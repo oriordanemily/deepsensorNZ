@@ -99,7 +99,7 @@ class PreprocessForDownscaling:
         include_time_of_year=False,
         include_landmask=False,
         data_processor_dict=None,
-        save_data_processor_dict=False,
+        save_data_processor_dict=None,
         remove_stations=[None],
         station_as_context=True
         ):
@@ -579,7 +579,7 @@ class PreprocessForDownscaling:
                     include_time_of_year=False,
                     test_norm=False,
                     # data_processor_dict=None,  # ?
-                    save=False,
+                    save=None,
                     station_as_context=False
                     ):
         """
@@ -633,8 +633,8 @@ class PreprocessForDownscaling:
         data_processor_dict['station_df'] = station_df
         data_processor_dict['landmask_ds'] = landmask_ds
         data_processor_dict['station_as_context'] = station_as_context
-        if save:
-            data_processor_dict_fpath = f'data_processor_dict_precip_era1_topohr5_topolr5_2000_2001.pkl'
+        if save != None:
+            data_processor_dict_fpath = save
             print(f'Saving data_processor_dict to {data_processor_dict_fpath}')
             with open(data_processor_dict_fpath, 'wb') as f:
                 pickle.dump(data_processor_dict, f)
