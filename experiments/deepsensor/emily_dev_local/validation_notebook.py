@@ -11,7 +11,7 @@ import time
 import importlib
 import glob
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 from scipy.interpolate import griddata
 import pandas as pd
@@ -32,15 +32,18 @@ from nzdownscale.downscaler.validate import ValidateV1
 from nzdownscale.dataprocess import utils
 from nzdownscale.dataprocess.config import LOCATION_LATLON, STATION_LATLON
 
+
+
 # %%
 era5_interp = None
 era5_interp_filled = None
 # %%  Load from saved model
+#### TEMP 
 # model_name = "test_model_1713164678"  # 100 - left out stations
 # model_name = "model_test_var_batching"
 # model_name = 'model_temp_incstations'
 # model_name = 'model_all_stations_context'
-model_name = 'model_1714684457'
+# model_name = 'model_1714684457'
 
 
 # --- from mahuika ----
@@ -55,22 +58,29 @@ model_name = 'model_1714684457'
 # model_name = 'test_model_1712792079' # 2000
 # model_name = '_model_1713135569'
 # model_name = '_model_1713136369'
+
+# PRECIP
+model_name = 'model_precip_100epochs'
+
 base = '/home/emily/deepsensor/deepweather-downscaling/'
-
-
 base2 = "/home/emily/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/"
 
-train_metadata_path = (
-    base + f"models/downscaling/{model_name}/metadata_{model_name}.pkl"
-)
-model_path = base + f"models/downscaling/{model_name}/{model_name}.pt"
+model_dir = base + f"models/downscaling/{model_name}/"
 
+train_metadata_path = (
+    model_dir + f"metadata_{model_name}.pkl"
+)
+model_path = model_dir + f"{model_name}.pt"
 
 with open(train_metadata_path, "rb") as f:
     meta = pickle.load(f)
 
+st_yr = meta["date_info"]["start_year"]
+end_yr = meta["date_info"]["end_year"]
+var = meta['data_settings']['var']
+
 print(
-    f'Model training date range: {meta["date_info"]["start_year"]} - {meta["date_info"]["end_year"]}'
+    f'Model training date range: {st_yr} - {end_yr}'
 )
 print(
     f'Model validation date range: {meta["date_info"]["val_start_year"]} - {meta["date_info"]["val_end_year"]}'
@@ -87,22 +97,25 @@ print(
     f"Validating model on date range: {validation_date_range[0]} - {validation_date_range[1]}"
 )
 
-save_validate = False
-load_validate = False
+# save_validate = False
+# load_validate = True
 # load_validate = not save_validate
-
-if load_validate:
+# dp_path = model_dir + f"data_processor_dict_{var}_{st_yr}_{end_yr}.pkl"
+dp_path = 'data_processor_dict_precip.pkl'
+if os.path.exists(dp_path):
     with open(
-        base2 + "data_processor_dict_era1_topohr5_topolr5_2000_2011.pkl", "rb"
+        dp_path, "rb"
     ) as handle:
         data_processor_dict = pickle.load(handle)
         print("Creating validate object using loaded processor dict")
+    save_dp = None # don't save as it's already saved
 else:
     data_processor_dict = None
     print(
         "Creating validate object without loaded processor dict,\
            may be slow"
     )
+    save_dp = dp_path # save the processor dict to this fpath
 
 remove_stations_list = [
     "TAUPO AWS",
@@ -126,7 +139,7 @@ validate = ValidateV1(
 validate.station_as_context = True
 validate.load_model(
     load_model_path=model_path,
-    save_data_processing_dict=save_validate,
+    save_data_processing_dict=save_dp,
 )
 
 metadata = validate.get_metadata()
@@ -179,10 +192,14 @@ dataprocess = utils.DataProcess()
 resolution = dataprocess.resolution(pred["mean"].isel(time=0), "latitude")
 print("Prediction resolution:", resolution)
 # %%
+# if 2016 - 2018 then just use a pre-done one,
+model_with_era5_done = 'model_1714684457'
+# otherwise use model_name instead of model_with_era5_done
+
 if era5_interp is None:
     era5_interp_path = (
         base
-        + f"models/downscaling/{model_name}/era5_interp_{date}_{number_of_months}months.pkl"
+        + f"models/downscaling/{model_with_era5_done}/era5_interp_{date}_{number_of_months}months.pkl"
     )
     if os.path.exists(era5_interp_path):
         print("Loading interpolated ERA5 from file")
@@ -209,7 +226,7 @@ if era5_interp is None:
 if era5_interp_filled is None:
     era5_interp_filled_path = (
         base
-        + f"models/downscaling/{model_name}/era5_interp_filled_{date}_{number_of_months}months.pkl"
+        + f"models/downscaling/{model_with_era5_done}/era5_interp_filled_{date}_{number_of_months}months.pkl"
     )
     if os.path.exists(era5_interp_filled_path):
         print("Loading filled ERA5 from file")
@@ -496,6 +513,10 @@ validate.plot_ERA5_and_prediction(
 # plot errors at stations
 validate.plot_errors_at_stations("2016-01-01")
 validate.plot_errors_at_stations("2016-07-01")
+
+#%% 
+validate.plot_stations_and_prediction("2017-5-2", pred=pred, )
+
 # %%
 # sample_locations = ['TAUPO AWS', 'CHRISTCHURCH AERO', 'KAITAIA AERO', 'MT COOK EWS']
 # sample_locations = ['TAUPO AWS', 'MT COOK EWS', 'ALEXANDRA AWS', 'TOLAGA BAY WXT AWS', 'WELLINGTON AERO']

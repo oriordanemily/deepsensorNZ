@@ -16,6 +16,7 @@ import cartopy.feature as cf
 import seaborn as sns
 from scipy.ndimage import gaussian_filter
 import torch
+import cartopy.feature as cfeature
 import pickle
 
 import deepsensor.torch
@@ -76,7 +77,7 @@ class ValidateV1:
             raise ValueError('Either processed_output_dict or training_metadata_path must be provided')
         
 
-    def load_model(self, load_model_path=None, save_data_processing_dict=False):
+    def load_model(self, load_model_path=None, save_data_processing_dict=None):
 
         self.model_metadata = self.get_metadata()
         
@@ -102,7 +103,7 @@ class ValidateV1:
 
         return metadata
 
-    def _load_processed_dict_data(self, save_data_processing_dict=False):
+    def _load_processed_dict_data(self, save_data_processing_dict=None):
         
         if self.processed_output_dict is not None:
             processed_dict = self.processed_output_dict
@@ -111,7 +112,7 @@ class ValidateV1:
 
         self.processed_dict = processed_dict 
 
-    def _get_processed_output_dict_from_metadata(self, save_data_processing_dict=False):
+    def _get_processed_output_dict_from_metadata(self, save_data_processing_dict=None):
 
         if not hasattr(self, 'model_metadata'):
             self.model_metadata = self.get_metadata()
@@ -535,7 +536,6 @@ class ValidateV1:
     def plot_errors_at_stations(self, date: str = None, pred = None, remove_sea=True, var_clim=None, diff_clim=None):
         #setup
         import cartopy.crs as ccrs
-        import cartopy.feature as cfeature
         from matplotlib.colors import TwoSlopeNorm
         task_loader = self.task_loader
         model = self.model
@@ -621,6 +621,77 @@ class ValidateV1:
         print('Std difference:', filtered_station_df['differences'].std())
         return fig, axes
 
+
+    def plot_stations_and_prediction(self, date: str = None, pred = None,remove_sea=True):
+        # task_loader = self.task_loader
+        # model = self.model
+        station_raw_df = self.processed_dict['station_raw_df']
+
+        date = self._format_date(date)
+
+        pred_db = pred.sel(time=date)
+
+        filtered_station_df = station_raw_df.loc[date]
+        filtered_station_df = filtered_station_df.reset_index()
+        station_var = self.get_variable_name('station')
+        station_values = filtered_station_df[station_var]
+        station_vmax = station_values.max()
+        station_vmin = station_values.min()
+
+        fig, axes = plt.subplots(1, 3, subplot_kw=dict(projection=self.crs), figsize=(20, 20/3))
+        
+        for ax in axes:
+            # Add features to the map
+            ax.add_feature(cfeature.LAND)
+            ax.add_feature(cfeature.COASTLINE)
+            ax.add_feature(cfeature.BORDERS, linestyle=':')
+
+        if station_var == 'precipitation':
+            cmap = 'viridis'
+        else:
+            cmap='coolwarm'
+
+        ### PLOT STATIONS
+        axes[0].scatter(filtered_station_df['longitude'], filtered_station_df['latitude'], c=filtered_station_df[station_var],
+                        cmap=cmap, marker='o', edgecolor='k', vmin=station_vmin, vmax=station_vmax, linewidth=0.5, s=100, transform=ccrs.PlateCarree())
+        cbar = plt.colorbar(axes[0].collections[0], ax=axes[0], shrink=1, label=station_var)
+        axes[0].set_title('Stations', fontsize=14)
+
+        ## PLOT PREDICTIONS
+        mean_ds = pred_db['mean']
+        if remove_sea:
+            topo = self.processed_dict['highres_aux_ds']['elevation']
+            topo_unnorm = self.data_processor.unnormalise(topo)
+            interpolated_topo = topo_unnorm.interp_like(mean_ds)
+            land_sea_mask = ~(interpolated_topo == 0)
+            mean_ds = mean_ds.where(land_sea_mask)
+
+        mean_ds.plot(ax=axes[1], cmap=cmap, vmin=station_vmin, vmax=station_vmax,
+                        add_colorbar=True)
+                    # cbar_kwargs=cbar_kwargs)
+        axes[1].set_title("ConvNP mean", fontsize=14)
+
+        ## PLOT STD
+        # std_ds = pred_db['std']
+        # if remove_sea:
+        #     std_ds = std_ds.where(land_sea_mask)
+        # std_ds.plot(ax=axes[2], cmap='Greys', vmin=0, vmax=5,
+        #                 add_colorbar=True)
+        #             # cbar_kwargs=cbar_kwargs)
+        # axes[2].set_title("ConvNP std", fontsize=14)
+
+        ## PLOT ERA
+        # era5_var = self.get_variable_name('era5')
+        era5 = self.processed_dict['era5_raw_ds']
+        era5_values = era5.sel(time=date)
+        # if remove_sea:
+        #     era5_values = era5_values.where(land_sea_mask)
+        era5_values.plot(ax=axes[2], cmap=cmap, vmin=station_vmin, vmax=station_vmax,
+                        add_colorbar=True)
+                    # cbar_kwargs=cbar_kwargs)
+        axes[2].set_title("ERA5", fontsize=14)
+
+        return fig, axes
 
 
 
