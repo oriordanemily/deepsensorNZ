@@ -35,21 +35,22 @@ def main():
         "--end_year",
         type=int, 
         # default=2005, 
-        default=2001,
+        # default=2001,
+        default=2011,
         help="Training end year is inclusive"
     ),
     parser.add_argument(
         "--val_start_year", 
         type=int, 
         # default=2006,
-        default=2002, 
+        default=2012, 
         help="Validation start year"
     ),
     parser.add_argument(
         "--val_end_year",
         type=int,
         # default=2007,
-        default=2002,
+        default=2015,
         help="Validation end year is inclusive",
     ),
     parser.add_argument(
@@ -217,13 +218,14 @@ def main():
         use_daily_data=use_daily_data,
         area=area,
     )
-    if False:
-        data_processor_dict_fpath = 'data_processor_dict_era1_topohr5_topolr5_2000_2001.pkl'
+    data_processor_dict_fpath = f'data_processor_dict_precip.pkl'
+    if os.path.exists(data_processor_dict_fpath):
+        # data_processor_dict_fpath = 'data_processor_dict_era1_topohr5_topolr5_2000_2001.pkl'
         data_processor_dict = data.load_data_processor_dict(data_processor_dict_fpath)
         save_data_processor_dict=False
     else:
         data_processor_dict = None
-        save_data_processor_dict = True
+        save_data_processor_dict=data_processor_dict_fpath
         
     data.run_processing_sequence(
         topography_highres_coarsen_factor,
