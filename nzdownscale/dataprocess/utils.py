@@ -155,6 +155,7 @@ class PlotData:
         fig = plt.figure(figsize=(10, 12))
         proj = ccrs.PlateCarree()
         ax = fig.add_subplot(1, 1, 1, projection=proj)
+        ax.tick_params(axis='both', labelsize=15)
         ax.coastlines()
         ax.set_extent([lon_lim[0], lon_lim[1], lat_lim[0], lat_lim[1]], proj)
         ax.gridlines(draw_labels=True, crs=proj)
