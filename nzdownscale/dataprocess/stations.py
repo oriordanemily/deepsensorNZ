@@ -145,8 +145,13 @@ class ProcessStations(DataProcess):
                       markersize=40,
                       color='red',
                       ):
+        i = 0
         for lon, lat in zip(df['lon'].values, df['lat'].values):
-            ax.scatter(lon, lat, color=color, marker='o', s=markersize)
+            if i == 0:
+                ax.scatter(lon, lat, color=color, marker='o', s=markersize, label='Stations')
+                i += 1
+            else:
+                ax.scatter(lon, lat, color=color, marker='o', s=markersize)
         return ax
 
 
