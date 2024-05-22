@@ -1,0 +1,114 @@
+# Variable to be downscaled (temperature or precipitation)
+variable:
+  arg: temperature 
+  # arg: precipitation
+  type: str
+
+# Training start year
+start_year:
+  arg: 2000  
+  type: int
+
+# Training end year (inclusive)
+end_year:
+  arg: 2011  
+  type: int
+
+# Validation start year
+val_start_year:
+  arg: 2012  
+  type: int
+
+# Validation end year (inclusive)
+val_end_year:
+  arg: 2015  
+  type: int
+
+# Model name, if default it will be the time
+model_name:
+  arg: default  
+  type: str
+
+# Use daily data
+use_daily_data:
+  arg: True  
+  type: bool
+
+# Coarsen factor for high resolution topography
+topography_highres_coarsen_factor:
+  arg: 5  
+  type: int
+
+# Coarsen factor for low resolution topography
+topography_lowres_coarsen_factor:
+  arg: 9  
+  type: int
+
+# Coarsen factor for ERA5 data
+era5_coarsen_factor:
+  arg: 1  
+  type: int
+
+# Include time of year
+include_time_of_year:
+  arg: True  
+  type: bool
+
+# Include landmask
+include_landmask:
+  arg: True  
+  type: bool
+
+# Number of epochs
+n_epochs:
+  arg: 30  
+  type: int
+
+# Channels for UNet
+unet_channels:
+  arg: None  
+  type: int_or_none
+
+# Likelihood
+likelihood:
+  arg: None  
+  type: str_or_none
+
+# Batch training
+batch:
+  arg: False  
+  type: bool
+
+# Batch size for training, only used if batch=True
+batch_size:
+  arg: 4  
+  type: int
+
+# Internal density
+internal_density:
+  arg: 250  
+  type: int
+
+# Auto set internal density
+auto_set_internal_density:
+  arg: False  
+  type: bool
+
+# Area 
+# Select area of map, options specified in: PLOT_EXTENT in nzdownscale.dataprocess.config.py. 
+# PLOT_EXTENT['all'] (all of NZ) is used as default
+area:
+  arg: None  
+  type: str_or_none
+
+# Remove stations
+# List of station names to remove from the dataset
+# ! CURRENTLY NOT IMPLEMENTED ! 
+remove_stations:
+  arg: [None]  
+  type: list
+
+# Learning rate
+lr:
+  arg: 5e-5  
+  type: float

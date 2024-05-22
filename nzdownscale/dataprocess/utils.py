@@ -198,6 +198,41 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
+def int_or_none(value):
+    if value is None or value == 'None':
+        return None
+    else:
+        return int(value)
+
+def str_or_none(value):
+    if value is None or value == 'None':
+        return None
+    else:
+        return str(value)
+
+def validate_and_convert_args(args):
+
+    type_functions = {
+    'str': str,
+    'int': int,
+    'float': float,
+    'bool': bool,
+    'list': list,
+    'int_or_none': int_or_none,
+    'str_or_none': str_or_none,
+    }
+
+    validated_args = {}
+    for key, value in args.items():
+        arg_value = value['arg']
+        arg_type = value['type']
+        if arg_type in type_functions:
+            try:
+                validated_args[key] = type_functions[arg_type](arg_value)
+            except ValueError as e:
+                raise ValueError(f"Invalid value for {key}: {arg_value}. Error: {e}")
+    return validated_args
+
 def debug_plot_da(da: xr.DataArray, save_path: str):
     fig, ax = plt.subplots(1, 1, figsize=(10, 12))
     da.plot(ax=ax)
