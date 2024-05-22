@@ -66,7 +66,7 @@ def main():
     parser.add_argument(
         "--topography_lowres_coarsen_factor",
         type=int,
-        default=5,
+        default=9,
         help="Note that the lowres topo is coarsened from the highres topo, so the lowres topo resolution is actually topography_highres_coarsen_factor * topography_lowres_coarsen_factor.",
     ),
     parser.add_argument(
@@ -218,7 +218,7 @@ def main():
         use_daily_data=use_daily_data,
         area=area,
     )
-    data_processor_dict_fpath = f'data_processor_dict_precip.pkl'
+    data_processor_dict_fpath = f'data_processor_dict_temp.pkl'
     if os.path.exists(data_processor_dict_fpath):
         # data_processor_dict_fpath = 'data_processor_dict_era1_topohr5_topolr5_2000_2001.pkl'
         data_processor_dict = data.load_data_processor_dict(data_processor_dict_fpath)
