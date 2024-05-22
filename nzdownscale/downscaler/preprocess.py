@@ -198,8 +198,10 @@ class PreprocessForDownscaling:
         # Get lowres topography 
         aux_raw_ds = self._get_lowres_topography(ds_elev_highres, lowres_coarsen_factor)
 
+        highres_aux_raw_ds['elevation_diff'] = self._compute_topo_difference(highres_aux_raw_ds, aux_raw_ds)
+
         self.highres_aux_raw_ds = highres_aux_raw_ds
-        self.aux_raw_ds = aux_raw_ds
+        self.aux_raw_ds = aux_raw_ds # does this need to include coarsened TPI?
         return self.highres_aux_raw_ds, self.aux_raw_ds
 
 
@@ -334,6 +336,17 @@ class PreprocessForDownscaling:
                 plt.show()
 
         return highres_aux_raw_ds
+    
+    def _compute_topo_difference(self, ds_elev_highres, ds_elev_lowres): 
+        # Compute the difference between highres and lowres topography
+        # This can be used as an additional auxiliary input to the model
+        # Use NN interpolation to not adjust LR data too much (i.e. no smoothing/averaging)
+        lr_interp = ds_elev_lowres['elevation'].interp_like(ds_elev_highres['elevation'], method='nearest')
+        topo_diff = ds_elev_highres['elevation'] - lr_interp
+
+        # some of the boundary is na - replace with 0
+        topo_diff = topo_diff.fillna(0)
+        return topo_diff
     
 
     def _convert_era5_to_daily(self, da_era):
