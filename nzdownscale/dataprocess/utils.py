@@ -197,3 +197,8 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+
+def debug_plot_da(da: xr.DataArray, save_path: str):
+    fig, ax = plt.subplots(1, 1, figsize=(10, 12))
+    da.plot(ax=ax)
+    fig.savefig(save_path)
