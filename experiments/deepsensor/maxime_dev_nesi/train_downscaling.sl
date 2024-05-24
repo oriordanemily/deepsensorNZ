@@ -1,7 +1,7 @@
 #!/bin/bash -e
-#SBATCH --time=3:00:00
+#SBATCH --time=0:30:00
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=20GB
+#SBATCH --mem=30GB
 #SBATCH --gpus-per-node=A100:1
 #SBATCH --partition=hgx,gpu
 #SBATCH --output logs/%j-%x.out
@@ -9,6 +9,7 @@
 
 module purge
 module load Python/3.11.6-foss-2023a
+. venv/bin/activate
 
 scontrol show job $SLURM_JOB_ID
 scontrol write batch_script $SLURM_JOB_ID -
@@ -19,7 +20,8 @@ nvidia-smi --query-gpu=timestamp,utilization.gpu,utilization.memory,memory.used,
 
 export JOBLIB_CACHEDIR=cache
 
-venv/bin/python train_downscaling.py \
+pyinstrument -o logs/profile-${SLURM_JOB_ID}.html -r html \
+    train_downscaling.py \
     --var='temperature' \
     --start-year=2000 \
     --end-year=2011 \
@@ -31,8 +33,7 @@ venv/bin/python train_downscaling.py \
     --include-time-of-year \
     --include-landmask \
     --model-name=$SLURM_JOB_ID \
-    --n-epochs=25 \
+    --n-epochs=1 \
     --internal-density=250 \
     --use-gpu \
-    --batch-size 4 \
-    --lr 1e-4
+    --lr 5e-5
