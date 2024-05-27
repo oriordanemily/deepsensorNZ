@@ -3,7 +3,7 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=30GB
 #SBATCH --gpus-per-node=A100:1
-#SBATCH --partition=hgx,gpu
+#SBATCH --partition=hgx
 #SBATCH --output logs/%j-%x.out
 #SBATCH --error logs/%j-%x.out
 
