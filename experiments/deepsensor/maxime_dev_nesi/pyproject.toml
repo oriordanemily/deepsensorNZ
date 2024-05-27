@@ -31,7 +31,8 @@ dev = [
     "ruff",
     "pdbpp",
     "memray",
-    "pyinstrument"
+    "pyinstrument",
+    "scalene"
 ]
 
 [tool.ruff]
