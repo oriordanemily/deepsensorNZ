@@ -8,7 +8,7 @@
 #SBATCH --error logs/%j-%x.out
 
 module purge
-module load Python/3.11.6-foss-2023a
+module load Python/3.11.6-foss-2023a forge/22.1.2
 . venv/bin/activate
 
 scontrol show job $SLURM_JOB_ID
@@ -20,8 +20,11 @@ nvidia-smi --query-gpu=timestamp,utilization.gpu,utilization.memory,memory.used,
 
 export JOBLIB_CACHEDIR=cache
 
-pyinstrument -o logs/profile-${SLURM_JOB_ID}.html -r html \
-    train_downscaling.py \
+# fix from https://github.com/SYSTRAN/faster-whisper/issues/516#issuecomment-1972615012
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(python3 -c 'import os; import nvidia.cublas.lib; import nvidia.cudnn.lib; print(os.path.dirname(nvidia.cublas.lib.__file__) + ":" + os.path.dirname(nvidia.cudnn.lib.__file__))'):"$PWD/venv/lib/python3.11/site-packages/torch/lib"
+
+map -o logs/profile-${SLURM_JOB_ID}.map --profile \
+    python train_downscaling.py \
     --var='temperature' \
     --start-year=2000 \
     --end-year=2011 \
