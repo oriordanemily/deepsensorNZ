@@ -20,7 +20,7 @@ nvidia-smi --query-gpu=timestamp,utilization.gpu,utilization.memory,memory.used,
 
 export JOBLIB_CACHEDIR=cache
 
-pyinstrument -o logs/profile-${SLURM_JOB_ID}.html -r html \
+scalene --no-browser --html --outfile logs/profile-${SLURM_JOB_ID}.html \
     train_downscaling.py \
     --var='temperature' \
     --start-year=2000 \
