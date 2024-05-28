@@ -16,20 +16,20 @@ from deepsensor.data.loader import TaskLoader
 from deepsensor.data.task import Task
 from deepsensor.model.convnp import ConvNP
 from deepsensor.train import Trainer, set_gpu_default_device
-# from neuralprocesses.model.loglik import loglik
-# from neuralprocesses.model import Model
-# from neuralprocesses.mask import Masked
+from neuralprocesses.model.loglik import loglik
+from neuralprocesses.model import Model
 
 from nzdownscale.dataprocess import config, utils
 
 
-# @loglik.dispatch
-# def loglik(model: Model, contexts: list, xt, yt: Masked, **kwargs):
-#     yt = torch.where(yt.mask > 0, yt.y, B.nan)
-#     state = B.global_random_state(B.dtype(xt))
-#     state, logpdfs = loglik(state, model, contexts, xt, yt, **kwargs)
-#     B.set_global_random_state(state)
-#     return logpdfs
+@loglik.dispatch
+def loglik(model: Model, *args, **kw_args):
+    kw_args = kw_args.copy()
+    kw_args["dtype_lik"] = torch.float32
+    state = B.global_random_state(B.dtype(args[-2]))
+    state, logpdfs = loglik(state, model, *args, **kw_args)
+    B.set_global_random_state(state)
+    return logpdfs
 
 
 def train_epoch(
