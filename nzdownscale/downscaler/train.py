@@ -66,18 +66,6 @@ def train_epoch(
     if opt is None:
         opt = optim.Adam(model.model.parameters(), lr=lr)
 
-    def train_step(tasks):
-        if not isinstance(tasks, list):
-            tasks = [tasks]
-        opt.zero_grad()
-        task_losses = []
-        for task in tasks:
-            task_losses.append(model.loss_fn(task, normalise=True))
-        mean_batch_loss = B.mean(B.stack(*task_losses))
-        mean_batch_loss.backward()
-        opt.step()
-        return mean_batch_loss.detach().cpu().numpy()
-
     tasks = np.random.permutation(tasks)
 
     if tqdm_notebook:
@@ -87,14 +75,16 @@ def train_epoch(
 
     batch_losses = []
     for batch_i in tqdm(range(len(tasks)), disable=not progress_bar):
-        task = tasks[batch_i]
-        batch_loss = train_step(task)
-        batch_losses.append(batch_loss)
+        opt.zero_grad()
+        task_loss = model.loss_fn(tasks[batch_i], normalise=True)
+        task_loss.backward()
+        opt.step()
+        batch_losses.append(task_loss.detach().cpu().numpy())
 
     return batch_losses
 
 
-class BatchTrainer(Trainer):
+class SimpleTrainer(Trainer):
     def __call__(
         self,
         tasks: list[Task],
@@ -218,6 +208,7 @@ class Train:
                 task = self.task_loader(
                     date, context_sampling="all", target_sampling="all"
                 )
+                task = ConvNP.modify_task(task)
                 self.train_tasks.append(task)
 
         # create validation tasks
@@ -230,6 +221,7 @@ class Train:
         self.val_tasks = []
         for date in tqdm(val_dates, desc="Loading val tasks..."):
             task = self.task_loader(date, context_sampling="all", target_sampling="all")
+            task = ConvNP.modify_task(task)
             self.val_tasks.append(task)
 
         if verbose:
@@ -307,7 +299,7 @@ class Train:
         save_dir.mkdir(parents=True, exist_ok=True)
 
         val_loss_best = min(self.val_losses) if self.val_losses else np.inf
-        trainer = BatchTrainer(self.model, lr=lr)
+        trainer = SimpleTrainer(self.model, lr=lr)
 
         for epoch in tqdm(range(n_epochs)):
             train_losses = trainer(self.train_tasks)
