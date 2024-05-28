@@ -208,6 +208,12 @@ class Train:
                 task = self.task_loader(
                     date, context_sampling="all", target_sampling="all"
                 )
+                task = (
+                    task.add_batch_dim()
+                    .cast_to_float32()
+                    .mask_nans_numpy()
+                    .mask_nans_nps()
+                )
                 self.train_tasks.append(task)
 
         # create validation tasks
@@ -220,6 +226,9 @@ class Train:
         self.val_tasks = []
         for date in tqdm(val_dates, desc="Loading val tasks..."):
             task = self.task_loader(date, context_sampling="all", target_sampling="all")
+            task = (
+                task.add_batch_dim().cast_to_float32().mask_nans_numpy().mask_nans_nps()
+            )
             self.val_tasks.append(task)
 
         if verbose:
