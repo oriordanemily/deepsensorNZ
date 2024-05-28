@@ -92,7 +92,6 @@ def main(
     area: str | None = None,
     remove_stations: Iterable[str] = DEFAULT_REMOVED_STATIONS,
     model_name: str = "default",
-    batch_size: int | None = None,
     use_gpu: bool = False,
     lr: float = 5e-5,
 ):
@@ -114,7 +113,6 @@ def main(
                  PLOT_EXTENT['all'] (all of NZ) is used as default
     :param remove_stations: list of station names to remove from the dataset
     :param model_name: name of the model to be saved, if default it will be the time
-    :param batch_size: batch size, disable by default
     :param use_gpu: use a GPU for model training
     :param lr: learning rate
     """
@@ -173,9 +171,7 @@ def main(
     # Train model
     # ------------------------------------------
     training = Train(processed_output_dict=processed_output_dict, use_gpu=use_gpu)
-    training.run_training_sequence(
-        n_epochs, model_name, batch_size=batch_size, lr=lr, **convnp_kwargs
-    )
+    training.run_training_sequence(n_epochs, model_name, lr=lr, **convnp_kwargs)
 
 
 if __name__ == "__main__":

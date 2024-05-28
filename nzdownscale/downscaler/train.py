@@ -13,44 +13,29 @@ import torch
 import deepsensor.torch  # noqa
 from tqdm import tqdm
 from deepsensor.data.loader import TaskLoader
-from deepsensor.data.task import Task, concat_tasks
+from deepsensor.data.task import Task
 from deepsensor.model.convnp import ConvNP
 from deepsensor.train import Trainer, set_gpu_default_device
-from neuralprocesses.model.loglik import loglik
-from neuralprocesses.model import Model
-from neuralprocesses.mask import Masked
+# from neuralprocesses.model.loglik import loglik
+# from neuralprocesses.model import Model
+# from neuralprocesses.mask import Masked
 
 from nzdownscale.dataprocess import config, utils
 
 
-@loglik.dispatch
-def loglik(model: Model, contexts: list, xt, yt: Masked, **kwargs):
-    yt = torch.where(yt.mask > 0, yt.y, B.nan)
-    state = B.global_random_state(B.dtype(xt))
-    state, logpdfs = loglik(state, model, contexts, xt, yt, **kwargs)
-    B.set_global_random_state(state)
-    return logpdfs
-
-
-class NaNTaskLoader(TaskLoader):
-    def sample_df(self, df, sampling_strat, seed):
-        assert sampling_strat == "all", "Only sampling strategy 'all' is supported."
-
-        X_c = df.reset_index()[["x1", "x2"]].values.T.astype(self.dtype)
-        Y_c = df.values.T
-
-        if Y_c.ndim == 1:
-            # returned a 1D array, but we need a 2D array of shape (variable, N)
-            Y_c = Y_c.reshape(1, *Y_c.shape)
-
-        return X_c, Y_c
+# @loglik.dispatch
+# def loglik(model: Model, contexts: list, xt, yt: Masked, **kwargs):
+#     yt = torch.where(yt.mask > 0, yt.y, B.nan)
+#     state = B.global_random_state(B.dtype(xt))
+#     state, logpdfs = loglik(state, model, contexts, xt, yt, **kwargs)
+#     B.set_global_random_state(state)
+#     return logpdfs
 
 
 def train_epoch(
     model: ConvNP,
     tasks: list[Task],
     lr: float = 5e-5,
-    batch_size: int = None,
     opt=None,
     progress_bar=False,
     tqdm_notebook=False,
@@ -65,8 +50,6 @@ def train_epoch(
             List of tasks to train on.
         lr (float, optional):
             Learning rate, by default 5e-5.
-        batch_size (int, optional):
-            Batch size. Defaults to None. If None, no batching is performed.
         opt (Optimizer, optional):
             TF or Torch optimizer. Defaults to None. If None,
             :class:`tensorflow:tensorflow.keras.optimizer.Adam` is used.
@@ -97,31 +80,14 @@ def train_epoch(
 
     tasks = np.random.permutation(tasks)
 
-    if batch_size is not None:
-        n_batches = len(tasks) // batch_size  # Note that this will drop the remainder
-    else:
-        n_batches = len(tasks)
-
     if tqdm_notebook:
         from tqdm.notebook import tqdm
     else:
         from tqdm import tqdm
 
     batch_losses = []
-    for batch_i in tqdm(range(n_batches), disable=not progress_bar):
-        if batch_size is not None:
-            tasks_batch = tasks[batch_i * batch_size : (batch_i + 1) * batch_size]
-
-            # pretend that NaNs have been removed to allow concatenation
-            tasks_batch = [
-                task.op(lambda x: x, "target_nans_removed") for task in tasks_batch
-            ]
-            task = concat_tasks(tasks_batch)
-            task["Y_t_aux"] = B.concat(*[t["Y_t_aux"] for t in tasks_batch])
-
-        else:
-            task = tasks[batch_i]
-
+    for batch_i in tqdm(range(len(tasks)), disable=not progress_bar):
+        task = tasks[batch_i]
         batch_loss = train_step(task)
         batch_losses.append(batch_loss)
 
@@ -132,14 +98,12 @@ class BatchTrainer(Trainer):
     def __call__(
         self,
         tasks: list[Task],
-        batch_size: int = None,
         progress_bar: bool = False,
         tqdm_notebook: bool = False,
     ) -> list[float]:
         return train_epoch(
             model=self.model,
             tasks=tasks,
-            batch_size=batch_size,
             opt=self.opt,
             progress_bar=progress_bar,
             tqdm_notebook=tqdm_notebook,
@@ -210,15 +174,12 @@ class Train:
         self,
         n_epochs,
         model_name="default",
-        batch_size=None,
         lr=5e-5,
         **convnp_kwargs,
     ):
         self.setup_task_loader()
         self.initialise_model(**convnp_kwargs)
-        self.train_model(
-            n_epochs=n_epochs, model_name=model_name, batch_size=batch_size, lr=lr
-        )
+        self.train_model(n_epochs=n_epochs, model_name=model_name, lr=lr)
 
     def setup_task_loader(
         self,
@@ -236,7 +197,7 @@ class Train:
         if landmask_ds is not None:
             context += [landmask_ds]
 
-        self.task_loader = NaNTaskLoader(
+        self.task_loader = TaskLoader(
             context=context, target=station_df, aux_at_targets=highres_aux_ds
         )
         if verbose:
@@ -335,14 +296,7 @@ class Train:
         )
         plt.show()
 
-    def train_model(
-        self,
-        n_epochs=30,
-        plot_losses=True,
-        model_name="default",
-        batch_size=None,
-        lr=5e-5,
-    ):
+    def train_model(self, n_epochs=30, plot_losses=True, model_name="default", lr=5e-5):
         if model_name == "default":
             model_id = str(round(time.time()))
             model_name = f"model_{model_id}"
@@ -356,7 +310,7 @@ class Train:
         trainer = BatchTrainer(self.model, lr=lr)
 
         for epoch in tqdm(range(n_epochs)):
-            train_losses = trainer(self.train_tasks, batch_size=batch_size)
+            train_losses = trainer(self.train_tasks)
             assert not np.isnan(train_losses).any(), "NaN train loss"
             train_loss = np.mean(train_losses)
             self.train_losses.append(train_loss)
