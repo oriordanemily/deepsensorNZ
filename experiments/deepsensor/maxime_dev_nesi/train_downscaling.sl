@@ -8,7 +8,7 @@
 #SBATCH --error logs/%j-%x.out
 
 module purge
-module load Python/3.10.5-gimkl-2022a forge/22.1.2
+module load forge/22.1.2 Python/3.10.5-gimkl-2022a
 . venv_3.10/bin/activate
 
 scontrol show job $SLURM_JOB_ID
@@ -19,9 +19,6 @@ nvidia-smi --query-gpu=timestamp,utilization.gpu,utilization.memory,memory.used,
     --format=csv,nounits -l 5 > "logs/gpustats-${SLURM_JOB_ID}.csv" &
 
 export JOBLIB_CACHEDIR=cache
-
-# fix from https://github.com/SYSTRAN/faster-whisper/issues/516#issuecomment-1972615012
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(python3 -c 'import os; import nvidia.cublas.lib; import nvidia.cudnn.lib; print(os.path.dirname(nvidia.cublas.lib.__file__) + ":" + os.path.dirname(nvidia.cudnn.lib.__file__))'):"$PWD/venv_3.10/lib/python3.10/site-packages/torch/lib"
 
 map -o logs/profile-${SLURM_JOB_ID}.map --profile \
     python train_downscaling.py \
