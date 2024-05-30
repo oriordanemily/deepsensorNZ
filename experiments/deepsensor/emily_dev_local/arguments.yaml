@@ -11,22 +11,26 @@ start_year:
 
 # Training end year (inclusive)
 end_year:
-  arg: 2011  
+  arg: 2011
+  # arg: 2001 
   type: int
 
 # Validation start year
 val_start_year:
   arg: 2012  
+  # arg: 2002
   type: int
 
 # Validation end year (inclusive)
 val_end_year:
-  arg: 2015  
+  arg: 2015
+  # arg: 2002  
   type: int
 
 # Model name, if default it will be the time
 model_name:
-  arg: default  
+  arg: full_allcontextvar
+  # arg: default  
   type: str
 
 # Use daily data
@@ -59,9 +63,23 @@ include_landmask:
   arg: True  
   type: bool
 
+# Context variables
+context_variables: 
+  arg: ['temperature',
+        'precipitation',
+        '10m_u_component_of_wind',
+        '10m_v_component_of_wind',
+        'surface_pressure',
+        'relative_humidity',
+        'surface_net_solar_radiation',
+        # 'surface_thermal_radiation_downwards', # BS only have download til 2001
+        'surface_solar_radiation_downwards',
+        ]
+  type: list
+
 # Number of epochs
 n_epochs:
-  arg: 30  
+  arg: 100 
   type: int
 
 # Channels for UNet
