@@ -65,18 +65,7 @@ def main():
             k: v for k, v in convnp_kwargs.items() if k != "internal_density"
         }
 
-    remove_stations = [
-    "TAUPO AWS",
-    "CHRISTCHURCH AERO",
-    "KAITAIA AERO",
-    "MT COOK EWS",
-    "AUCKLAND AERO",
-    "ALEXANDRA AWS",
-    "TOLAGA BAY WXT AWS",
-    "WELLINGTON AERO",
-    "BLENHEIM AERO",
-    "DUNEDIN AERO AWS",
-    ]
+    remove_stations = args['remove_stations']
 
     # ------------------------------------------
     # Preprocess data
