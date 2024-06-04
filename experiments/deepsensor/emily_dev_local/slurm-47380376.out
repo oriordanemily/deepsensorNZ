@@ -1,0 +1,85 @@
+
+The following modules were not unloaded:
+   (Use "module --force purge" to unload all):
+
+  1) XALT/minimal   2) slurm   3) NeSI
+Conda.sh sourced successfully
+
+Currently Loaded Modules:
+  1) XALT/minimal   2) slurm   3) NeSI (S)   4) Miniconda3/23.10.0-1
+
+# conda environments:
+#
+                      *  /nesi/project/nesi03947/deepsensor
+base                     /opt/nesi/CS400_centos7_bdw/Miniconda3/23.10.0-1
+
+JobId=47380376 JobName=train.sl
+   UserId=emilyoriordan(2004487) GroupId=emilyoriordan(2004487) MCS_label=N/A
+   Priority=1015 Nice=0 Account=nesi03947 QOS=normal
+   JobState=RUNNING Reason=None Dependency=(null)
+   Requeue=1 Restarts=0 BatchFlag=1 Reboot=0 ExitCode=0:0
+   RunTime=00:00:07 TimeLimit=00:15:00 TimeMin=N/A
+   SubmitTime=Jun 04 13:54 EligibleTime=Jun 04 13:54
+   AccrueTime=Jun 04 13:54
+   StartTime=Jun 04 13:54 EndTime=Jun 04 14:09 Deadline=N/A
+   SuspendTime=None SecsPreSuspend=0 LastSchedEval=Jun 04 13:54 Scheduler=Main
+   Partition=large AllocNode:Sid=mahuika01:24407
+   ReqNodeList=(null) ExcNodeList=(null)
+   NodeList=wbn179
+   BatchHost=wbn179
+   NumNodes=1 NumCPUs=2 NumTasks=1 CPUs/Task=1 ReqB:S:C:T=0:0:*:*
+   ReqTRES=cpu=1,mem=512M,node=1
+   AllocTRES=cpu=2,mem=1G,node=1,billing=1
+   Socks/Node=* NtasksPerN:B:S:C=0:0:*:1 CoreSpec=*
+   MinCPUsNode=1 MinMemoryCPU=512M MinTmpDiskNode=0
+   Features=(null) DelayBoot=00:00:00
+   OverSubscribe=OK Contiguous=0 Licenses=(null) Network=(null)
+   Command=/scale_wlg_persistent/filesets/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/train.sl
+   WorkDir=/scale_wlg_persistent/filesets/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local
+   StdErr=/scale_wlg_persistent/filesets/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/slurm-47380376.out
+   StdIn=/dev/null
+   StdOut=/scale_wlg_persistent/filesets/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/slurm-47380376.out
+   Power=
+   
+
+#!/bin/bash -e
+MODEL_NAME=$(python /nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/read_yaml.py /nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/arguments.yaml)
+
+#SBATCH --job-name=deepsensor#$MODEL_NAME
+#SBATCH --time=6:00:00
+#SBATCH --mem=90G
+#SBATCH --output=/nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/models/downscaling/outputs/${MODEL_NAME}/output_${MODEL_NAME}_%j.log
+#SBATCH --error=/nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/models/downscaling/outputs/${MODEL_NAME}/error_${MODEL_NAME}_%j.log
+#SBATCH --mail-type=begin,end,fail,requeue
+#SBATCH --mail-user=emily@bodekerscientific.com
+#SBATCH --gpus-per-node=A100:1
+#SBATCH --partition=hgx # hgx = 80GB, gpu = 40GB
+#SBATCH --cpus-per-task=2
+#SBATCH --ntasks-per-core=1
+
+module purge
+module load Miniconda3
+source $(conda info --base)/etc/profile.d/conda.sh
+export PYTHONNOUSERSITE=1
+echo "Conda.sh sourced successfully"
+module list
+
+# activate deepsensor conda env
+conda activate /nesi/project/nesi03947/deepsensor
+conda info --envs
+# echo "conda env deepsensor activated"
+
+scontrol show job $SLURM_JOB_ID
+scontrol write batch_script $SLURM_JOB_ID -
+
+# monitor GPU usage
+nvidia-smi --query-gpu=timestamp,utilization.gpu,utilization.memory,memory.used,memory.total \
+    --format=csv,nounits -l 5 > "/nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/models/downscaling/outputs/gpustats-${SLURM_JOB_ID}.csv" &
+
+/nesi/project/nesi03947/deepsensor/bin/python /nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/train_downscaling.py
+
+# echo 'Running Python'
+# /nesi/project/nesi03947/deepsensor/bin/python /nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/train_downscaling.py --var='temperature' --start_year=2000 --end_year=2001 --val_start_year=2002 --val_end_year=2002 --topography_highres_coarsen_factor=2 --topography_lowres_coarsen_factor=5 --era5_coarsen_factor=2 --model_name_prefix='test' --n_epochs=4  --internal_density=2000
+# /nesi/project/nesi03947/deepsensor/bin/python /nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/train_downscaling.py
+/var/spool/slurm/job47380376/slurm_script: line 32: nvidia-smi: command not found
+slurmstepd: error: *** JOB 47380376 ON wbn179 CANCELLED AT 2024-06-04T01:54:43 ***

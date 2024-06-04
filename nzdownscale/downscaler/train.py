@@ -19,13 +19,13 @@ from tqdm import tqdm
 
 from deepsensor.model.convnp import ConvNP
 from deepsensor.train.train import train_epoch, set_gpu_default_device
-from nzdownscale.dataprocess import config, utils
+from nzdownscale.dataprocess import config, config_local, utils
 
 
 class Train:
     def __init__(self,
                  processed_output_dict,
-                 save_model_path: str = 'experiments/models/downscaling', #'/nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/experiments/models/downscaling',
+                 save_model_path: str = 'default', #'/nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/experiments/models/downscaling',
                  use_gpu: bool = True,
                  ) -> None:
         """
@@ -41,6 +41,8 @@ class Train:
         if use_gpu:
             set_gpu_default_device()
 
+        if save_model_path == 'default':
+            self.save_model_path=config_local['save_model']['fpath']
         self.save_model_path = save_model_path
         self.processed_output_dict = processed_output_dict
 
@@ -78,7 +80,7 @@ class Train:
 
 
     def run_training_sequence(self, n_epochs, model_name='default', batch=False, batch_size=1, lr=5e-5, **convnp_kwargs,):
-
+        
         self.setup_task_loader()
         self.initialise_model(**convnp_kwargs)
         self.train_model(n_epochs=n_epochs, model_name=model_name, batch=batch, batch_size=batch_size, lr=lr)

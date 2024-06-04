@@ -27,7 +27,8 @@ def main():
         f.close()
 
     args = validate_and_convert_args(args)
-    
+
+    print('ARGUMENTS:', args)    
     var = args["variable"]
     start_year = args["start_year"]
     end_year = args["end_year"]
@@ -118,7 +119,6 @@ def main():
     # ------------------------------------------
 
     training = Train(processed_output_dict=processed_output_dict)
-    # training.run_training_sequence(n_epochs, model_name, batch=False, **convnp_kwargs)
     training.run_training_sequence(n_epochs, model_name, batch=batch, batch_size=batch_size, lr=lr, **convnp_kwargs)
 
 

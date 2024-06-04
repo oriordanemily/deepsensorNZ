@@ -29,7 +29,7 @@ val_end_year:
 
 # Model name, if default it will be the time
 model_name:
-  arg: full_allcontextvar
+  arg: nesi_allcontextvar_2epochs
   # arg: default  
   type: str
 
@@ -70,7 +70,7 @@ context_variables:
         '10m_u_component_of_wind',
         '10m_v_component_of_wind',
         'surface_pressure',
-        'relative_humidity',
+        # 'relative_humidity', BS only have downloaded 1981-2020
         'surface_net_solar_radiation',
         # 'surface_thermal_radiation_downwards', # BS only have download til 2001
         'surface_solar_radiation_downwards',
@@ -79,7 +79,7 @@ context_variables:
 
 # Number of epochs
 n_epochs:
-  arg: 100 
+  arg: 2 
   type: int
 
 # Channels for UNet
