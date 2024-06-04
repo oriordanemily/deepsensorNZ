@@ -121,9 +121,18 @@ area:
 
 # Remove stations
 # List of station names to remove from the dataset
-# ! CURRENTLY NOT IMPLEMENTED ! 
 remove_stations:
-  arg: [None]  
+  arg: ["TAUPO AWS",
+    "CHRISTCHURCH AERO",
+    "KAITAIA AERO",
+    "MT COOK EWS",
+    "AUCKLAND AERO",
+    "ALEXANDRA AWS",
+    "TOLAGA BAY WXT AWS",
+    "WELLINGTON AERO",
+    "BLENHEIM AERO",
+    "DUNEDIN AERO AWS",
+    ]  
   type: list
 
 # Learning rate
