@@ -11,7 +11,7 @@ import time
 import importlib
 import glob
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 from scipy.interpolate import griddata
 import pandas as pd
@@ -44,7 +44,8 @@ era5_interp_filled = None
 # model_name = 'model_temp_incstations'
 # model_name = 'model_all_stations_context'
 # model_name = 'model_1714684457'
-
+# model_name = 'model_1716532171'
+model_name = 'model_model_radiation'
 
 # --- from mahuika ----
 # model_name = 'test_model_1712898775' # 50
@@ -60,9 +61,10 @@ era5_interp_filled = None
 # model_name = '_model_1713136369'
 
 # PRECIP
-model_name = 'model_precip_100epochs'
+# model_name = 'model_precip_100epochs'
 
-base = '/home/emily/deepsensor/deepweather-downscaling/'
+
+base = '/home/emily/deepsensor/deepweather-downscaling/experiments/'
 base2 = "/home/emily/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/"
 
 model_dir = base + f"models/downscaling/{model_name}/"
@@ -92,16 +94,13 @@ print(f"Metadata: {filtered_dict}")
 # %% Load validation class
 
 # change the validation date range to a testing range to see how the model performs on unseen data
-validation_date_range = [2016, 2018]  # inclusive
+validation_date_range = [2016, 2017]  # inclusive
 print(
     f"Validating model on date range: {validation_date_range[0]} - {validation_date_range[1]}"
 )
 
-# save_validate = False
-# load_validate = True
-# load_validate = not save_validate
-# dp_path = model_dir + f"data_processor_dict_{var}_{st_yr}_{end_yr}.pkl"
-dp_path = 'data_processor_dict_precip.pkl'
+# dp_path = base + f'models/downscaling/{model_name}/data_processor_dict_{var}_{model_name}.pkl'
+dp_path = '/home/emily/deepsensor/deepweather-downscaling/data_processor_dict_temp_model_radiation.pkl'
 if os.path.exists(dp_path):
     with open(
         dp_path, "rb"
@@ -136,12 +135,14 @@ validate = ValidateV1(
     validation_date_range=validation_date_range,
     data_processor_dict=data_processor_dict,
 )
-validate.station_as_context = True
+# validate.station_as_context = True
+#%%
 validate.load_model(
     load_model_path=model_path,
     save_data_processing_dict=save_dp,
 )
 
+# validate.model = validate._load_pretrained_model(model_path)
 metadata = validate.get_metadata()
 print(metadata)
 model = validate.model
@@ -150,7 +151,8 @@ model = validate.model
 # Inspect trained model over given dates
 # ------------------------------------------
 # date = f'{validation_date_range[0]}-01-01'
-date = "2016-01-01"
+# date = "2016-01-01"
+date = '2016-01-01'
 number_of_months = 24
 # note that the stations only have data up to 2019-08-01
 
@@ -167,7 +169,7 @@ print(f"Validating for dates between {date_range}")
 validation_stations = validate.stations_in_date_range(date_range)
 
 # %%
-prediction_fpath = f"/home/emily/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/predictions_{model_name}_{validation_date_range[0]}_1.pkl"
+prediction_fpath = f"/home/emily/deepsensor/deepweather-downscaling/experiments/models/downscaling/{model_name}/predictions_{model_name}_{validation_date_range[0]}.pkl"
 if os.path.exists(prediction_fpath):
     print("Loading predictions from file")
     pred = utils.open_pickle(prediction_fpath)
@@ -193,9 +195,10 @@ resolution = dataprocess.resolution(pred["mean"].isel(time=0), "latitude")
 print("Prediction resolution:", resolution)
 # %%
 # if 2016 - 2018 then just use a pre-done one,
-model_with_era5_done = 'model_1714684457'
+# model_with_era5_done = 'model_1714684457' #precip
+model_with_era5_done = model_name
 # otherwise use model_name instead of model_with_era5_done
-
+era5_interp = None
 if era5_interp is None:
     era5_interp_path = (
         base
@@ -207,7 +210,7 @@ if era5_interp is None:
             era5_interp = pickle.load(handle)
     else:
         era5_unnorm = validate.data_processor.unnormalise(
-            validate.processed_dict["era5_ds"].drop_vars(("cos_D", "sin_D"))
+            validate.processed_dict["era5_ds"].drop_vars(("cos_D", "sin_D"), errors='ignore')
         )
         print("ERA5 unnormalised")
         pred_coarse = pred.coarsen(latitude=5, longitude=5, boundary="trim").mean()
@@ -222,7 +225,11 @@ if era5_interp is None:
         with open(era5_interp_path, "wb") as handle:
             pickle.dump(era5_interp, handle, protocol=pickle.HIGHEST_PROTOCOL)
         print("ERA5 interpolated")
+
+era5_var = validate.get_variable_name('era5')
+era5_interp = era5_interp[era5_var]
 #%%
+era5_interp_filled = None
 if era5_interp_filled is None:
     era5_interp_filled_path = (
         base
@@ -244,23 +251,27 @@ if era5_interp_filled is None:
 
         era5_interp_filled = era5_interp.copy()
         era5_var = validate.get_variable_name('era5')
-        for t in tqdm(era5_interp[era5_var].time, desc="Filling missing values"):
-            era5_da = era5_interp[era5_var].sel(time=t)
+        for t in tqdm(era5_interp.time, desc="Filling missing values"):
+            era5_da = era5_interp.sel(time=t)
             valid_points = np.array(np.nonzero(~np.isnan(era5_da))).T
             valid_values = era5_da.values[~np.isnan(era5_da)]
-            missing_land_values_da = missing_land_values[era5_var].sel(time=t)
+            missing_land_values_da = missing_land_values.sel(time=t)
             invalid_points = np.array(np.nonzero(missing_land_values_da)).T
             # Perform nearest neighbor interpolation
             interpolated_values = griddata(
                 valid_points, valid_values, invalid_points, method="nearest"
             )
             # Fill the era5_interp DataArray with the interpolated values
-            era5_interp_filled[era5_var].sel(time=t).values[tuple(invalid_points.T)] = (
+            era5_interp_filled.sel(time=t).values[tuple(invalid_points.T)] = (
                 interpolated_values
             )
 
         with open(era5_interp_filled_path, "wb") as handle:
             pickle.dump(era5_interp_filled, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+era5_interp_filled = era5_interp_filled
+if era5_var == 't2m':
+    era5_interp_filled -= 273.15
 # %%
 validation_stations.remove("CAPE CAMPBELL AWS")
 validation_stations.remove("CAPE KIDNAPPERS WXT AWS")
@@ -280,6 +291,7 @@ with open(
     "wb",
 ) as handle:
     pickle.dump(loss_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
 # %%
 print("------ ConvNP predictions -------")
 loss_mean_std = {}

@@ -17,11 +17,48 @@ VAR_ERA5 = {
             'precipitation': {
                 'subdir': 'total_precipitation_hourly',
                 'var_name': 'precipitation',
+                'folder': 'NZ_land_processed'
             },
             'temperature': {
                 'subdir': '2m_temperature',
                 'var_name': 't2m',
+                'folder': 'NZ_land'
             },
+            'surface_pressure': {
+                'subdir': 'surface_pressure',
+                'var_name': 'sp',
+                'folder': 'NZ_land'
+            },
+            '10m_u_component_of_wind': {
+                'subdir': '10m_u_component_of_wind',
+                'var_name': 'u10',
+                'folder': 'NZ_land'
+            },
+            '10m_v_component_of_wind': {
+                'subdir': '10m_v_component_of_wind',
+                'var_name': 'v10',
+                'folder': 'NZ_land'
+            },
+            'relative_humidity': {
+                'subdir': 'relative_humidity',
+                'var_name': 'VAR_2U',
+                'folder': 'NZ_land_processed'
+            },
+            'surface_net_solar_radiation': {
+                'subdir': 'surface_net_solar_radiation',
+                'var_name': 'ssr',
+                'folder': 'NZ_land'
+            },
+            'surface_solar_radiation_downwards': {
+                'subdir': 'surface_solar_radiation_downwards',
+                'var_name': 'ssrd',
+                'folder': 'NZ_land'
+            },
+            # 'surface_thermal_radiation_downwards': {
+            #     'subdir': 'surface_thermal_radiation_downwards',
+            #     'var_name': 'strd',
+            #     'folder': 'NZ_land'
+            # },
 }
 
 

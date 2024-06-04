@@ -91,9 +91,8 @@ def main():
         area=area,
         context_variables=context_variables,
     )
-    data_processor_dict_fpath = f'data_processor_dict_{var}_{model_name}.pkl'
+    data_processor_dict_fpath = f'experiments/models/{model_name}/data_processor_dict_{var}_{model_name}.pkl'
     if os.path.exists(data_processor_dict_fpath):
-        # data_processor_dict_fpath = 'data_processor_dict_era1_topohr5_topolr5_2000_2001.pkl'
         data_processor_dict = data.load_data_processor_dict(data_processor_dict_fpath)
         save_data_processor_dict=False
     else:

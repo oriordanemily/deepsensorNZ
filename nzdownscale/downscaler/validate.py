@@ -50,7 +50,7 @@ class ValidateV1:
             training_output_dict (dict, optional): 
                 Dict output from nzdownscale.downscaler.train.Train.get_training_output_dict()
             training_metadata_path (int, optional):
-                (If loading pretrained model) Path to dictionary pickle file for training metadata, saved with model e.g. 'models/downscaling/metadata/test_model_1705594143.pkl'
+                (If loading pretrained model) Path to dictionary pickle file for training metadata, saved with model e.g. 'experiments/models/downscaling/metadata/test_model_1705594143.pkl'
             validation_date_range (list, optional):
                 List of two years in format 'YYYY' for start and end of validation period (inclusive) e.g. ['2005', '2006']. Only include if different from model training period.
             data_processor_dict (dict, optional):
@@ -118,18 +118,16 @@ class ValidateV1:
             self.model_metadata = self.get_metadata()
         
         # can run preprocessed data once and try different models
-        try:
-            self.data
-        except: 
-            self.data = PreprocessForDownscaling(
-                variable = self.model_metadata['data_settings']['var'],
-                start_year = self.model_metadata['date_info']['start_year'],
-                end_year = self.model_metadata['date_info']['end_year'],
-                val_start_year = self.model_metadata['date_info']['val_start_year'],
-                val_end_year = self.model_metadata['date_info']['val_end_year'],
-                use_daily_data = self.model_metadata['date_info']['use_daily_data'],
-                validation = True
-            )
+        self.data = PreprocessForDownscaling(
+            variable = self.model_metadata['data_settings']['var'],
+            start_year = self.model_metadata['date_info']['start_year'],
+            end_year = self.model_metadata['date_info']['end_year'],
+            val_start_year = self.model_metadata['date_info']['val_start_year'],
+            val_end_year = self.model_metadata['date_info']['val_end_year'],
+            use_daily_data = self.model_metadata['date_info']['use_daily_data'],
+            context_variables = self.model_metadata['data_settings']['context_variables'],
+            validation = True
+        )
         data = self.data
 
         data.run_processing_sequence(
@@ -139,7 +137,8 @@ class ValidateV1:
             include_time_of_year=True,
             include_landmask=True,
             data_processor_dict=self.data_processor_dict,
-            save_data_processor_dict=save_data_processing_dict
+            save_data_processor_dict=save_data_processing_dict,
+            station_as_context=self.model_metadata['station_as_context'],
             )
         processed_output_dict = data.get_processed_output_dict()
 
@@ -312,7 +311,10 @@ class ValidateV1:
         era5_name = self.get_variable_name('era5')
         station_name = self.get_variable_name('station')
 
-        era5_values = era5[era5_name].sel(time=dates)
+        if isinstance(era5, xr.Dataset):
+            era5_values = era5[era5_name].sel(time=dates)
+        else:
+            era5_values = era5.sel(time=dates)
 
         norms_era5 = {}
         
@@ -1151,7 +1153,10 @@ class ValidateV1:
 
     def get_variable_name(self, dataset):
         if dataset == 'era5':
-            return self.processed_dict['era5_raw_ds'].name
+            from nzdownscale.dataprocess.config import VAR_ERA5 as VAR_DICT
         elif dataset == 'station':
-            return self.processed_dict['station_df'].columns[0]
+            from nzdownscale.dataprocess.config import VAR_STATIONS as VAR_DICT
+
+        variable = self.data.var
+        return VAR_DICT[variable]['var_name']
 # %%

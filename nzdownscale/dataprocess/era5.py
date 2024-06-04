@@ -75,7 +75,7 @@ class ProcessERA5(DataProcess):
     def get_parent_path(self,
                         var: Literal[tuple(VARIABLE_OPTIONS)],
                         ):
-        if var == "precipitation":
+        if VAR_ERA5[var]['folder'] == 'NZ_land_processed':
             parent = "parent_processed"
         else:
             parent = "parent"
@@ -90,22 +90,25 @@ class ProcessERA5(DataProcess):
 
         parent_path = self.get_parent_path(var)
         
-        if var == 'temperature':
+        if VAR_ERA5[var]['folder'] == 'NZ_land': #'temperature': #surface pressure # 10m_u_component_of_wind # 10m_v_component_of_wind # 
             if years is None:
                 filenames = glob.glob(f'{parent_path}/*/*.nc')
             else:
                 filenames = []
                 for year in years:
-                    filenames = filenames + glob.glob(f'{parent_path}/{year}/*.nc')
-        
-        elif var == 'precipitation':  
+                    filenames_year = glob.glob(f'{parent_path}/{year}/*.nc')
+                    if len(filenames_year) == 0:
+                        filenames_year = glob.glob(f'{parent_path}/{year}/*/*.nc')
+                    filenames = filenames + filenames_year
+
+        elif VAR_ERA5[var]['folder'] == 'NZ_land_processed': #var == 'precipitation':  # relative_humidity
             if years is None:
                 filenames = glob.glob(f'{parent_path}/*.nc')
             else:
                 filenames = []
                 for year in years:
                     filenames = filenames + [f'{parent_path}/{fname}' for fname in os.listdir(parent_path) if str(year) in fname]
-        
+
         return filenames
 
 

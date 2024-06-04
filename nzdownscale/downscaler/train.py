@@ -25,7 +25,7 @@ from nzdownscale.dataprocess import config, utils
 class Train:
     def __init__(self,
                  processed_output_dict,
-                 save_model_path: str = 'models/downscaling', #'/nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/models/downscaling',
+                 save_model_path: str = 'experiments/models/downscaling', #'/nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/experiments/models/downscaling',
                  use_gpu: bool = True,
                  ) -> None:
         """
@@ -119,8 +119,9 @@ class Train:
         if verbose:
             print(task_loader)
 
-        train_start = f'{start_year}-01-01'
-        train_end = f'{end_year}-12-31'
+        if not validation:
+            train_start = f'{start_year}-01-01'
+            train_end = f'{end_year}-12-31'
         val_start = f'{val_start_year}-01-01'
         val_end = f'{val_end_year}-12-31'
 
@@ -130,8 +131,7 @@ class Train:
 
         if not validation:
             train_tasks = []
-            # only loaded every other date to speed up training for now
-            for date in tqdm(train_dates[::2], desc="Loading train tasks..."):
+            for date in tqdm(train_dates, desc="Loading train tasks..."):
                 task = task_loader(date, context_sampling=context_sampling, target_sampling="all")
                 # task["ops"] = ["numpy_mask", "nps_mask"]
                 train_tasks.append(task)
@@ -139,7 +139,7 @@ class Train:
         val_tasks = []
         for date in tqdm(val_dates, desc="Loading val tasks..."):
             task = task_loader(date, context_sampling=context_sampling, target_sampling="all")
-            # task["ops"] = ["numpy_mask", "nps_mask"]
+             # task["ops"] = ["numpy_mask", "nps_mask"]
             val_tasks.append(task)
 
         if verbose:

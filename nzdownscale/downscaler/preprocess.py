@@ -33,7 +33,8 @@ class PreprocessForDownscaling:
                  variable='temperature',
                  use_daily_data=True,
                  validation = False,
-                 area=None
+                 area=None,
+                 context_variables=[]
                  ) -> None:
         
         """
@@ -48,15 +49,20 @@ class PreprocessForDownscaling:
             # one year validation
             val_end_year = val_start_year
         else:
-            self.val_end_year = val_end_year
+            self.val_end_year = val_end_year        
         self.years = np.arange(start_year, val_end_year+1)
         self.use_daily_data = use_daily_data
 
         if validation:
             self.start_year = val_start_year
             self.end_year = val_end_year
+            self.years = np.arange(val_start_year, val_end_year+1)
 
         self.area = area
+        
+        if context_variables == []:
+            context_variables = [self.var]
+        self.context_variables = context_variables 
 
         self.dataprocess = utils.DataProcess()
 
@@ -132,17 +138,21 @@ class PreprocessForDownscaling:
                 save=save_data_processor_dict,
                 station_as_context=station_as_context
                 )
-                # data_processor=data_processor_dict
-            
-        self.data_processor = data_processor_dict['data_processor']
-        self.aux_ds = data_processor_dict['aux_ds']
-        self.era5_ds = data_processor_dict['era5_ds']
-        self.highres_aux_ds = data_processor_dict['highres_aux_ds']
-        self.station_df = data_processor_dict['station_df']
-        self.landmask_ds = data_processor_dict['landmask_ds']
-        self.station_as_context = data_processor_dict['station_as_context']
-
-
+            self.data_processor = data_processor_dict['data_processor']
+            self.aux_ds = data_processor_dict['aux_ds']
+            self.era5_ds = data_processor_dict['era5_ds']
+            self.highres_aux_ds = data_processor_dict['highres_aux_ds']
+            self.station_df = data_processor_dict['station_df']
+            self.landmask_ds = data_processor_dict['landmask_ds']
+            self.station_as_context = data_processor_dict['station_as_context']
+        else:
+            self.data_processor = data_processor_dict['data_processor']
+            self.aux_ds = self.data_processor(aux_raw_ds)
+            self.era5_ds = self.data_processor(era5_raw_ds)
+            self.highres_aux_ds = self.data_processor(highres_aux_raw_ds)
+            self.station_df = self.data_processor(station_raw_df)
+            self.landmask_ds = self.data_processor(landmask_raw_ds)
+            self.station_as_context = data_processor_dict['station_as_context']
 
     def load_topography(self):
         print('Loading topography...')
@@ -158,7 +168,13 @@ class PreprocessForDownscaling:
     def load_era5(self):
         print('Loading era5...')
         self.ds_era = self.process_era.load_ds(self.var, self.years)
-        self.da_era = self.process_era.ds_to_da(self.ds_era, self.var)
+        for variable in self.context_variables:
+            if variable != self.var:
+                da = self.process_era.load_ds(variable, self.years)
+                self.ds_era = xr.merge([self.ds_era, da])
+        
+        print('loaded')
+        # self.da_era = self.process_era.ds_to_da(self.ds_era, self.var)
 
     
     def load_stations(self, use_cache=False):
@@ -210,21 +226,21 @@ class PreprocessForDownscaling:
                         ):
         """ Gets self.era5_raw_ds """
 
-        assert self.da_era is not None, "Run load_era5() first"
+        assert self.ds_era is not None, "Run load_era5() first"
         assert self.highres_aux_raw_ds is not None, "Run preprocess_topography() first"
 
         # Convert hourly to daily data
         if self.use_daily_data:
-            da_era = self._convert_era5_to_daily(self.da_era)
+            ds_era = self._convert_era5_to_daily(self.ds_era)
 
         # Coarsen
         self.era5_coarsen_factor = coarsen_factor
-        self.da_era_coarse = self._coarsen_era5(da_era, self.era5_coarsen_factor)
+        self.ds_era_coarse = self._coarsen_era5(ds_era, self.era5_coarsen_factor)
 
         # Trim to topography extent
-        da_era_trimmed = self._trim_era5(self.da_era_coarse, self.highres_aux_raw_ds)
+        ds_era_trimmed = self._trim_era5(self.ds_era_coarse, self.highres_aux_raw_ds)
         
-        self.era5_raw_ds = da_era_trimmed
+        self.era5_raw_ds = ds_era_trimmed
         return self.era5_raw_ds
 
 
@@ -350,10 +366,10 @@ class PreprocessForDownscaling:
     
 
     def _convert_era5_to_daily(self, da_era):
-        if self.var == 'temperature':
+        if self.var == 'precipitation':
+            function = 'sum'
+        else:
             function = 'mean'
-        elif self.var == 'precipitation':
-            function = 'sum'  # ? 
         da = self.process_era.convert_hourly_to_daily(da_era, function)
         return da
     
@@ -566,20 +582,24 @@ class PreprocessForDownscaling:
         return da_landmask
 
     
-    def add_time_of_year(self, da):
+    def add_time_of_year(self, ds):
         """ 
-        Add cos_D and sin_D to output dataset to be used as context set, original da must have the time coordinate. Info: https://alan-turing-institute.github.io/deepsensor/user-guide/convnp.html
+        Add cos_D and sin_D to output dataset to be used as context set, original ds must have the time coordinate. Info: https://alan-turing-institute.github.io/deepsensor/user-guide/convnp.html
         """
-        dates = pd.date_range(da.time.values.min(), da.time.values.max(), freq="D")
-        doy_ds = construct_circ_time_ds(dates, freq="D")
+        if self.use_daily_data:
+            freq='D'
+        else:
+            freq='H'
+        dates = pd.date_range(ds.time.values.min(), ds.time.values.max(), freq=freq)
+        doy_ds = construct_circ_time_ds(dates, freq=freq)
         
-        ds = xr.Dataset({
-            da.name: da,
-            'cos_D': doy_ds["cos_D"], 
-            'sin_D': doy_ds["sin_D"],
-            })
-        # ds["cos_D"] = doy_ds["cos_D"]
-        # ds["sin_D"] = doy_ds["sin_D"]
+        # ds = xr.Dataset({
+        #     da.name: da,
+        #     'cos_D': doy_ds["cos_D"], 
+        #     'sin_D': doy_ds["sin_D"],
+        #     })
+        ds["cos_D"] = doy_ds["cos_D"]
+        ds["sin_D"] = doy_ds["sin_D"]
         return ds
 
 
@@ -605,17 +625,16 @@ class PreprocessForDownscaling:
         print('Creating DataProcessor...')
         data_processor = DataProcessor(
             x1_name="latitude", 
-            # x1_map=(era5_raw_ds["latitude"].min(), 
-            #         era5_raw_ds["latitude"].max()),
             x1_map=(highres_aux_raw_ds["latitude"].min(), 
                     highres_aux_raw_ds["latitude"].max()),
             x2_name="longitude", 
-            # x2_map = (era5_raw_ds["longitude"].min(), 
-            #           era5_raw_ds["longitude"].max()),
             x2_map=(highres_aux_raw_ds["longitude"].min(), 
                     highres_aux_raw_ds["longitude"].max()),
             )
         print('DataProcessor created in', time()-start, 'seconds')
+
+        if 'precipitation' in era5_raw_ds.data_vars:
+            era5_raw_ds['precipitation'] = np.log10(1 + era5_raw_ds['precipitation'])
 
         # Compute normalisation parameters
         start = time()
@@ -702,6 +721,7 @@ class PreprocessForDownscaling:
             'topography_lowres_coarsen_factor': self.topography_lowres_coarsen_factor,
             'resolutions': self._get_resolutions_dict(),
             'area': self.area,
+            'context_variables': self.context_variables,
         }
 
         processed_output_dict = {
