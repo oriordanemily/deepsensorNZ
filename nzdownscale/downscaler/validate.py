@@ -179,16 +179,23 @@ class ValidateV1:
         return model
     
 
-    def _initialise_model(self):
+    def _initialise_model(self, model_path=None):
         if self.training_output_dict is not None:
             model = self.training_output_dict['model']
             self.training_dict['model'] = model
         else:
             convnp_kwargs = self.training_dict['metadata_dict']['convnp_kwargs']
-            model = ConvNP(self.data_processor,
-                        self.task_loader, 
-                        **convnp_kwargs,
-                        ) 
+            if model_path is not None:
+                model = ConvNP(self.data_processor,
+                            self.task_loader, 
+                            model_ID=model_path,
+                            **convnp_kwargs,
+                            ) 
+            else:
+                model = ConvNP(self.data_processor,
+                            self.task_loader, 
+                            **convnp_kwargs,
+                            )
             _ = model(self.training_dict['val_tasks'][0])   # ? need ? 
         return model
 
