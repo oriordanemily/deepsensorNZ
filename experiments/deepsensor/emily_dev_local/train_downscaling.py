@@ -88,6 +88,8 @@ def main():
     else:
         data_processor_dict = None
         save_data_processor_dict=data_processor_dict_fpath
+        if not os.path.exists(f'experiments/models/{model_name}'):
+            os.makedirs(f'experiments/models/{model_name}')
 
     data.run_processing_sequence(
         topography_highres_coarsen_factor,
@@ -109,7 +111,7 @@ def main():
 
     training = Train(processed_output_dict=processed_output_dict)
     training.run_training_sequence(n_epochs, model_name, batch=batch, batch_size=batch_size, lr=lr, **convnp_kwargs)
-
+    training.model.save(f'experiments/models/{model_name}/')
 
 if __name__ == "__main__":
     main()

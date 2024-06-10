@@ -11,25 +11,29 @@ start_year:
 
 # Training end year (inclusive)
 end_year:
-  arg: 2011
-  # arg: 2001 
+  # arg: 2011
+  arg: 2001 
   type: int
 
 # Validation start year
 val_start_year:
-  arg: 2012  
-  # arg: 2002
+  # arg: 2012  
+  arg: 2002
   type: int
 
 # Validation end year (inclusive)
 val_end_year:
-  arg: 2015
-  # arg: 2002  
+  # arg: 2015
+  arg: 2002  
   type: int
 
 # Model name, if default it will be the time
 model_name:
+<<<<<<< HEAD
   arg: nesi_allcontextvar_2epochs
+=======
+  arg: allvar_station02
+>>>>>>> 49dd907ebdc46988e110d98ff22f0c177ee850b9
   # arg: default  
   type: str
 
@@ -45,7 +49,7 @@ topography_highres_coarsen_factor:
 
 # Coarsen factor for low resolution topography
 topography_lowres_coarsen_factor:
-  arg: 9  
+  arg: 10
   type: int
 
 # Coarsen factor for ERA5 data
@@ -70,16 +74,22 @@ context_variables:
         '10m_u_component_of_wind',
         '10m_v_component_of_wind',
         'surface_pressure',
+<<<<<<< HEAD
         # 'relative_humidity', BS only have downloaded 1981-2020
+=======
+>>>>>>> 49dd907ebdc46988e110d98ff22f0c177ee850b9
         'surface_net_solar_radiation',
-        # 'surface_thermal_radiation_downwards', # BS only have download til 2001
         'surface_solar_radiation_downwards',
         ]
   type: list
 
 # Number of epochs
 n_epochs:
+<<<<<<< HEAD
   arg: 2 
+=======
+  arg: 2
+>>>>>>> 49dd907ebdc46988e110d98ff22f0c177ee850b9
   type: int
 
 # Channels for UNet

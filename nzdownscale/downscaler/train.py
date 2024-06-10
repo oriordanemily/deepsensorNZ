@@ -96,7 +96,7 @@ class Train:
         aux_ds = self.aux_ds
         station_df = self.station_df
         landmask_ds = self.landmask_ds
-        station_as_context = False# self.station_as_context
+        station_as_context = self.station_as_context
         
         start_year = self.start_year
         end_year = self.end_year
@@ -110,7 +110,7 @@ class Train:
             if validation:
                 context_sampling += ["all"]
             else: 
-                context_sampling += ["all"]    
+                context_sampling += [0.2]  #20% stations used   
         if landmask_ds is not None:
             context += [landmask_ds]
             context_sampling += ["all"]

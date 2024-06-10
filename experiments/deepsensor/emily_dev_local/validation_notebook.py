@@ -45,7 +45,8 @@ era5_interp_filled = None
 # model_name = 'model_all_stations_context'
 # model_name = 'model_1714684457'
 # model_name = 'model_1716532171'
-model_name = 'model_model_radiation'
+# model_name = 'model_model_radiation'
+model_name = 'model_full_allcontextvar'
 
 # --- from mahuika ----
 # model_name = 'test_model_1712898775' # 50
@@ -94,27 +95,29 @@ print(f"Metadata: {filtered_dict}")
 # %% Load validation class
 
 # change the validation date range to a testing range to see how the model performs on unseen data
-validation_date_range = [2016, 2017]  # inclusive
+validation_date_range = [2016, 2016]  # inclusive
 print(
     f"Validating model on date range: {validation_date_range[0]} - {validation_date_range[1]}"
 )
+# dp_path = base + f'models/{model_name[6:]}/not'
 
-# dp_path = base + f'models/downscaling/{model_name}/data_processor_dict_{var}_{model_name}.pkl'
-dp_path = '/home/emily/deepsensor/deepweather-downscaling/data_processor_dict_temp_model_radiation.pkl'
-if os.path.exists(dp_path):
-    with open(
-        dp_path, "rb"
-    ) as handle:
-        data_processor_dict = pickle.load(handle)
-        print("Creating validate object using loaded processor dict")
-    save_dp = None # don't save as it's already saved
-else:
-    data_processor_dict = None
-    print(
-        "Creating validate object without loaded processor dict,\
-           may be slow"
-    )
-    save_dp = dp_path # save the processor dict to this fpath
+dp_path = base + f'models/downscaling/{model_name}/data_processor_dict_{var}_{model_name}.pkl'
+# dp_path = 'not'
+# dp_path = '/home/emily/deepsensor/deepweather-downscaling/data_processor_dict_temp_model_radiation.pkl'
+# if os.path.exists(dp_path):
+#     with open(
+#         dp_path, "rb"
+#     ) as handle:
+#         data_processor_dict = pickle.load(handle)
+#         print("Creating validate object using loaded processor dict")
+#     save_dp = None # don't save as it's already saved
+# else:
+data_processor_dict = None
+print(
+    "Creating validate object without loaded processor dict,\
+        may be slow"
+)
+save_dp = dp_path # save the processor dict to this fpath
 
 remove_stations_list = [
     "TAUPO AWS",
@@ -153,7 +156,7 @@ model = validate.model
 # date = f'{validation_date_range[0]}-01-01'
 # date = "2016-01-01"
 date = '2016-01-01'
-number_of_months = 24
+number_of_months = 12
 # note that the stations only have data up to 2019-08-01
 
 date_obj = datetime.strptime(date, "%Y-%m-%d")
