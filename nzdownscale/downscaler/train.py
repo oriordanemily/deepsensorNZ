@@ -12,7 +12,7 @@ import lab as B
 import torch
 import deepsensor.torch  # noqa
 from tqdm import tqdm
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, parallel_config
 from deepsensor.data.loader import TaskLoader
 from deepsensor.data.task import Task
 from deepsensor.model.convnp import ConvNP
@@ -74,21 +74,20 @@ def train_epoch(
     else:
         from tqdm import tqdm
 
-    parallel = Parallel(n_jobs=2, prefer="threads")
-    delayed_loss = delayed(model.loss_fn)
     batch_size = 2
-
     batch_losses = []
-    for batch_i in tqdm(range(0, len(tasks), batch_size), disable=not progress_bar):
-        opt.zero_grad()
-        batch_indices = range(batch_i, min(batch_i + batch_size, len(tasks)))
-        task_losses = parallel(
-            delayed_loss(tasks[i], normalise=True) for i in batch_indices
-        )
-        mean_batch_loss = B.mean(B.stack(*task_losses))
-        mean_batch_loss.backward()
-        opt.step()
-        batch_losses.append(mean_batch_loss.detach().cpu().numpy())
+
+    with parallel_config(backend='threading', n_jobs=2):
+        for batch_i in tqdm(range(0, len(tasks), batch_size), disable=not progress_bar):
+            opt.zero_grad()
+            batch_indices = range(batch_i, min(batch_i + batch_size, len(tasks)))
+            task_losses = Parallel()(
+                delayed(model.loss_fn)(tasks[i], normalise=True) for i in batch_indices
+            )
+            mean_batch_loss = B.mean(B.stack(*task_losses))
+            mean_batch_loss.backward()
+            opt.step()
+            batch_losses.append(mean_batch_loss.detach().cpu().numpy())
 
     return batch_losses
 
