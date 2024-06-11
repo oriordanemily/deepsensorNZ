@@ -25,7 +25,7 @@ from nzdownscale.dataprocess import config, config_local, utils
 class Train:
     def __init__(self,
                  processed_output_dict,
-                 save_model_path: str = 'default', #'/nesi/project/nesi03947/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/experiments/models/downscaling',
+                 save_model_path: str = 'default', 
                  use_gpu: bool = True,
                  ) -> None:
         """
@@ -42,7 +42,7 @@ class Train:
             set_gpu_default_device()
 
         if save_model_path == 'default':
-            self.save_model_path=config_local['save_model']['fpath']
+            self.save_model_path=config_local.DATA_PATHS['save_model']['fpath']
         self.save_model_path = save_model_path
         self.processed_output_dict = processed_output_dict
 
@@ -110,7 +110,7 @@ class Train:
             if validation:
                 context_sampling += ["all"]
             else: 
-                context_sampling += [0.2]  #20% stations used   
+                context_sampling += [0.1]  # stations used   
         if landmask_ds is not None:
             context += [landmask_ds]
             context_sampling += ["all"]

@@ -18,7 +18,8 @@ def main():
 
     python experiments/deepsensor/emily_dev_local/train_downscaling.py 
     """
-
+    
+    print('Starting training script')
     # ------------------------------------------
     # Settings
     # ------------------------------------------
@@ -29,7 +30,7 @@ def main():
     args = validate_and_convert_args(args)
 
     print('ARGUMENTS:', args)    
-    var = args["variable"]
+    variable = args["variable"]
     start_year = args["start_year"]
     end_year = args["end_year"]
     val_start_year = args["val_start_year"]
@@ -47,6 +48,7 @@ def main():
     topography_lowres_coarsen_factor = args["topography_lowres_coarsen_factor"]
     era5_coarsen_factor = args["era5_coarsen_factor"]
     n_epochs = args["n_epochs"]
+    station_as_context = args["station_as_context"]
 
     convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
     if args["unet_channels"] is not None:
@@ -55,7 +57,7 @@ def main():
         convnp_kwargs["likelihood"] = args["likelihood"]
     # else:
         # if precipitation, use bernoulli likelihood, otherwise default to cnp
-        # if var == "precipitation": 
+        # if variable == "precipitation": 
         #     convnp_kwargs["likelihood"] = "bernoulli-gamma"
     if args["internal_density"] is not None:
         convnp_kwargs["internal_density"] = args["internal_density"]
@@ -72,7 +74,7 @@ def main():
     # Preprocess data
     # ------------------------------------------
     data = PreprocessForDownscaling(
-        variable=var,
+        variable=variable,
         start_year=start_year,
         end_year=end_year,
         val_start_year=val_start_year,
@@ -81,16 +83,22 @@ def main():
         area=area,
         context_variables=context_variables,
     )
-    data_processor_dict_fpath = f'experiments/models/{model_name}/data_processor_dict_{var}_{model_name}.pkl'
-    if os.path.exists(data_processor_dict_fpath):
-        data_processor_dict = data.load_data_processor_dict(data_processor_dict_fpath)
+    
+    model_dir = os.path.join(DATA_PATHS['save_model']['fpath'], variable, model_name)
+    data_processor_fpath = f'{model_dir}/data_processor.pkl'
+
+    if os.path.exists(data_processor_fpath):
+        print('Using loaded dataprocessor')
+        data_processor_dict = data.load_data_processor_dict(data_processor_fpath)
         save_data_processor_dict=False
     else:
+        print('No dataprocessor found, will be created')
         data_processor_dict = None
-        save_data_processor_dict=data_processor_dict_fpath
-        if not os.path.exists(f'experiments/models/{model_name}'):
-            os.makedirs(f'experiments/models/{model_name}')
-
+        save_data_processor_dict=data_processor_fpath
+        if not os.path.exists(model_dir):
+            os.makedirs(model_dir)
+    
+    print('Starting data processing')
     data.run_processing_sequence(
         topography_highres_coarsen_factor,
         topography_lowres_coarsen_factor,
@@ -100,7 +108,7 @@ def main():
         remove_stations=remove_stations,
         save_data_processor_dict=save_data_processor_dict,
         data_processor_dict=data_processor_dict,
-        station_as_context=False
+        station_as_context=station_as_context,
     )
     processed_output_dict = data.get_processed_output_dict()
     data.print_resolutions()
@@ -108,10 +116,10 @@ def main():
     # ------------------------------------------
     # Train model
     # ------------------------------------------
-
+    print('Starting training')
     training = Train(processed_output_dict=processed_output_dict)
     training.run_training_sequence(n_epochs, model_name, batch=batch, batch_size=batch_size, lr=lr, **convnp_kwargs)
-    training.model.save(f'experiments/models/{model_name}/')
+    training.model.save(model_dir)
 
 if __name__ == "__main__":
     main()
