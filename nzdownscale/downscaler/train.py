@@ -1,6 +1,8 @@
 import time
 import logging
 from pathlib import Path
+from functools import partial
+from concurrent.futures import ThreadPoolExecutor
 
 logging.captureWarnings(True)
 
@@ -12,7 +14,6 @@ import lab as B
 import torch
 import deepsensor.torch  # noqa
 from tqdm import tqdm
-from joblib import Parallel, delayed, parallel_config
 from deepsensor.data.loader import TaskLoader
 from deepsensor.data.task import Task
 from deepsensor.model.convnp import ConvNP
@@ -31,6 +32,11 @@ def loglik(model: Model, *args, **kw_args):
     state, logpdfs = loglik(state, model, *args, **kw_args)
     B.set_global_random_state(state)
     return logpdfs
+
+
+def init_gpu_backend():
+    torch.set_default_device("cuda")
+    B.set_global_device("cuda:0")
 
 
 def train_epoch(
@@ -77,13 +83,19 @@ def train_epoch(
     batch_size = 2
     batch_losses = []
 
-    with parallel_config(backend='threading', n_jobs=2):
+    model_loss = partial(model.loss_fn, normalise=True)
+
+    # linear algebra init issue, see https://github.com/pytorch/pytorch/issues/90613
+    torch.inverse(torch.ones((1, 1), device="cuda:0"))
+
+    # TODO add parameter to use (or not) GPU initialiser
+    with ThreadPoolExecutor(max_workers=2, initializer=init_gpu_backend) as executor:
         for batch_i in tqdm(range(0, len(tasks), batch_size), disable=not progress_bar):
             opt.zero_grad()
-            batch_indices = range(batch_i, min(batch_i + batch_size, len(tasks)))
-            task_losses = Parallel()(
-                delayed(model.loss_fn)(tasks[i], normalise=True) for i in batch_indices
-            )
+            batch_tasks = [
+                tasks[i] for i in range(batch_i, min(batch_i + batch_size, len(tasks)))
+            ]
+            task_losses = list(executor.map(model_loss, batch_tasks))
             mean_batch_loss = B.mean(B.stack(*task_losses))
             mean_batch_loss.backward()
             opt.step()
