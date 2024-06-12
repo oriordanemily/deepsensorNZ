@@ -29,7 +29,7 @@ val_end_year:
 
 # Model name, if default it will be the time
 model_name:
-  arg: test_newdirs
+  arg: stations02_v2_id100
   # arg: default  
   type: str
 
@@ -66,23 +66,23 @@ include_landmask:
 # Context variables
 context_variables: 
   arg: ['temperature',
-        # 'precipitation',
+        'precipitation',
         '10m_u_component_of_wind',
         '10m_v_component_of_wind',
         'surface_pressure',
-        # 'surface_net_solar_radiation',
+        'surface_net_solar_radiation',
         'surface_solar_radiation_downwards',
         ]
   type: list
   
 # Station as context
 station_as_context:
-  arg: False
+  arg: True
   type: bool
 
 # Number of epochs
 n_epochs:
-  arg: 2 
+  arg: 50
   type: int
 
 # Channels for UNet
@@ -107,7 +107,7 @@ batch_size:
 
 # Internal density
 internal_density:
-  arg: 250  
+  arg: 100
   type: int
 
 # Auto set internal density

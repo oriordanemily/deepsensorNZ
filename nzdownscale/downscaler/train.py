@@ -42,10 +42,11 @@ class Train:
             set_gpu_default_device()
 
         if save_model_path == 'default':
-            self.save_model_path=config_local.DATA_PATHS['save_model']['fpath']
+            save_model_path=config_local.DATA_PATHS['save_model']['fpath']
         self.save_model_path = save_model_path
         self.processed_output_dict = processed_output_dict
-
+        
+        self.variable = processed_output_dict['data_settings']['var']
         self.era5_ds = processed_output_dict['era5_ds']
         self.highres_aux_ds = processed_output_dict['highres_aux_ds']
         self.aux_ds = processed_output_dict['aux_ds']
@@ -110,7 +111,7 @@ class Train:
             if validation:
                 context_sampling += ["all"]
             else: 
-                context_sampling += [0.1]  # stations used   
+                context_sampling += [0.2]  # stations used   
         if landmask_ds is not None:
             context += [landmask_ds]
             context_sampling += ["all"]
@@ -241,8 +242,7 @@ class Train:
         if model_name == 'default':
             model_id = str(round(time.time()))
             model_name = f'model_{model_id}'
-        else:
-            model_name = f'model_{model_name}'
+        
         self.set_save_dir(model_name)
 
         def compute_val_loss(model, val_tasks):
@@ -306,7 +306,7 @@ class Train:
     #     return te 
 
     def set_save_dir(self, model_name):
-        self.save_dir = f'{self.save_model_path}/{model_name}'
+        self.save_dir = f'{self.save_model_path}/{self.variable}/{model_name}'
         if not os.path.exists(self.save_dir): 
             os.makedirs(self.save_dir)
 
@@ -380,6 +380,7 @@ class Train:
         fig = plt.figure()
         plt.plot(train_losses, label='Train loss')
         plt.plot(val_losses, label='Val loss')
+        plt.legend()
         plt.show()
 
         if not os.path.exists(folder): os.makedirs(folder)
