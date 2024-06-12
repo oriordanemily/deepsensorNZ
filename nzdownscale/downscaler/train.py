@@ -80,7 +80,7 @@ def train_epoch(
     else:
         from tqdm import tqdm
 
-    batch_size = 4
+    batch_size = 8
     batch_losses = []
 
     model_loss = partial(model.loss_fn, normalise=True)
@@ -89,7 +89,7 @@ def train_epoch(
     torch.inverse(torch.ones((1, 1), device="cuda:0"))
 
     # TODO add parameter to use (or not) GPU initialiser
-    with ThreadPoolExecutor(max_workers=4, initializer=init_gpu_backend) as executor:
+    with ThreadPoolExecutor(max_workers=8, initializer=init_gpu_backend) as executor:
         for batch_i in tqdm(range(0, len(tasks), batch_size), disable=not progress_bar):
             opt.zero_grad()
             batch_tasks = [
