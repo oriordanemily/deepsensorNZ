@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #SBATCH --time=0:30:00
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=4
 #SBATCH --mem=50GB
 #SBATCH --gpus-per-node=A100-1g.5gb:1
 ##SBATCH --partition=hgx
