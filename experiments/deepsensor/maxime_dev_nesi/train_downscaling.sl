@@ -38,4 +38,6 @@ map -o logs/profile-${SLURM_JOB_ID}.map --profile \
     --n-epochs=1 \
     --internal-density=250 \
     --use-gpu \
-    --lr 5e-5
+    --lr 5e-5 \
+    --n-workers 8 \
+    --batch-size 8

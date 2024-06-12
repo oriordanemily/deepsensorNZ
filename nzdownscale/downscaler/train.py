@@ -34,11 +34,6 @@ def loglik(model: Model, *args, **kw_args):
     return logpdfs
 
 
-def init_gpu_backend():
-    torch.set_default_device("cuda")
-    B.set_global_device("cuda:0")
-
-
 def train_epoch(
     model: ConvNP,
     tasks: list[Task],
@@ -46,6 +41,9 @@ def train_epoch(
     opt=None,
     progress_bar=False,
     tqdm_notebook=False,
+    use_gpu=False,
+    n_workers=1,
+    batch_size=1,
 ) -> list[float]:
     """
     Train model for one epoch.
@@ -80,16 +78,17 @@ def train_epoch(
     else:
         from tqdm import tqdm
 
-    batch_size = 8
-    batch_losses = []
+    if use_gpu:
+        initializer = set_gpu_default_device
+        # linear algebra init issue, see https://github.com/pytorch/pytorch/issues/90613
+        torch.inverse(torch.ones((1, 1), device="cuda:0"))
+    else:
+        initializer = None
 
+    batch_losses = []
     model_loss = partial(model.loss_fn, normalise=True)
 
-    # linear algebra init issue, see https://github.com/pytorch/pytorch/issues/90613
-    torch.inverse(torch.ones((1, 1), device="cuda:0"))
-
-    # TODO add parameter to use (or not) GPU initialiser
-    with ThreadPoolExecutor(max_workers=8, initializer=init_gpu_backend) as executor:
+    with ThreadPoolExecutor(max_workers=n_workers, initializer=initializer) as executor:
         for batch_i in tqdm(range(0, len(tasks), batch_size), disable=not progress_bar):
             opt.zero_grad()
             batch_tasks = [
@@ -104,7 +103,13 @@ def train_epoch(
     return batch_losses
 
 
-class SimpleTrainer(Trainer):
+class BatchTrainer(Trainer):
+    def __init__(self, *args, use_gpu=False, n_workers=1, batch_size=1, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.use_gpu = use_gpu
+        self.n_workers = n_workers
+        self.batch_size = batch_size
+
     def __call__(
         self,
         tasks: list[Task],
@@ -117,6 +122,9 @@ class SimpleTrainer(Trainer):
             opt=self.opt,
             progress_bar=progress_bar,
             tqdm_notebook=tqdm_notebook,
+            use_gpu=self.use_gpu,
+            n_workers=self.n_workers,
+            batch_size=self.batch_size,
         )
 
 
@@ -134,6 +142,8 @@ class Train:
         processed_output_dict,
         save_model_path: str = "models/downscaling",
         use_gpu: bool = True,
+        n_workers: int = 1,
+        batch_size: int = 1,
     ) -> None:
         """
         Args:
@@ -147,6 +157,10 @@ class Train:
 
         if use_gpu:
             set_gpu_default_device()
+
+        self.use_gpu = use_gpu
+        self.n_workers = n_workers
+        self.batch_size = batch_size
 
         self.save_model_path = Path(save_model_path)
         self.processed_output_dict = processed_output_dict
@@ -326,7 +340,13 @@ class Train:
         save_dir.mkdir(parents=True, exist_ok=True)
 
         val_loss_best = min(self.val_losses) if self.val_losses else np.inf
-        trainer = SimpleTrainer(self.model, lr=lr)
+        trainer = BatchTrainer(
+            self.model,
+            lr=lr,
+            use_gpu=self.use_gpu,
+            n_workers=self.n_workers,
+            batch_size=self.batch_size,
+        )
 
         for epoch in tqdm(range(n_epochs)):
             train_losses = trainer(self.train_tasks)
