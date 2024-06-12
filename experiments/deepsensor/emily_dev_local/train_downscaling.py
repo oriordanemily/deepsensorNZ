@@ -10,6 +10,7 @@ from nzdownscale.dataprocess.utils import validate_and_convert_args
 from nzdownscale.dataprocess.config_local import DATA_PATHS
 
 import os 
+import shutil
 
 
 def main():
@@ -86,7 +87,7 @@ def main():
     
     model_dir = os.path.join(DATA_PATHS['save_model']['fpath'], variable, model_name)
     data_processor_fpath = f'{model_dir}/data_processor.pkl'
-
+    print('Looking for dataprocessor at:', data_processor_fpath)
     if os.path.exists(data_processor_fpath):
         print('Using loaded dataprocessor')
         data_processor_dict = data.load_data_processor_dict(data_processor_fpath)
@@ -97,6 +98,8 @@ def main():
         save_data_processor_dict=data_processor_fpath
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
+    
+    shutil.copy(DATA_PATHS['arguments'], model_dir)
     
     print('Starting data processing')
     data.run_processing_sequence(

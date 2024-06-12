@@ -42,17 +42,18 @@ class Train:
             set_gpu_default_device()
 
         if save_model_path == 'default':
-            self.save_model_path=config_local.DATA_PATHS['save_model']['fpath']
+            save_model_path=config_local.DATA_PATHS['save_model']['fpath']
         self.save_model_path = save_model_path
         self.processed_output_dict = processed_output_dict
 
+        self.variable = processed_output_dict['data_settings']['var']
         self.era5_ds = processed_output_dict['era5_ds']
         self.highres_aux_ds = processed_output_dict['highres_aux_ds']
         self.aux_ds = processed_output_dict['aux_ds']
         self.station_df = processed_output_dict['station_df']
         self.landmask_ds = processed_output_dict['landmask_ds']
         self.station_as_context = processed_output_dict['station_as_context']
-
+        
         self.data_processor = processed_output_dict['data_processor']
 
         self.start_year = processed_output_dict['date_info']['start_year']
@@ -242,7 +243,7 @@ class Train:
             model_id = str(round(time.time()))
             model_name = f'model_{model_id}'
         else:
-            model_name = f'model_{model_name}'
+            model_name = f'{model_name}'
         self.set_save_dir(model_name)
 
         def compute_val_loss(model, val_tasks):
@@ -306,7 +307,7 @@ class Train:
     #     return te 
 
     def set_save_dir(self, model_name):
-        self.save_dir = f'{self.save_model_path}/{model_name}'
+        self.save_dir = f'{self.save_model_path}/{self.variable}/{model_name}'
         if not os.path.exists(self.save_dir): 
             os.makedirs(self.save_dir)
 
