@@ -2,7 +2,6 @@ import time
 import logging
 from pathlib import Path
 from functools import partial
-from concurrent.futures import ThreadPoolExecutor
 
 logging.captureWarnings(True)
 
@@ -14,6 +13,7 @@ import lab as B
 import torch
 import deepsensor.torch  # noqa
 from tqdm import tqdm
+from joblib import Parallel, delayed
 from deepsensor.data.loader import TaskLoader
 from deepsensor.data.task import Task
 from deepsensor.model.convnp import ConvNP
@@ -32,6 +32,12 @@ def loglik(model: Model, *args, **kw_args):
     state, logpdfs = loglik(state, model, *args, **kw_args)
     B.set_global_random_state(state)
     return logpdfs
+
+
+class LokyParallel(Parallel):
+    def __init__(self, *args, initializer=None, **kwargs):
+        super().__init__(*args, backend="loky", **kwargs)
+        self._backend_args["initializer"] = initializer
 
 
 def train_epoch(
@@ -88,13 +94,13 @@ def train_epoch(
     batch_losses = []
     model_loss = partial(model.loss_fn, normalise=True)
 
-    with ThreadPoolExecutor(max_workers=n_workers, initializer=initializer) as executor:
+    with LokyParallel(initializer=initializer, n_jobs=n_workers) as parallel:
         for batch_i in tqdm(range(0, len(tasks), batch_size), disable=not progress_bar):
             opt.zero_grad()
-            batch_tasks = [
-                tasks[i] for i in range(batch_i, min(batch_i + batch_size, len(tasks)))
-            ]
-            task_losses = list(executor.map(model_loss, batch_tasks))
+            task_losses = parallel(
+                delayed(model_loss)(tasks[i])
+                for i in range(batch_i, min(batch_i + batch_size, len(tasks)))
+            )
             mean_batch_loss = B.mean(B.stack(*task_losses))
             mean_batch_loss.backward()
             opt.step()
