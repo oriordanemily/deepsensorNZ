@@ -18,6 +18,7 @@ from deepsensor.data.loader import TaskLoader
 from tqdm import tqdm
 
 from deepsensor.model.convnp import ConvNP
+from nzdownscale.downscaler.model import ConvNP_dropout
 from deepsensor.train.train import train_epoch, set_gpu_default_device
 from nzdownscale.dataprocess import config, config_local, utils
 
@@ -172,7 +173,7 @@ class Train:
             convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
     
         # Set up model
-        model = ConvNP(self.data_processor,
+        model = ConvNP_dropout(self.data_processor,
                     self.task_loader, 
                     **convnp_kwargs,
                     )

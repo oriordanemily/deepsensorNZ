@@ -11,25 +11,25 @@ start_year:
 
 # Training end year (inclusive)
 end_year:
-  arg: 2011
-  #arg: 2001 
+  # arg: 2011
+  arg: 2001
   type: int
 
 # Validation start year
 val_start_year:
-  arg: 2012  
-  #arg: 2002
+  # arg: 2012  
+  arg: 2002
   type: int
 
 # Validation end year (inclusive)
 val_end_year:
-  arg: 2015
-  #arg: 2002  
+  # arg: 2015
+  arg: 2002  
   type: int
 
 # Model name, if default it will be the time
 model_name:
-  arg: test_newdirs
+  arg: dropout
   # arg: default  
   type: str
 
@@ -66,11 +66,11 @@ include_landmask:
 # Context variables
 context_variables: 
   arg: ['temperature',
-        # 'precipitation',
+        'precipitation',
         '10m_u_component_of_wind',
         '10m_v_component_of_wind',
         'surface_pressure',
-        # 'surface_net_solar_radiation',
+        'surface_net_solar_radiation',
         'surface_solar_radiation_downwards',
         ]
   type: list
@@ -82,7 +82,7 @@ station_as_context:
 
 # Number of epochs
 n_epochs:
-  arg: 2 
+  arg: 3 
   type: int
 
 # Channels for UNet
