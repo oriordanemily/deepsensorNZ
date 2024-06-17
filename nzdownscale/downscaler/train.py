@@ -234,6 +234,7 @@ class Train:
         model = self.model
         train_tasks = self.train_tasks
         val_tasks = self.val_tasks
+        opt = torch.optim.Adam(model.model.parameters(), lr=lr, weight_decay=1e-2)
 
         if shuffle_tasks:
             random.shuffle(train_tasks)
@@ -265,11 +266,11 @@ class Train:
 
         for epoch in tqdm(range(n_epochs)):
             if batch:
-                batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}'], batch_size=len(batched_train_tasks[f'{num_stations}']), lr=lr) for num_stations in batched_train_tasks.keys()]
+                batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}'], batch_size=len(batched_train_tasks[f'{num_stations}']), lr=lr, opt=opt) for num_stations in batched_train_tasks.keys()]
                 # batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}']) for num_stations in batched_train_tasks.keys()]
                 batch_losses = [item for sublist in batch_losses for item in sublist]
             else:
-                batch_losses = train_epoch(model, train_tasks)
+                batch_losses = train_epoch(model, train_tasks, opt=opt)
             batch_losses_not_nan = [arr for arr in batch_losses if~ np.isnan(arr)]
             train_loss = np.mean(batch_losses_not_nan)
             train_losses.append(train_loss)
@@ -283,7 +284,7 @@ class Train:
 
             if val_loss < val_loss_best:
                 val_loss_best = val_loss
-                
+                print(f'Saving model at epoch {epoch}')
                 torch.save(model.model.state_dict(), f"{self.save_dir}/{model_name}.pt")
                 self.save_metadata(f"{self.save_dir}", f'metadata_{model_name}')
                 
