@@ -29,13 +29,13 @@ val_end_year:
 
 # Model name, if default it will be the time
 model_name:
-  arg: stations05_wd1e-2_lr1e-4
+  arg: hourly_v1
   # arg: default  
   type: str
 
 # Use daily data
 use_daily_data:
-  arg: True  
+  arg: False  
   type: bool
 
 # Coarsen factor for high resolution topography
@@ -76,6 +76,9 @@ context_variables:
   type: list
   
 # Station as context
+# If True, all stations are included as context variables
+# If False, no stations are included as context variables
+# If float, the percentage of stations to include as context variables
 station_as_context:
   arg: 0.5
   type: bool_or_float
@@ -142,4 +145,3 @@ remove_stations:
 lr:
   arg: 1e-4
   type: float
-
