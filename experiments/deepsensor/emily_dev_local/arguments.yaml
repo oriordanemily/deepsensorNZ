@@ -110,7 +110,7 @@ batch_size:
 
 # Internal density
 internal_density:
-  arg: 100
+  arg: 250
   type: int
 
 # Auto set internal density
@@ -143,5 +143,5 @@ remove_stations:
 
 # Learning rate
 lr:
-  arg: 5e-5  
+  arg: 1e-4
   type: float

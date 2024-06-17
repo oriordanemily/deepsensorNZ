@@ -243,7 +243,7 @@ class Train:
         model = self.model
         train_tasks = self.train_tasks
         val_tasks = self.val_tasks
-        opt = torch.optim.Adam(model.model.parameters(), lr=lr, weight_decay=1e-3)
+        opt = torch.optim.Adam(model.model.parameters(), lr=lr, weight_decay=1e-2)
 
         if shuffle_tasks:
             random.shuffle(train_tasks)
@@ -295,7 +295,7 @@ class Train:
 
             if val_loss < val_loss_best:
                 val_loss_best = val_loss
-                
+                print(f'Saving model at epoch {epoch}')
                 torch.save(model.model.state_dict(), f"{self.save_dir}/{model_name}.pt")
                 self.save_metadata(f"{self.save_dir}", f'metadata_{model_name}')
                 
