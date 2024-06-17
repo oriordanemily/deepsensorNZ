@@ -76,8 +76,11 @@ context_variables:
   type: list
   
 # Station as context
+# If True, all stations are included as context variables
+# If False, no stations are included as context variables
+# If float, the percentage of stations to include as context variables
 station_as_context:
-  arg: True
+  arg: 0.5
   type: bool
 
 # Number of epochs
