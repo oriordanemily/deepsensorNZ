@@ -143,13 +143,13 @@ class Train:
 
         if not validation:
             train_tasks = []
-            for date in tqdm(train_dates, desc="Loading train tasks..."):
+            for date in tqdm(train_dates[::5], desc="Loading train tasks..."):
                 task = task_loader(date, context_sampling=context_sampling, target_sampling="all")
                 # task["ops"] = ["numpy_mask", "nps_mask"]
                 train_tasks.append(task)
 
         val_tasks = []
-        for date in tqdm(val_dates, desc="Loading val tasks..."):
+        for date in tqdm(val_dates[::5], desc="Loading val tasks..."):
             task = task_loader(date, context_sampling=context_sampling, target_sampling="all")
              # task["ops"] = ["numpy_mask", "nps_mask"]
             val_tasks.append(task)

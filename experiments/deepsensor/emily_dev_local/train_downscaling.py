@@ -86,7 +86,10 @@ def main():
     )
     
     model_dir = os.path.join(DATA_PATHS['save_model']['fpath'], variable)#, model_name)
+    # if use_daily_data:
     data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}.pkl'
+    # else:
+    #     data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}_hourly.pkl'
 
     print('Looking for dataprocessor at:', data_processor_fpath)
     if os.path.exists(data_processor_fpath):

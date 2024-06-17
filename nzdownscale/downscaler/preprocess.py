@@ -140,20 +140,23 @@ class PreprocessForDownscaling:
             self.highres_aux_ds = data_processor_dict['highres_aux_ds']
             self.station_df = data_processor_dict['station_df']
             self.landmask_ds = data_processor_dict['landmask_ds']
-            self.station_as_context = data_processor_dict['station_as_context']
         else:
             self.data_processor = data_processor_dict['data_processor']
             self.aux_ds = data_processor_dict['aux_ds']
             self.highres_aux_ds = data_processor_dict['highres_aux_ds']
             self.landmask_ds = data_processor_dict['landmask_ds']
-            self.station_as_context = data_processor_dict['station_as_context']
-            if (data_processor_dict['era5_ds'].time == era5_raw_ds.time).all():
-                self.era5_ds = data_processor_dict['era5_ds']
-                self.station_df = data_processor_dict['station_df']
+            if len(data_processor_dict['era5_ds'].time) == len(era5_raw_ds.time):
+                if (data_processor_dict['era5_ds'].time == era5_raw_ds.time).all():
+                    self.era5_ds = data_processor_dict['era5_ds']
+                    self.station_df = data_processor_dict['station_df']
+                else:
+                    self.era5_ds = self.data_processor(era5_raw_ds)
+                    self.station_df = self.data_processor(station_raw_df)
             else:
                 self.era5_ds = self.data_processor(era5_raw_ds)
                 self.station_df = self.data_processor(station_raw_df)
-            
+
+        self.station_as_context = station_as_context
 
             # # self.aux_ds = self.data_processor(aux_raw_ds)
             # self.era5_ds = self.data_processor(era5_raw_ds)
@@ -240,7 +243,8 @@ class PreprocessForDownscaling:
         # Convert hourly to daily data
         if self.use_daily_data:
             ds_era = self._convert_era5_to_daily(self.ds_era)
-
+        else:
+            ds_era = self.ds_era
         # Coarsen
         self.era5_coarsen_factor = coarsen_factor
         self.ds_era_coarse = self._coarsen_era5(ds_era, self.era5_coarsen_factor)
