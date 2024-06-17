@@ -103,6 +103,7 @@ def main():
     shutil.copy(DATA_PATHS['arguments'], model_dir)
     
     print('Starting data processing')
+    print(f'1. {station_as_context}')
     data.run_processing_sequence(
         topography_highres_coarsen_factor,
         topography_lowres_coarsen_factor,
