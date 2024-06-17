@@ -29,7 +29,7 @@ val_end_year:
 
 # Model name, if default it will be the time
 model_name:
-  arg: stations02_v2_id100
+  arg: stations02_id250_wd1e-2_lr1e-4
   # arg: default  
   type: str
 
@@ -107,7 +107,7 @@ batch_size:
 
 # Internal density
 internal_density:
-  arg: 100
+  arg: 250
   type: int
 
 # Auto set internal density
@@ -140,5 +140,5 @@ remove_stations:
 
 # Learning rate
 lr:
-  arg: 5e-5  
+  arg: 1e-4
   type: float
