@@ -112,7 +112,7 @@ class Train:
         context_sampling = ["all", "all"]
         if station_as_context != 0:
             context += [station_df]        
-            if validation == True:
+            if validation:
                 context_sampling += ['all']
             else:
                 context_sampling += [station_as_context]
@@ -252,8 +252,7 @@ class Train:
         if model_name == 'default':
             model_id = str(round(time.time()))
             model_name = f'model_{model_id}'
-        else:
-            model_name = f'{model_name}'
+
         self.set_save_dir(model_name)
 
         def compute_val_loss(model, val_tasks):
@@ -393,6 +392,7 @@ class Train:
         fig = plt.figure()
         plt.plot(train_losses, label='Train loss')
         plt.plot(val_losses, label='Val loss')
+        plt.legend()
         plt.show()
 
         if not os.path.exists(folder): os.makedirs(folder)

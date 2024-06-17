@@ -34,6 +34,7 @@ __pycache__
 #NeSI
 *nesi_startup.sh
 *train.sl
+*.map
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
