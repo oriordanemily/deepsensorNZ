@@ -29,7 +29,7 @@ val_end_year:
 
 # Model name, if default it will be the time
 model_name:
-  arg: test_newdirs
+  arg: dp_test
   # arg: default  
   type: str
 
@@ -66,19 +66,22 @@ include_landmask:
 # Context variables
 context_variables: 
   arg: ['temperature',
-        # 'precipitation',
+        'precipitation',
         '10m_u_component_of_wind',
         '10m_v_component_of_wind',
         'surface_pressure',
-        # 'surface_net_solar_radiation',
+        'surface_net_solar_radiation',
         'surface_solar_radiation_downwards',
         ]
   type: list
   
 # Station as context
+# If True, all stations are included as context variables
+# If False, no stations are included as context variables
+# If float, the percentage of stations to include as context variables
 station_as_context:
-  arg: False
-  type: bool
+  arg: 0.5
+  type: bool_or_float
 
 # Number of epochs
 n_epochs:

@@ -46,7 +46,8 @@ era5_interp_filled = None
 # model_name = 'model_1714684457'
 # model_name = 'model_1716532171'
 # model_name = 'model_model_radiation'
-model_name = 'model_full_allcontextvar'
+# model_name = 'model_full_allcontextvar'
+model_name = 'dp_test'
 
 # --- from mahuika ----
 # model_name = 'test_model_1712898775' # 50
@@ -60,15 +61,17 @@ model_name = 'model_full_allcontextvar'
 # model_name = 'test_model_1712792079' # 2000
 # model_name = '_model_1713135569'
 # model_name = '_model_1713136369'
+# model_name = 'stations02_wd1e-3'
 
 # PRECIP
 # model_name = 'model_precip_100epochs'
 
+var = 'temperature'
 
 base = '/home/emily/deepsensor/deepweather-downscaling/experiments/'
-base2 = "/home/emily/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/"
+# base2 = "/home/emily/deepsensor/deepweather-downscaling/experiments/deepsensor/emily_dev_local/"
 
-model_dir = base + f"models/downscaling/{model_name}/"
+model_dir = base + f"models/{var}/{model_name}/"
 
 train_metadata_path = (
     model_dir + f"metadata_{model_name}.pkl"
@@ -101,23 +104,23 @@ print(
 )
 # dp_path = base + f'models/{model_name[6:]}/not'
 
-dp_path = base + f'models/downscaling/{model_name}/data_processor_dict_{var}_{model_name}.pkl'
+dp_path = base + f'models/{var}/data_processor_{validation_date_range[0]}_{validation_date_range[1]}.pkl'
 # dp_path = 'not'
 # dp_path = '/home/emily/deepsensor/deepweather-downscaling/data_processor_dict_temp_model_radiation.pkl'
-# if os.path.exists(dp_path):
-#     with open(
-#         dp_path, "rb"
-#     ) as handle:
-#         data_processor_dict = pickle.load(handle)
-#         print("Creating validate object using loaded processor dict")
-#     save_dp = None # don't save as it's already saved
-# else:
-data_processor_dict = None
-print(
-    "Creating validate object without loaded processor dict,\
-        may be slow"
-)
-save_dp = dp_path # save the processor dict to this fpath
+if os.path.exists(dp_path):
+    with open(
+        dp_path, "rb"
+    ) as handle:
+        data_processor_dict = pickle.load(handle)
+        print("Creating validate object using loaded processor dict")
+    save_dp = None # don't save as it's already saved
+else:
+    data_processor_dict = None
+    print(
+        "Creating validate object without loaded processor dict,\
+            may be slow"
+    )
+    save_dp = dp_path # save the processor dict to this fpath
 
 remove_stations_list = [
     "TAUPO AWS",
@@ -133,6 +136,8 @@ remove_stations_list = [
 ]
 # if not load_validate:
 # if 'validate' not in locals():
+#%%
+
 validate = ValidateV1(
     training_metadata_path=train_metadata_path,
     validation_date_range=validation_date_range,
@@ -172,7 +177,7 @@ print(f"Validating for dates between {date_range}")
 validation_stations = validate.stations_in_date_range(date_range)
 
 # %%
-prediction_fpath = f"/home/emily/deepsensor/deepweather-downscaling/experiments/models/downscaling/{model_name}/predictions_{model_name}_{validation_date_range[0]}.pkl"
+prediction_fpath = f"/home/emily/deepsensor/deepweather-downscaling/experiments/models/{var}/{model_name}/predictions_{validation_date_range[0]}.pkl"
 if os.path.exists(prediction_fpath):
     print("Loading predictions from file")
     pred = utils.open_pickle(prediction_fpath)
@@ -205,7 +210,7 @@ era5_interp = None
 if era5_interp is None:
     era5_interp_path = (
         base
-        + f"models/downscaling/{model_with_era5_done}/era5_interp_{date}_{number_of_months}months.pkl"
+        + f"models/{var}/{model_with_era5_done}/era5_interp_{date}_{number_of_months}months.pkl"
     )
     if os.path.exists(era5_interp_path):
         print("Loading interpolated ERA5 from file")
@@ -236,7 +241,7 @@ era5_interp_filled = None
 if era5_interp_filled is None:
     era5_interp_filled_path = (
         base
-        + f"models/downscaling/{model_with_era5_done}/era5_interp_filled_{date}_{number_of_months}months.pkl"
+        + f"models/{var}/{model_with_era5_done}/era5_interp_filled_{date}_{number_of_months}months.pkl"
     )
     if os.path.exists(era5_interp_filled_path):
         print("Loading filled ERA5 from file")
@@ -283,14 +288,13 @@ loss_dict_era5, locations = validate.calculate_loss_era5(
     dates, validation_stations, era5_interp_filled
 )
 # %%
-# could speed this up with multiprocessing ?
 loss_dict, pred_dict, station_dict = validate.calculate_loss(
     dates, locations, pred=pred, return_pred=True, return_station=True, verbose=True
 )
 
 with open(
     base
-    + f"models/downscaling/{model_name}/loss_dict_{date}_{number_of_months}months.pkl",
+    + f"models/{var}/{model_name}/loss_dict_{date}_{number_of_months}months.pkl",
     "wb",
 ) as handle:
     pickle.dump(loss_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -502,15 +506,15 @@ ax.legend()
 ax.set_xlabel("Month")
 ax.set_ylabel("Average loss at stations")
 # %%
-# validate.plot_nationwide_prediction(date=date)
+validate.plot_nationwide_prediction(date=date)
 
 # %%
 # nationwide
-date = "2016-01-01"
+date = "2016-07-01"
 validate.plot_ERA5_and_prediction(
     date=date,
     pred=pred,
-    #   era5=era5_interp_filled,
+    era5=era5_interp_filled,
     remove_sea=True,
 )
 # 'THE BROTHERS LIGHT', 'WHITE ISLAND AWS',

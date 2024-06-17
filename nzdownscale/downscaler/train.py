@@ -12,6 +12,8 @@ import cartopy.feature as cf
 import lab as B
 import torch
 import random
+import xarray as xr
+import pandas as pd
 
 import deepsensor.torch
 from deepsensor.data.loader import TaskLoader
@@ -20,6 +22,8 @@ from tqdm import tqdm
 from deepsensor.model.convnp import ConvNP
 from deepsensor.train.train import train_epoch, set_gpu_default_device
 from nzdownscale.dataprocess import config, config_local, utils
+from deepsensor.data.task import Task
+from sklearn.model_selection import train_test_split
 
 
 class Train:
@@ -106,19 +110,24 @@ class Train:
 
         context = [era5_ds, aux_ds]
         context_sampling = ["all", "all"]
-        if station_as_context:
-            context += [station_df]          
-            if validation:
-                context_sampling += ["all"]
-            else: 
-                context_sampling += [0.1]  # stations used   
+        if station_as_context != 0:
+            context += [station_df]        
+            if validation == True:
+                context_sampling += ['all']
+            else:
+                context_sampling += [station_as_context]
+   
         if landmask_ds is not None:
             context += [landmask_ds]
             context_sampling += ["all"]
         
-        task_loader = TaskLoader(context=context,
-                                target=station_df, 
-                                aux_at_targets=highres_aux_ds,)
+        # task_loader = TaskLoader(context=context,
+        #                         target=station_df, 
+        #                         aux_at_targets=highres_aux_ds,)
+
+        task_loader = TaskLoader_SampleStations(context=context,
+                                                target=station_df, 
+                                                aux_at_targets=highres_aux_ds,)
         if verbose:
             print(task_loader)
 
@@ -234,6 +243,7 @@ class Train:
         model = self.model
         train_tasks = self.train_tasks
         val_tasks = self.val_tasks
+        opt = torch.optim.Adam(model.model.parameters(), lr=lr, weight_decay=1e-3)
 
         if shuffle_tasks:
             random.shuffle(train_tasks)
@@ -266,11 +276,13 @@ class Train:
 
         for epoch in tqdm(range(n_epochs)):
             if batch:
-                batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}'], batch_size=len(batched_train_tasks[f'{num_stations}']), lr=lr) for num_stations in batched_train_tasks.keys()]
+                batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}'], 
+                                            batch_size=len(batched_train_tasks[f'{num_stations}']), 
+                                            lr=lr, opt=opt) for num_stations in batched_train_tasks.keys()]
                 # batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}']) for num_stations in batched_train_tasks.keys()]
                 batch_losses = [item for sublist in batch_losses for item in sublist]
             else:
-                batch_losses = train_epoch(model, train_tasks)
+                batch_losses = train_epoch(model, train_tasks, opt=opt)
             batch_losses_not_nan = [arr for arr in batch_losses if~ np.isnan(arr)]
             train_loss = np.mean(batch_losses_not_nan)
             train_losses.append(train_loss)
@@ -388,4 +400,116 @@ class Train:
         print(f"Saved: {folder}/{save_name}")
 
 
-# %%
+class TaskLoader_SampleStations(TaskLoader):
+    def __init__(self, context, target, aux_at_targets, **kwargs):
+        super().__init__(context=context, target=target, aux_at_targets=aux_at_targets, **kwargs)
+    
+    def sample_df(self, df, sampling_strat, seed=None):
+        df = df.dropna(how="any")  # If any obs are NaN, drop them
+
+        if isinstance(sampling_strat, float):
+            sampling_strat = int(sampling_strat * df.shape[0])
+
+        if isinstance(sampling_strat, (int, np.integer)):
+            N = sampling_strat
+            rng = np.random.default_rng(seed)
+            idx = rng.choice(df.index, N, replace=False)
+            X_c = df.loc[idx].reset_index()[["x1", "x2"]].values.T.astype(self.dtype)
+            Y_c = df.loc[idx].values.T
+
+            # Get the target data as the complementary set
+            X_t = df.drop(idx).reset_index()[["x1", "x2"]].values.T.astype(self.dtype)
+            Y_t = df.drop(idx).values.T
+            
+        elif isinstance(sampling_strat, str) and sampling_strat in [
+            "all",
+            "split",
+        ]:
+            # NOTE if "split", we assume that the context-target split has already been applied to the df
+            # in an earlier scope with access to both the context and target data. This is maybe risky!
+            X_c = df.reset_index()[["x1", "x2"]].values.T.astype(self.dtype)
+            Y_c = df.values.T
+            X_t = X_c
+            Y_t = Y_c
+        #     raise InvalidSamplingStrategyError(f"Unknown sampling strategy {sampling_strat}")
+
+        return X_c, Y_c, X_t, Y_t
+
+    def task_generation(self, date, context_sampling="all", target_sampling=None, split_frac=0.5, datewise_deterministic=False, seed_override=None):
+        
+        def check_sampling_strat(sampling_strat, set):
+            if sampling_strat is None:
+                return None
+            if not isinstance(sampling_strat, (list, tuple)):
+                sampling_strat = tuple([sampling_strat] * len(set))
+            return sampling_strat
+
+        context_sampling = check_sampling_strat(context_sampling, self.context)
+        target_sampling = check_sampling_strat(target_sampling, self.target)
+
+        if split_frac < 0 or split_frac > 1:
+            raise ValueError(f"split_frac must be between 0 and 1, got {split_frac}")
+
+        if not isinstance(date, pd.Timestamp):
+            date = pd.Timestamp(date)
+
+        if seed_override is not None:
+            seed = seed_override
+        elif datewise_deterministic:
+            seed = int(date.strftime("%Y%m%d"))
+        else:
+            seed = None
+
+        task = {}
+        task["time"] = date
+        task["ops"] = []
+        task["X_c"] = []
+        task["Y_c"] = []
+        task["X_t"] = []
+        task["Y_t"] = []
+
+        context_slices = [
+            self.time_slice_variable(var, date, delta_t)
+            for var, delta_t in zip(self.context, self.context_delta_t)
+        ]
+        target_slices = [
+            self.time_slice_variable(var, date, delta_t)
+            for var, delta_t in zip(self.target, self.target_delta_t)
+        ]
+
+        for i, (var, sampling_strat) in enumerate(zip(context_slices, context_sampling)):
+            context_seed = seed + i if seed is not None else None
+            if isinstance(var, (pd.DataFrame, pd.Series)):
+                X_c, Y_c, X_t, Y_t = self.sample_df(var, sampling_strat, context_seed)
+                task["X_t"].append(X_t)
+                task["Y_t"].append(Y_t)
+            elif isinstance(var, (xr.Dataset, xr.DataArray)):
+                X_c, Y_c = self.sample_da(var, sampling_strat, context_seed)
+
+            task["X_c"].append(X_c)
+            task["Y_c"].append(Y_c)
+        
+        if self.aux_at_contexts is not None:
+            X_c_offgrid = [X_c for X_c in task["X_c"] if not isinstance(X_c, tuple)]
+            if len(X_c_offgrid) == 0:
+                X_c_offrid_all = np.empty((2, 0), dtype=self.dtype)
+            else:
+                X_c_offrid_all = np.concatenate(X_c_offgrid, axis=1)
+            Y_c_aux = self.sample_offgrid_aux(
+                X_c_offrid_all,
+                self.time_slice_variable(self.aux_at_contexts, date),
+            )
+            task["X_c"].append(X_c_offrid_all)
+            task["Y_c"].append(Y_c_aux)
+
+        if self.aux_at_targets is not None:
+            if len(task["X_t"]) > 1:
+                raise ValueError(
+                    "Cannot add auxiliary variable to target set when there are multiple target variables (not supported by default `ConvNP` model)."
+                )
+            task["Y_t_aux"] = self.sample_offgrid_aux(
+                task["X_t"][0],
+                self.time_slice_variable(self.aux_at_targets, date),
+            )
+
+        return Task(task)

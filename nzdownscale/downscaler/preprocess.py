@@ -107,7 +107,7 @@ class PreprocessForDownscaling:
         data_processor_dict=None,
         save_data_processor_dict=None,
         remove_stations=[None],
-        station_as_context=True
+        station_as_context=False
         ):
         
         self.load_topography()
@@ -118,10 +118,6 @@ class PreprocessForDownscaling:
         era5_raw_ds = self.preprocess_era5(coarsen_factor=era5_coarsen_factor)
         station_raw_df = self.preprocess_stations(remove_stations=remove_stations, fill_missing=True)
 
-        # if include_time_of_year: 
-        #     raise NotImplementedError
-        # if include_landmask:
-        #     raise NotImplementedError
         if include_landmask:
             landmask_raw_ds = self.load_landmask()
         else:
@@ -147,12 +143,24 @@ class PreprocessForDownscaling:
             self.station_as_context = data_processor_dict['station_as_context']
         else:
             self.data_processor = data_processor_dict['data_processor']
-            self.aux_ds = self.data_processor(aux_raw_ds)
-            self.era5_ds = self.data_processor(era5_raw_ds)
-            self.highres_aux_ds = self.data_processor(highres_aux_raw_ds)
-            self.station_df = self.data_processor(station_raw_df)
-            self.landmask_ds = self.data_processor(landmask_raw_ds)
+            self.aux_ds = data_processor_dict['aux_ds']
+            self.highres_aux_ds = data_processor_dict['highres_aux_ds']
+            self.landmask_ds = data_processor_dict['landmask_ds']
             self.station_as_context = data_processor_dict['station_as_context']
+            if (data_processor_dict['era5_ds'].time == era5_raw_ds.time).all():
+                self.era5_ds = data_processor_dict['era5_ds']
+                self.station_df = data_processor_dict['station_df']
+            else:
+                self.era5_ds = self.data_processor(era5_raw_ds)
+                self.station_df = self.data_processor(station_raw_df)
+            
+
+            # # self.aux_ds = self.data_processor(aux_raw_ds)
+            # self.era5_ds = self.data_processor(era5_raw_ds)
+            # # self.highres_aux_ds = self.data_processor(highres_aux_raw_ds)
+            # self.station_df = self.data_processor(station_raw_df)
+            # # self.landmask_ds = self.data_processor(landmask_raw_ds)
+            # self.station_as_context = data_processor_dict['station_as_context']
 
     def load_topography(self):
         print('Loading topography...')

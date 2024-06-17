@@ -209,6 +209,14 @@ def str_or_none(value):
         return None
     else:
         return str(value)
+    
+def bool_or_float(value):
+    if value is True:
+        return 1.0
+    elif value is False:
+        return 0.0
+    else:
+        return float(value)
 
 def validate_and_convert_args(args):
 
@@ -220,6 +228,7 @@ def validate_and_convert_args(args):
     'list': list,
     'int_or_none': int_or_none,
     'str_or_none': str_or_none,
+    'bool_or_float': bool_or_float,
     }
 
     validated_args = {}

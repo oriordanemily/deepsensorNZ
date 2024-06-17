@@ -138,7 +138,7 @@ class ValidateV1:
             include_landmask=True,
             data_processor_dict=self.data_processor_dict,
             save_data_processor_dict=save_data_processing_dict,
-            station_as_context=self.model_metadata['station_as_context'],
+            station_as_context='all',#self.model_metadata['station_as_context'],
             )
         processed_output_dict = data.get_processed_output_dict()
 
@@ -717,10 +717,14 @@ class ValidateV1:
         #setup
         task_loader = self.task_loader
         model = self.model
-        if era5 == None:
-            era5_raw_ds = self.processed_dict['era5_raw_ds']
+        var = self.get_variable_name('era5')
+        if era5 is None:
+            era5_raw_ds = self.processed_dict['era5_raw_ds'][var]
         else:
-            era5_raw_ds = era5
+            if isinstance(era5, xr.Dataset):
+                era5_raw_ds = era5[var]
+            elif isinstance(era5, xr.DataArray):
+                era5_raw_ds = era5
         station_raw_df = self.processed_dict['station_raw_df']
 
         # get location if specified
@@ -1072,12 +1076,16 @@ class ValidateV1:
             print('Loading test tasks...')
         
         # remove stations in remove_stations_from_tasks from the station data to be used in test tasks
-        # ! NOTE ! currently predict doesn't use the station data, so this is unnecessary.
         station_df = self.processed_dict['station_raw_df'].copy()
         self.processed_dict['station_raw_df'] = self._remove_stations_from_station_df(station_df, remove_stations_from_tasks)
         
+        # if self.model_metadata['station_as_context']:
+        #     context_sampling = ['all', 'all', 'all', 'all']
+        # else:
+        #     context_sampling = ['all', 'all', 'all']
+        # feed context sampling into task_loader if needed
 
-        test_task = task_loader(dates, context_sampling = ['all', 'all', 'all'], target_sampling='all',  seed_override=42)
+        test_task = task_loader(dates, target_sampling='all',  seed_override=42)
         if verbose:
             print('Test tasks loaded')
         if len(dates) == 1:
@@ -1119,7 +1127,7 @@ class ValidateV1:
         # merge station_df with removal_df to remove stations
         merged_df = station_df.reset_index().merge(removal_df, on=['latitude', 'longitude'], how='left', indicator=True).set_index(['time', 'latitude', 'longitude'])
         final_df = merged_df[merged_df['_merge'] == 'left_only'].drop(columns=['_merge'])
-        
+        print(f"Removed the following stations from station_df: {stations}"        )
         return final_df
     
     def _infer_extent(self):
