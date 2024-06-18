@@ -1,5 +1,6 @@
 import time
 import logging
+import copyreg
 from pathlib import Path
 from functools import partial
 
@@ -13,19 +14,36 @@ import lab as B
 import torch
 import deepsensor.torch  # noqa
 from tqdm import tqdm
-from joblib import Parallel, delayed
-from joblib.externals import loky
+from torch.multiprocessing import Pool, Process, set_start_method
 from deepsensor.data.loader import TaskLoader
 from deepsensor.data.task import Task
 from deepsensor.model.convnp import ConvNP
 from deepsensor.train import Trainer, set_gpu_default_device
 from neuralprocesses.model.loglik import loglik
 from neuralprocesses.model import Model
+from neuralprocesses.torch.nn import Module
+from neuralprocesses.torch import Discretisation
 
 from nzdownscale.dataprocess import config, utils
 
 
-loky.backend.context.set_start_method("spawn")
+try:
+    set_start_method("spawn")
+except RuntimeError:
+    pass
+
+
+def pickle_Module(m):
+    return Module, ((),)
+
+
+def pickle_Discretisation(d):
+    args = (d.points_per_unit, d.multiple, d.margin, d.dim)
+    return Discretisation, (args,)
+
+
+copyreg.pickle(Module, pickle_Module)
+copyreg.pickle(Discretisation, pickle_Discretisation)
 
 
 @loglik.dispatch
@@ -38,21 +56,26 @@ def loglik(model: Model, *args, **kw_args):
     return logpdfs
 
 
-class LokyParallel(Parallel):
-    def __init__(self, *args, initializer=None, **kwargs):
-        super().__init__(*args, backend="loky", **kwargs)
-        self._backend_args["initializer"] = initializer
+import pickle
+
+class MyPickler (pickle._Pickler):
+    def save(self, obj):
+        print('pickling object  {0} of type {1}'.format(obj, type(obj)))
+        pickle._Pickler.save(self, obj)
+    def dumps(self, obj):
+        print('pickling object  {0} of type {1}'.format(obj, type(obj)))
+        return pickle._Pickler.dumps(self, obj)
 
 
-def train_epoch(
+def batch_train_epoch(
     model: ConvNP,
     tasks: list[Task],
+    pool: Pool,
     lr: float = 5e-5,
     opt=None,
     progress_bar=False,
     tqdm_notebook=False,
     use_gpu=False,
-    n_workers=1,
     batch_size=1,
 ) -> list[float]:
     """
@@ -63,6 +86,8 @@ def train_epoch(
             Model to train.
         tasks (list[:class:`~.data.task.Task`]):
             List of tasks to train on.
+        pool (:class:`torch.multiprocessing.Pool`):
+            Workers pool to compute loss in parallel within a each batch
         lr (float, optional):
             Learning rate, by default 5e-5.
         opt (Optimizer, optional):
@@ -97,18 +122,17 @@ def train_epoch(
 
     batch_losses = []
     model_loss = partial(model.loss_fn, normalise=True)
+    breakpoint()
+    # MyPickler(open("pouet.pkl", "wb")).save(model_loss)
 
-    with LokyParallel(initializer=initializer, n_jobs=n_workers, max_nbytes=None) as parallel:
-        for batch_i in tqdm(range(0, len(tasks), batch_size), disable=not progress_bar):
-            opt.zero_grad()
-            task_losses = parallel(
-                delayed(model_loss)(tasks[i])
-                for i in range(batch_i, min(batch_i + batch_size, len(tasks)))
-            )
-            mean_batch_loss = B.mean(B.stack(*task_losses))
-            mean_batch_loss.backward()
-            opt.step()
-            batch_losses.append(mean_batch_loss.detach().cpu().numpy())
+    for i in tqdm(range(0, len(tasks), batch_size), disable=not progress_bar):
+        opt.zero_grad()
+        batch_tasks = tasks[i : min(i + batch_size, len(tasks))]
+        task_losses = pool.map(model_loss, batch_tasks)
+        mean_batch_loss = B.mean(B.stack(*task_losses))
+        mean_batch_loss.backward()
+        opt.step()
+        batch_losses.append(mean_batch_loss.detach().cpu().numpy())
 
     return batch_losses
 
@@ -117,8 +141,8 @@ class BatchTrainer(Trainer):
     def __init__(self, *args, use_gpu=False, n_workers=1, batch_size=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.use_gpu = use_gpu
-        self.n_workers = n_workers
         self.batch_size = batch_size
+        self.pool = Pool(processes=n_workers)
 
     def __call__(
         self,
@@ -126,14 +150,14 @@ class BatchTrainer(Trainer):
         progress_bar: bool = False,
         tqdm_notebook: bool = False,
     ) -> list[float]:
-        return train_epoch(
+        return batch_train_epoch(
             model=self.model,
             tasks=tasks,
+            pool=self.pool,
             opt=self.opt,
             progress_bar=progress_bar,
             tqdm_notebook=tqdm_notebook,
             use_gpu=self.use_gpu,
-            n_workers=self.n_workers,
             batch_size=self.batch_size,
         )
 
