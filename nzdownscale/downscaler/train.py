@@ -98,7 +98,7 @@ def train_epoch(
     batch_losses = []
     model_loss = partial(model.loss_fn, normalise=True)
 
-    with LokyParallel(initializer=initializer, n_jobs=n_workers) as parallel:
+    with LokyParallel(initializer=initializer, n_jobs=n_workers, max_nbytes=None) as parallel:
         for batch_i in tqdm(range(0, len(tasks), batch_size), disable=not progress_bar):
             opt.zero_grad()
             task_losses = parallel(
