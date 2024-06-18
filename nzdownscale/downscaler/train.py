@@ -14,6 +14,7 @@ import torch
 import deepsensor.torch  # noqa
 from tqdm import tqdm
 from joblib import Parallel, delayed
+from joblib.externals import loky
 from deepsensor.data.loader import TaskLoader
 from deepsensor.data.task import Task
 from deepsensor.model.convnp import ConvNP
@@ -22,6 +23,9 @@ from neuralprocesses.model.loglik import loglik
 from neuralprocesses.model import Model
 
 from nzdownscale.dataprocess import config, utils
+
+
+loky.backend.context.set_start_method("spawn")
 
 
 @loglik.dispatch
