@@ -146,10 +146,19 @@ class PreprocessForDownscaling:
             self.highres_aux_ds = data_processor_dict['highres_aux_ds']
             self.landmask_ds = data_processor_dict['landmask_ds']
             
-            if (data_processor_dict['era5_ds'].time == era5_raw_ds.time).all():
-                self.era5_ds = data_processor_dict['era5_ds']
-                self.station_df = data_processor_dict['station_df']
+            print('Data Processor time:', data_processor_dict['era5_ds'].time)
+            print('ERA5 time:', era5_raw_ds.time)
+            if len(data_processor_dict['era5_ds'].time) == len(era5_raw_ds.time):
+                if (data_processor_dict['era5_ds'].time == era5_raw_ds.time).all():
+                    print('Loading ERA5 and stations from Data Processor')
+                    self.era5_ds = data_processor_dict['era5_ds']
+                    self.station_df = data_processor_dict['station_df']
+                else:
+                    print('Not loading ERA5 and stations from Data Processor')
+                    self.era5_ds = self.data_processor(era5_raw_ds)
+                    self.station_df = self.data_processor(station_raw_df)
             else:
+                print('Not loading ERA5 and stations from Data Processor')
                 self.era5_ds = self.data_processor(era5_raw_ds)
                 self.station_df = self.data_processor(station_raw_df)
 
