@@ -13,6 +13,7 @@ import cartopy.feature as cf
 import lab as B
 import torch
 import deepsensor.torch  # noqa
+import neuralprocesses as nps
 from tqdm import tqdm
 from torch.multiprocessing import Pool, Process, set_start_method
 from deepsensor.data.loader import TaskLoader
@@ -21,8 +22,6 @@ from deepsensor.model.convnp import ConvNP
 from deepsensor.train import Trainer, set_gpu_default_device
 from neuralprocesses.model.loglik import loglik
 from neuralprocesses.model import Model
-from neuralprocesses.torch.nn import Module
-from neuralprocesses.torch import Discretisation
 
 from nzdownscale.dataprocess import config, utils
 
@@ -33,17 +32,16 @@ except RuntimeError:
     pass
 
 
-def pickle_Module(m):
-    return Module, ((),)
+def get_nps_torch():
+    return nps.torch
 
 
-def pickle_Discretisation(d):
-    args = (d.points_per_unit, d.multiple, d.margin, d.dim)
-    return Discretisation, (args,)
+def pickle_nps_torch(m):
+    assert m == nps.torch
+    return get_nps_torch, ((),)
 
 
-copyreg.pickle(Module, pickle_Module)
-copyreg.pickle(Discretisation, pickle_Discretisation)
+copyreg.pickle(type(nps.torch), pickle_nps_torch)
 
 
 @loglik.dispatch
