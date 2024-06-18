@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #SBATCH --time=0:30:00
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=2
 #SBATCH --mem=50GB
 #SBATCH --gpus-per-node=A100-1g.5gb:1
 ##SBATCH --partition=hgx
@@ -22,6 +22,9 @@ export JOBLIB_CACHEDIR=cache
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(python3 -c 'import os; import nvidia.cublas.lib; import nvidia.cudnn.lib; print(os.path.dirname(nvidia.cublas.lib.__file__) + ":" + os.path.dirname(nvidia.cudnn.lib.__file__))'):"$PWD/venv_3.10/lib/python3.10/site-packages/torch/lib"
 
+# prevent joblib from using /dev/shm directly
+export JOBLIB_TEMP_FOLDER=$TMPDIR
+
 map -o logs/profile-${SLURM_JOB_ID}.map --profile \
     python train_downscaling.py \
     --var='temperature' \
@@ -39,5 +42,5 @@ map -o logs/profile-${SLURM_JOB_ID}.map --profile \
     --internal-density=250 \
     --use-gpu \
     --lr 5e-5 \
-    --n-workers 2 \
+    --n-workers $SLURM_CPUS_PER_TASK \
     --batch-size 2
