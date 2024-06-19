@@ -34,8 +34,10 @@ def main():
     variable = args["variable"]
     start_year = args["start_year"]
     end_year = args["end_year"]
+    training_years_step = args["training_years_step"]
     val_start_year = args["val_start_year"]
     val_end_year = args["val_end_year"]
+    validation_years_step = args["val_years_step"]
     use_daily_data = args["use_daily_data"]
     include_time_of_year = args["include_time_of_year"]
     include_landmask = args["include_landmask"]
@@ -74,12 +76,20 @@ def main():
     # ------------------------------------------
     # Preprocess data
     # ------------------------------------------
+    training_years = list(range(start_year, end_year+1, training_years_step))
+    assert len(training_years) > 0, 'No training years found'
+    print('Training years:', training_years)
+    validation_years = list(range(val_start_year, val_end_year+1, validation_years_step))
+    assert len(validation_years) > 0, 'No validation years found'
+    print('Validation years:', validation_years)
     data = PreprocessForDownscaling(
         variable=variable,
-        start_year=start_year,
-        end_year=end_year,
-        val_start_year=val_start_year,
-        val_end_year=val_end_year,
+        # start_year=start_year,
+        # end_year=end_year,
+        # val_start_year=val_start_year,
+        # val_end_year=val_end_year,
+        training_years=training_years,
+        validation_years=validation_years,
         use_daily_data=use_daily_data,
         area=area,
         context_variables=context_variables,
@@ -91,7 +101,8 @@ def main():
     else:
         suffix = '_hourly'
 
-    data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}{suffix}.pkl'
+    data_processor_fpath = f'{model_dir}/data_processor_{2000}_{2001}{suffix}.pkl'
+    # data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}{suffix}.pkl'
     # else:
     #     data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}_hourly.pkl'
 

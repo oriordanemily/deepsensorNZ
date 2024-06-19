@@ -26,10 +26,8 @@ from nzdownscale.dataprocess.config_local import DATA_PATHS
 class PreprocessForDownscaling:
 
     def __init__(self,
-                 start_year,
-                 end_year,
-                 val_start_year,
-                 val_end_year = None,
+                 training_years,
+                 validation_years,
                  variable='temperature',
                  use_daily_data=True,
                  validation = False,
@@ -42,21 +40,12 @@ class PreprocessForDownscaling:
         """
         
         self.var = variable
-        self.start_year = start_year
-        self.end_year = end_year
-        self.val_start_year = val_start_year
-        if val_end_year is None:
-            # one year validation
-            val_end_year = val_start_year
-        else:
-            self.val_end_year = val_end_year        
-        self.years = np.arange(start_year, val_end_year+1)
         self.use_daily_data = use_daily_data
 
         if validation:
-            self.start_year = val_start_year
-            self.end_year = val_end_year
-            self.years = np.arange(val_start_year, val_end_year+1)
+            self.years = validation_years
+        else:
+            self.years = training_years
 
         self.area = area
         
