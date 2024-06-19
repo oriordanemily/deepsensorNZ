@@ -110,16 +110,23 @@ class Train:
 
         context = [era5_ds, aux_ds]
         context_sampling = ["all", "all"]
+
+        if landmask_ds is not None:
+            context += [landmask_ds]
+            context_sampling += ["all"]
+
         if station_as_context != 0:
             context += [station_df]        
             if validation:
                 context_sampling += ['all']
-            else:
+            elif type(station_as_context) == float:
                 context_sampling += [station_as_context]
+            elif station_as_context == 'all':
+                context_sampling += ['all']
+            elif station_as_context == 'random':
+                context_sampling += ['random']
    
-        if landmask_ds is not None:
-            context += [landmask_ds]
-            context_sampling += ["all"]
+        
         
         # task_loader = TaskLoader(context=context,
         #                         target=station_df, 
@@ -144,13 +151,21 @@ class Train:
         if not validation:
             train_tasks = []
             for date in tqdm(train_dates[::5], desc="Loading train tasks..."):
-                task = task_loader(date, context_sampling=context_sampling, target_sampling="all")
+                if context_sampling[-1] == 'random': #currently only implemented for stations
+                    context_sampling_ = context_sampling[:-1] + [np.random.rand()]
+                else:
+                    context_sampling_ = context_sampling
+                task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
                 # task["ops"] = ["numpy_mask", "nps_mask"]
                 train_tasks.append(task)
 
         val_tasks = []
         for date in tqdm(val_dates[::5], desc="Loading val tasks..."):
-            task = task_loader(date, context_sampling=context_sampling, target_sampling="all")
+            if context_sampling[-1] == ['random']: #currently only implemented for stations
+                    context_sampling_ = context_sampling[:-1] + [np.random.rand()]
+            else:
+                context_sampling_ = context_sampling
+            task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
              # task["ops"] = ["numpy_mask", "nps_mask"]
             val_tasks.append(task)
 
@@ -244,7 +259,7 @@ class Train:
         train_tasks = self.train_tasks
         val_tasks = self.val_tasks
         weight_decay = 1e-2
-        opt = torch.optim.Adam(model.model.parameters(), lr=lr, weight_decay=weight_decay)
+        opt = torch.optim.AdamW(model.model.parameters(), lr=lr, weight_decay=weight_decay)
 
         if shuffle_tasks:
             random.shuffle(train_tasks)

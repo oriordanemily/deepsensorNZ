@@ -11,20 +11,20 @@ start_year:
 
 # Training end year (inclusive)
 end_year:
-  arg: 2011
-  #arg: 2001 
+  # arg: 2011
+  arg: 2001 
   type: int
 
 # Validation start year
 val_start_year:
-  arg: 2012  
-  #arg: 2002
+  # arg: 2012  
+  arg: 2002
   type: int
 
 # Validation end year (inclusive)
 val_end_year:
-  arg: 2015
-  #arg: 2002  
+  # arg: 2012
+  arg: 2002  
   type: int
 
 # Model name, if default it will be the time
@@ -79,9 +79,10 @@ context_variables:
 # If True, all stations are included as context variables
 # If False, no stations are included as context variables
 # If float, the percentage of stations to include as context variables
+# If random, a random number of stations are included as context variables
 station_as_context:
-  arg: 0.5
-  type: bool_or_float
+  arg: random
+  type: bool_or_float_or_str
 
 # Number of epochs
 n_epochs:
