@@ -7,6 +7,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import seaborn as sns
+import pandas as pd
 
 from nzdownscale.dataprocess.config import PLOT_EXTENT
 from nzdownscale.dataprocess.config_local import DATA_PATHS
@@ -210,11 +211,13 @@ def str_or_none(value):
     else:
         return str(value)
     
-def bool_or_float(value):
+def bool_or_float_or_str(value):
     if value is True:
         return 1.0
     elif value is False:
         return 0.0
+    elif value == 'random':
+        return 'random'
     else:
         return float(value)
 
@@ -228,7 +231,7 @@ def validate_and_convert_args(args):
     'list': list,
     'int_or_none': int_or_none,
     'str_or_none': str_or_none,
-    'bool_or_float': bool_or_float,
+    'bool_or_float_or_str': bool_or_float_or_str,
     }
 
     validated_args = {}
@@ -246,3 +249,16 @@ def debug_plot_da(da: xr.DataArray, save_path: str):
     fig, ax = plt.subplots(1, 1, figsize=(10, 12))
     da.plot(ax=ax)
     fig.savefig(save_path)
+
+def random_hour_subset_xr(ds: xr.Dataset):
+    """ Returns a dataset with a random hour selected for each day in the dataset"""
+    ds['time'] = pd.to_datetime(ds['time'].values)
+    daily_groups = ds.groupby('time.date')
+
+    def select_random_hour(day_data):
+        return day_data.isel(time=np.random.randint(0, len(day_data)))
+    
+    selected_hours = [select_random_hour(day) for date, day in daily_groups]
+    ds_random_hour_per_day = xr.concat(selected_hours, dim='time')
+
+    return ds_random_hour_per_day
