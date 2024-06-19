@@ -258,7 +258,7 @@ class Train:
         model = self.model
         train_tasks = self.train_tasks
         val_tasks = self.val_tasks
-        weight_decay = 1e-2
+        weight_decay = 1e-4
         opt = torch.optim.AdamW(model.model.parameters(), lr=lr, weight_decay=weight_decay)
 
         if shuffle_tasks:
@@ -280,9 +280,6 @@ class Train:
 
         train_losses = []
         val_losses = []
-        if weight_decay != 0:
-            raw_losses_list = []
-            raw_val_losses_list = []
 
         val_loss_best = np.inf
 
@@ -303,29 +300,15 @@ class Train:
                 batch_losses = train_epoch(model, train_tasks, opt=opt)
             batch_losses_not_nan = [arr for arr in batch_losses if~ np.isnan(arr)]
             
-            if weight_decay != 0:
-                l2_norm = sum(param.norm(2).item() ** 2 for param in model.model.parameters())
-                regularization_term = weight_decay * l2_norm
-                raw_losses = [loss - regularization_term for loss in batch_losses_not_nan]
-                raw_loss = np.mean(raw_losses)
-                raw_losses_list.append(raw_loss)
-            
             train_loss = np.mean(batch_losses_not_nan)
             train_losses.append(train_loss)
 
             if batch:
                 batch_val_losses = [compute_val_loss(model, batched_val_tasks[f'{num_stations}']) for num_stations in batched_val_tasks.keys()]
                 val_loss = np.mean(batch_val_losses)
-                if weight_decay != 0:
-                    raw_val_losses = batch_val_losses - regularization_term
-                    raw_val_loss = np.mean(raw_val_losses)
             else:
                 val_loss = compute_val_loss(model, val_tasks)
-                if weight_decay != 0:
-                    raw_val_loss = val_loss - regularization_term
             val_losses.append(val_loss)
-            if weight_decay != 0:
-                raw_val_losses_list.append(raw_val_loss)
 
             if val_loss < val_loss_best:
                 val_loss_best = val_loss
@@ -341,18 +324,12 @@ class Train:
                                 val_losses, 
                                 f"{self.save_dir}", 
                                 f"losses_{model_name}.png")
-                if weight_decay != 0:
-                    self.make_loss_plot(raw_losses_list,
-                                        raw_val_losses_list,
-                                        f"{self.save_dir}",
-                                        f"raw_losses_{model_name}.png")
+
 
         self.model = model
         self.train_losses = train_losses
         self.val_losses = val_losses
-        if weight_decay != 0:
-            self.raw_losses= raw_losses_list
-            self.raw_val_losses = raw_val_losses_list
+
 
     # def train_epoch_and_print(self, model, train_tasks):
     #     # used for debugging
