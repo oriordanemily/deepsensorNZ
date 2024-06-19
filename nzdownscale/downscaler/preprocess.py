@@ -617,8 +617,8 @@ class PreprocessForDownscaling:
         #     'cos_D': doy_ds["cos_D"], 
         #     'sin_D': doy_ds["sin_D"],
         #     })
-        ds["cos_D"] = doy_ds["cos_D"]
-        ds["sin_D"] = doy_ds["sin_D"]
+        ds[f"cos_{freq}"] = doy_ds[f"cos_{freq}"]
+        ds[f"sin_{freq}"] = doy_ds[f"sin_{freq}"]
         return ds
 
 
@@ -658,7 +658,16 @@ class PreprocessForDownscaling:
         # Compute normalisation parameters
         start = time()
         print('Computing normalisation parameters...')
-        era5_ds, station_df = data_processor([era5_raw_ds, station_raw_df]) #meanstd
+
+        assert_computed = False
+        # If hourly data, take a random hour from each day and produce the normalization parameters from that
+        if self.use_daily_data == False:
+            _ = data_processor(utils.random_hour_subset_xr(era5_raw_ds))
+            assert_computed = True
+        era5_ds = data_processor(era5_raw_ds, assert_computed=assert_computed)
+        station_df = data_processor(station_raw_df)
+
+        # era5_ds, station_df = data_processor([era5_raw_ds, station_raw_df]) #meanstd
         aux_ds, highres_aux_ds = data_processor([aux_raw_ds, highres_aux_raw_ds], method="min_max") #minmax
         landmask_ds = data_processor(landmask_raw_ds, method='min_max') if landmask_raw_ds is not None else None
         print(data_processor)
