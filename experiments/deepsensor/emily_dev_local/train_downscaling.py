@@ -86,8 +86,12 @@ def main():
     )
     
     model_dir = os.path.join(DATA_PATHS['save_model']['fpath'], variable)#, model_name)
-    # if use_daily_data:
-    data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}.pkl'
+    if use_daily_data:
+        suffix = ''
+    else:
+        suffix = '_hourly'
+
+    data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}{suffix}.pkl'
     # else:
     #     data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}_hourly.pkl'
 
@@ -106,7 +110,6 @@ def main():
     shutil.copy(DATA_PATHS['arguments'], model_dir)
     
     print('Starting data processing')
-    print(f'1. {station_as_context}')
     data.run_processing_sequence(
         topography_highres_coarsen_factor,
         topography_lowres_coarsen_factor,
