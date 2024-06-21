@@ -47,6 +47,7 @@ def main():
     batch_size = args["batch_size"]
     model_name = f'{args["model_name"]}'
     lr = args["lr"]
+    weight_decay = args["weight_decay"]
     topography_highres_coarsen_factor = args["topography_highres_coarsen_factor"]
     topography_lowres_coarsen_factor = args["topography_lowres_coarsen_factor"]
     era5_coarsen_factor = args["era5_coarsen_factor"]
@@ -84,10 +85,6 @@ def main():
     print('Validation years:', validation_years)
     data = PreprocessForDownscaling(
         variable=variable,
-        # start_year=start_year,
-        # end_year=end_year,
-        # val_start_year=val_start_year,
-        # val_end_year=val_end_year,
         training_years=training_years,
         validation_years=validation_years,
         use_daily_data=use_daily_data,
@@ -101,8 +98,8 @@ def main():
     else:
         suffix = '_hourly'
 
-    data_processor_fpath = f'{model_dir}/data_processor_{2000}_{2001}{suffix}.pkl'
     # data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}{suffix}.pkl'
+    data_processor_fpath = f'{model_dir}/data_processor_{2000}_{2001}{suffix}.pkl'
     # else:
     #     data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}_hourly.pkl'
 
@@ -140,7 +137,7 @@ def main():
     # ------------------------------------------
     print('Starting training')
     training = Train(processed_output_dict=processed_output_dict)
-    training.run_training_sequence(n_epochs, model_name, batch=batch, batch_size=batch_size, lr=lr, **convnp_kwargs)
+    training.run_training_sequence(n_epochs, model_name, batch=batch, batch_size=batch_size, lr=lr, weight_decay=weight_decay, **convnp_kwargs)
     training.model.save(model_dir)
 
 if __name__ == "__main__":

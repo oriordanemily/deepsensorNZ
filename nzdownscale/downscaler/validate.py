@@ -98,8 +98,9 @@ class ValidateV1:
             metadata = self.training_output_dict['metadata_dict']
 
         if self.validation_date_range is not None:
-            metadata['date_info']['val_start_year'] = self.validation_date_range[0]
-            metadata['date_info']['val_end_year'] = self.validation_date_range[1]
+            # metadata['date_info']['val_start_year'] = self.validation_date_range[0]
+            # metadata['date_info']['val_end_year'] = self.validation_date_range[1]
+            metadata['date_info']['validation_years'] = self.validation_date_range
 
         return metadata
 
@@ -120,10 +121,12 @@ class ValidateV1:
         # can run preprocessed data once and try different models
         self.data = PreprocessForDownscaling(
             variable = self.model_metadata['data_settings']['var'],
-            start_year = self.model_metadata['date_info']['start_year'],
-            end_year = self.model_metadata['date_info']['end_year'],
-            val_start_year = self.model_metadata['date_info']['val_start_year'],
-            val_end_year = self.model_metadata['date_info']['val_end_year'],
+            # start_year = self.model_metadata['date_info']['start_year'],
+            # end_year = self.model_metadata['date_info']['end_year'],
+            # val_start_year = self.model_metadata['date_info']['val_start_year'],
+            # val_end_year = self.model_metadata['date_info']['val_end_year'],
+            training_years = self.model_metadata['date_info']['training_years'],
+            validation_years = self.model_metadata['date_info']['validation_years'],
             use_daily_data = self.model_metadata['date_info']['use_daily_data'],
             context_variables = self.model_metadata['data_settings']['context_variables'],
             validation = True
@@ -1045,8 +1048,9 @@ class ValidateV1:
     ### Plotting utils
     def _format_date(self, date: str = None):
         if date is None:
-            val_start_year = self.processed_dict['date_info']['val_start_year']
-            date = f"{val_start_year}-01-01T00:00:00.000000000"
+            # val_start_year = self.processed_dict['date_info']['val_start_year']
+            validation_years = self.processed_dict['date_info']['validation_years']
+            date = f"{validation_years[0]}-01-01T00:00:00.000000000"
         else:
             date = f'{date}T00:00:00.000000000'
         return date

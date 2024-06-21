@@ -60,11 +60,13 @@ class Train:
         
         self.data_processor = processed_output_dict['data_processor']
 
-        self.start_year = processed_output_dict['date_info']['start_year']
-        self.end_year = processed_output_dict['date_info']['end_year']
-        self.val_start_year = processed_output_dict['date_info']['val_start_year']
-        self.val_end_year = processed_output_dict['date_info']['val_end_year']
-        self.years = np.arange(self.start_year, self.end_year+1)
+        # self.start_year = processed_output_dict['date_info']['start_year']
+        # self.end_year = processed_output_dict['date_info']['end_year']
+        # self.val_start_year = processed_output_dict['date_info']['val_start_year']
+        # self.val_end_year = processed_output_dict['date_info']['val_end_year']
+        self.training_years = processed_output_dict['date_info']['training_years']
+        self.validation_years = processed_output_dict['date_info']['validation_years']
+        # self.years = np.arange(self.start_year, self.end_year+1)
 
         self.model = None
         self.train_tasks = None
@@ -84,11 +86,11 @@ class Train:
         pass
 
 
-    def run_training_sequence(self, n_epochs, model_name='default', batch=False, batch_size=1, lr=5e-5, **convnp_kwargs,):
+    def run_training_sequence(self, n_epochs, model_name='default', batch=False, batch_size=1, lr=5e-5, weight_decay=0, **convnp_kwargs,):
         
         self.setup_task_loader()
         self.initialise_model(**convnp_kwargs)
-        self.train_model(n_epochs=n_epochs, model_name=model_name, batch=batch, batch_size=batch_size, lr=lr)
+        self.train_model(n_epochs=n_epochs, model_name=model_name, batch=batch, batch_size=batch_size, lr=lr, weight_decay=weight_decay)
 
 
     def setup_task_loader(self, 
@@ -103,10 +105,13 @@ class Train:
         landmask_ds = self.landmask_ds
         station_as_context = self.station_as_context
         
-        start_year = self.start_year
-        end_year = self.end_year
-        val_start_year = self.val_start_year
-        val_end_year = self.val_end_year
+        # start_year = self.start_year
+        # end_year = self.end_year
+        # val_start_year = self.val_start_year
+        # val_end_year = self.val_end_year
+        
+        training_years = self.training_years
+        validation_years = self.validation_years
 
         context = [era5_ds, aux_ds]
         context_sampling = ["all", "all"]
@@ -125,44 +130,43 @@ class Train:
                 context_sampling += ['all']
             elif station_as_context == 'random':
                 context_sampling += ['random']
-   
-        
-        
-        # task_loader = TaskLoader(context=context,
-        #                         target=station_df, 
-        #                         aux_at_targets=highres_aux_ds,)
 
-        task_loader = TaskLoader_SampleStations(context=context,
+        self.task_loader = TaskLoader_SampleStations(context=context,
                                                 target=station_df, 
                                                 aux_at_targets=highres_aux_ds,)
+        task_loader = self.task_loader
+
         if verbose:
             print(task_loader)
 
-        if not validation:
-            train_start = f'{start_year}-01-01'
-            train_end = f'{end_year}-12-31'
-        val_start = f'{val_start_year}-01-01'
-        val_end = f'{val_end_year}-12-31'
+        # if not validation:
+        #     train_start = f'{start_year}-01-01'
+        #     train_end = f'{end_year}-12-31'
+        # val_start = f'{val_start_year}-01-01'
+        # val_end = f'{val_end_year}-12-31'
 
+        
         if not validation:
-            train_dates = era5_ds.sel(time=slice(train_start, train_end)).time.values
-        val_dates = era5_ds.sel(time=slice(val_start, val_end)).time.values
+            train_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in training_years]
+            train_dates = [date for sublist in train_dates for date in sublist]
+        val_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in validation_years]
+        val_dates = [date for sublist in val_dates for date in sublist]
 
+        hours_interval = 10
         if not validation:
             train_tasks = []
-            for date in tqdm(train_dates[::5], desc="Loading train tasks..."):
+            for date in tqdm(train_dates[::hours_interval], desc="Loading train tasks..."):
                 if context_sampling[-1] == 'random': #currently only implemented for stations
                     context_sampling_ = context_sampling[:-1] + [np.random.rand()]
                 else:
                     context_sampling_ = context_sampling
                 task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
-                # task["ops"] = ["numpy_mask", "nps_mask"]
                 train_tasks.append(task)
 
         val_tasks = []
-        for date in tqdm(val_dates[::5], desc="Loading val tasks..."):
-            if context_sampling[-1] == ['random']: #currently only implemented for stations
-                    context_sampling_ = context_sampling[:-1] + [np.random.rand()]
+        for date in tqdm(val_dates[::hours_interval], desc="Loading val tasks..."):
+            if context_sampling[-1] == 'random': #currently only implemented for stations
+                context_sampling_ = context_sampling[:-1] + [np.random.rand()]
             else:
                 context_sampling_ = context_sampling
             task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
@@ -252,13 +256,14 @@ class Train:
                     batch=False,
                     batch_size=1,
                     shuffle_tasks=True,
-                    lr=5e-5 
+                    lr=5e-5,
+                    weight_decay=0
                     ):
 
         model = self.model
         train_tasks = self.train_tasks
         val_tasks = self.val_tasks
-        weight_decay = 1e-4
+        weight_decay = weight_decay
         opt = torch.optim.AdamW(model.model.parameters(), lr=lr, weight_decay=weight_decay)
 
         if shuffle_tasks:

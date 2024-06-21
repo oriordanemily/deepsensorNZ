@@ -41,11 +41,13 @@ class PreprocessForDownscaling:
         
         self.var = variable
         self.use_daily_data = use_daily_data
-
+        self.training_years = training_years
+        self.validation_years = validation_years
+        
         if validation:
             self.years = validation_years
         else:
-            self.years = training_years
+            self.years = training_years + validation_years
 
         self.area = area
         
@@ -102,7 +104,6 @@ class PreprocessForDownscaling:
         self.load_topography()
         self.load_era5()
         self.load_stations()
-
         highres_aux_raw_ds, aux_raw_ds = self.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
         era5_raw_ds = self.preprocess_era5(coarsen_factor=era5_coarsen_factor)
         station_raw_df = self.preprocess_stations(remove_stations=remove_stations, fill_missing=True)
@@ -457,7 +458,9 @@ class PreprocessForDownscaling:
                 df = df[df['station_id'] != str(station_no)]
 
         # ! Eventually change this so that stations only partially available are still used
-        df_filtered_years = df[(df['start_year']<years[-1]) & (df['end_year']>=years[0])]
+        # df_filtered_years = df[(df['start_year']<years[-1]) & (df['end_year']>=years[0])]
+        condition = df.apply(lambda row: any(year in range(row['start_year'], row['end_year'] + 1) for year in years), axis=1)
+        df_filtered_years = df[condition]
 
         if area is not None:
             df_filtered_area = df_filtered_years[(df_filtered_years['lon'] > PLOT_EXTENT[area]['minlon']) & (df_filtered_years['lon'] < PLOT_EXTENT[area]['maxlon']) & (df_filtered_years['lat'] > PLOT_EXTENT[area]['minlat']) & (df_filtered_years['lat'] < PLOT_EXTENT[area]['maxlat'])]
@@ -724,10 +727,8 @@ class PreprocessForDownscaling:
     def get_processed_output_dict(self):
 
         date_info = {
-                'start_year': self.start_year,
-                'end_year': self.end_year,
-                'val_start_year': self.val_start_year,
-                'val_end_year': self.val_end_year,
+                'training_years': self.training_years,
+                'validation_years': self.validation_years,
                 'use_daily_data': self.use_daily_data,
             }
 
