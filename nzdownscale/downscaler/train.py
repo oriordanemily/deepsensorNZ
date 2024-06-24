@@ -257,7 +257,9 @@ class Train:
                     batch_size=1,
                     shuffle_tasks=True,
                     lr=5e-5,
-                    weight_decay=0
+                    weight_decay=0,
+                    scheduler_patience=5,
+                    early_stopping_patience=10,
                     ):
 
         model = self.model
@@ -265,6 +267,7 @@ class Train:
         val_tasks = self.val_tasks
         weight_decay = weight_decay
         opt = torch.optim.AdamW(model.model.parameters(), lr=lr, weight_decay=weight_decay)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', factor=0.1, patience=scheduler_patience, verbose=True)
 
         if shuffle_tasks:
             random.shuffle(train_tasks)
@@ -287,6 +290,7 @@ class Train:
         val_losses = []
 
         val_loss_best = np.inf
+        epochs_no_improve = 0
 
         if batch:
             print(f'Using batched data with batch size {batch_size}')
@@ -315,20 +319,29 @@ class Train:
                 val_loss = compute_val_loss(model, val_tasks)
             val_losses.append(val_loss)
 
+            scheduler.step(val_loss)
+
             if val_loss < val_loss_best:
                 val_loss_best = val_loss
+                epochs_no_improve = 0
                 print(f'Saving model at epoch {epoch}')
                 torch.save(model.model.state_dict(), f"{self.save_dir}/{model_name}.pt")
                 self.save_metadata(f"{self.save_dir}", f'metadata_{model_name}')
                 
                 self.train_losses = train_losses
                 self.val_losses = val_losses
+            else:
+                epochs_no_improve += 1
 
             if plot_losses:
                 self.make_loss_plot(train_losses, 
                                 val_losses, 
                                 f"{self.save_dir}", 
                                 f"losses_{model_name}.png")
+
+            if epochs_no_improve >= early_stopping_patience:
+                print(f'Early stopping at epoch {epoch}')
+                break
 
 
         self.model = model
