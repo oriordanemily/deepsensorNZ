@@ -1,55 +1,12 @@
-import pickle
-# import cloudpickle
-# pickle.Pickler = cloudpickle.Pickler
 import dill
-pickle.Pickler = dill.Pickler
-
-
-import copyreg
-import io
-
-
-class ForkingPickler(dill.Pickler):
-    '''Pickler subclass used by multiprocessing.'''
-    _extra_reducers = {}
-    _copyreg_dispatch_table = copyreg.dispatch_table
-
-    def __init__(self, *args):
-        super().__init__(*args)
-        self.dispatch_table = self._copyreg_dispatch_table.copy()
-        self.dispatch_table.update(self._extra_reducers)
-
-    @classmethod
-    def register(cls, type, reduce):
-        '''Register a reduce function for a type.'''
-        breakpoint()
-        cls._extra_reducers[type] = reduce
-
-    @classmethod
-    def dumps(cls, obj, protocol=None):
-        breakpoint()
-        buf = io.BytesIO()
-        cls(buf, protocol).dump(obj)
-        return buf.getbuffer()
-
-    loads = dill.loads
-
-
-from multiprocessing import reduction
-reduction.ForkingPickler = ForkingPickler
-register = ForkingPickler.register
-
 
 import time
 import logging
-# import copyreg
+import copyreg
 from pathlib import Path
 from functools import partial
 
 logging.captureWarnings(True)
-
-from multiprocessing import reduction
-#reduction.ForkingPickler = None
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -71,16 +28,16 @@ from neuralprocesses.model import Model
 from nzdownscale.dataprocess import config, utils
 
 
-# def get_nps_torch():
-#     return nps.torch
+def get_nps_torch():
+    return nps.torch
 
 
-# def pickle_nps_torch(m):
-#     assert m == nps.torch
-#     return get_nps_torch, ((),)
+def pickle_nps_torch(m):
+    assert m == nps.torch
+    return get_nps_torch, ((),)
 
 
-# copyreg.pickle(type(nps.torch), pickle_nps_torch)
+copyreg.pickle(type(nps.torch), pickle_nps_torch)
 
 
 try:
