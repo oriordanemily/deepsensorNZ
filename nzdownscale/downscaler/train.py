@@ -55,7 +55,6 @@ def batch_train_epoch(
     opt=None,
     progress_bar=False,
     tqdm_notebook=False,
-    use_gpu=False,
     batch_size=1,
 ) -> list[float]:
     """
@@ -93,13 +92,6 @@ def batch_train_epoch(
     else:
         from tqdm import tqdm
 
-    if use_gpu:
-        initializer = set_gpu_default_device
-        # linear algebra init issue, see https://github.com/pytorch/pytorch/issues/90613
-        torch.inverse(torch.ones((1, 1), device="cuda:0"))
-    else:
-        initializer = None
-
     batch_losses = []
     model_loss = partial(model.loss_fn, normalise=True)
 
@@ -118,9 +110,17 @@ def batch_train_epoch(
 class BatchTrainer(Trainer):
     def __init__(self, *args, use_gpu=False, n_workers=1, batch_size=1, **kwargs):
         super().__init__(*args, **kwargs)
-        self.use_gpu = use_gpu
+
         self.batch_size = batch_size
-        self.pool = Pool(processes=n_workers)
+
+        if use_gpu:
+            initializer = set_gpu_default_device
+            # linear algebra init issue, see https://github.com/pytorch/pytorch/issues/90613
+            torch.inverse(torch.ones((1, 1), device="cuda:0"))
+        else:
+            initializer = None
+
+        self.pool = Pool(processes=n_workers, initializer=initializer)
 
     def __call__(
         self,
@@ -136,7 +136,6 @@ class BatchTrainer(Trainer):
             opt=self.opt,
             progress_bar=progress_bar,
             tqdm_notebook=tqdm_notebook,
-            use_gpu=self.use_gpu,
             batch_size=self.batch_size,
         )
 
