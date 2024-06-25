@@ -132,6 +132,7 @@ class BatchTrainer(Trainer):
             model=self.model,
             tasks=tasks,
             pool=self.pool,
+            lr=self.lr,
             opt=self.opt,
             progress_bar=progress_bar,
             tqdm_notebook=tqdm_notebook,
