@@ -1,8 +1,12 @@
 import dill
+from multiprocessing.reduction import ForkingPickler
+
+# monkey patch multiprocessing pickler to support lambdas and module
+ForkingPickler.dumps = dill.dumps
+ForkingPickler.loads = dill.loads
 
 import time
 import logging
-import copyreg
 from pathlib import Path
 from functools import partial
 
@@ -15,9 +19,8 @@ import cartopy.feature as cf
 import lab as B
 import torch
 import deepsensor.torch  # noqa
-import neuralprocesses as nps
 from tqdm import tqdm
-from torch.multiprocessing import Pool, Process, set_start_method
+from torch.multiprocessing import Pool, set_start_method
 from deepsensor.data.loader import TaskLoader
 from deepsensor.data.task import Task
 from deepsensor.model.convnp import ConvNP
@@ -26,18 +29,6 @@ from neuralprocesses.model.loglik import loglik
 from neuralprocesses.model import Model
 
 from nzdownscale.dataprocess import config, utils
-
-
-def get_nps_torch():
-    return nps.torch
-
-
-def pickle_nps_torch(m):
-    assert m == nps.torch
-    return get_nps_torch, ((),)
-
-
-copyreg.pickle(type(nps.torch), pickle_nps_torch)
 
 
 try:
