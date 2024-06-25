@@ -31,6 +31,8 @@ class ProcessERA5(DataProcess):
             years = [int(years)]
         elif type(years) == list:
             years = [int(year) for year in years]
+            if len(set(years)) == 1:
+                years = [years[0]]
         else:
             ValueError (f'Years should be int, str or list, not {type(years)}')
         filenames = self.get_filenames(var, years)
