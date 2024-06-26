@@ -47,7 +47,8 @@ era5_interp_filled = None
 # model_name = 'model_1716532171'
 # model_name = 'model_model_radiation'
 # model_name = 'model_full_allcontextvar'
-model_name = 'dp_test'
+# model_name = 'dp_test'
+model_name = 'hourly_v2'
 
 # --- from mahuika ----
 # model_name = 'test_model_1712898775' # 50
@@ -81,30 +82,33 @@ model_path = model_dir + f"{model_name}.pt"
 with open(train_metadata_path, "rb") as f:
     meta = pickle.load(f)
 
-st_yr = meta["date_info"]["start_year"]
-end_yr = meta["date_info"]["end_year"]
+st_yr = meta["date_info"]["training_years"][0]
+end_yr = meta["date_info"]["training_years"][-1]
+training_years = meta["date_info"]["training_years"]
+validation_years = meta["date_info"]["validation_years"]
 var = meta['data_settings']['var']
 
 print(
-    f'Model training date range: {st_yr} - {end_yr}'
+    f'Model training date range: {training_years}'
 )
 print(
-    f'Model validation date range: {meta["date_info"]["val_start_year"]} - {meta["date_info"]["val_end_year"]}'
+    f'Model validation date range: {validation_years}'
 )
 keys_to_exclude = ["train_losses", "val_losses"]
 filtered_dict = {key: meta[key] for key in meta if key not in keys_to_exclude}
 filtered_dict
 print(f"Metadata: {filtered_dict}")
+
 # %% Load validation class
 
 # change the validation date range to a testing range to see how the model performs on unseen data
-validation_date_range = [2016, 2016]  # inclusive
+validation_date_range = [2015]  # inclusive
 print(
     f"Validating model on date range: {validation_date_range[0]} - {validation_date_range[1]}"
 )
 # dp_path = base + f'models/{model_name[6:]}/not'
-
-dp_path = base + f'models/{var}/data_processor_{validation_date_range[0]}_{validation_date_range[1]}.pkl'
+dp_path = base + 'no'
+# dp_path = base + f'models/{var}/{model_name}/data_processor_hourly.pkl'
 # dp_path = 'not'
 # dp_path = '/home/emily/deepsensor/deepweather-downscaling/data_processor_dict_temp_model_radiation.pkl'
 if os.path.exists(dp_path):
@@ -160,17 +164,20 @@ model = validate.model
 # ------------------------------------------
 # date = f'{validation_date_range[0]}-01-01'
 # date = "2016-01-01"
-date = '2016-01-01'
+date = f'{validation_years[0]}-01-01'
 number_of_months = 12
 # note that the stations only have data up to 2019-08-01
 
-date_obj = datetime.strptime(date, "%Y-%m-%d")
-new_date_obj = date_obj + relativedelta(months=number_of_months) - relativedelta(days=1)
-new_date_str = new_date_obj.strftime("%Y-%m-%d")
+# date_obj = datetime.strptime(date, "%Y-%m-%d")
+# new_date_obj = date_obj + relativedelta(months=number_of_months) - relativedelta(days=1)
+# new_date_str = new_date_obj.strftime("%Y-%m-%d")
 
-date_range = (date, new_date_str)
-dates = pd.date_range(date_range[0], date_range[1])
-print(f"Validating for dates between {date_range}")
+# date_range = (date, new_date_str)
+# dates1 = pd.date_range(date_range[0], date_range[1])
+dates = pd.DatetimeIndex([task['time'] for task in validate.val_tasks])
+date_range = (dates[0], dates[-1])
+
+print(f"Validating for dates between {dates}")
 
 # %%
 # check to see if station data exists there
@@ -205,6 +212,7 @@ print("Prediction resolution:", resolution)
 # if 2016 - 2018 then just use a pre-done one,
 # model_with_era5_done = 'model_1714684457' #precip
 model_with_era5_done = model_name
+freq = 'H'
 # otherwise use model_name instead of model_with_era5_done
 era5_interp = None
 if era5_interp is None:
@@ -218,7 +226,7 @@ if era5_interp is None:
             era5_interp = pickle.load(handle)
     else:
         era5_unnorm = validate.data_processor.unnormalise(
-            validate.processed_dict["era5_ds"].drop_vars(("cos_D", "sin_D"), errors='ignore')
+            validate.processed_dict["era5_ds"].drop_vars((f"cos_{freq}", f"sin_{freq}"), errors='ignore')
         )
         print("ERA5 unnormalised")
         pred_coarse = pred.coarsen(latitude=5, longitude=5, boundary="trim").mean()
@@ -259,7 +267,7 @@ if era5_interp_filled is None:
 
         era5_interp_filled = era5_interp.copy()
         era5_var = validate.get_variable_name('era5')
-        for t in tqdm(era5_interp.time, desc="Filling missing values"):
+        for t in tqdm(dates, desc="Filling missing values"):
             era5_da = era5_interp.sel(time=t)
             valid_points = np.array(np.nonzero(~np.isnan(era5_da))).T
             valid_values = era5_da.values[~np.isnan(era5_da)]
@@ -277,7 +285,7 @@ if era5_interp_filled is None:
         with open(era5_interp_filled_path, "wb") as handle:
             pickle.dump(era5_interp_filled, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-era5_interp_filled = era5_interp_filled
+# era5_interp_filled = era5_interp_filled
 if era5_var == 't2m':
     era5_interp_filled -= 273.15
 # %%

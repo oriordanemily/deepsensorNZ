@@ -59,10 +59,12 @@ def main():
         convnp_kwargs["unet_channels"] = args["unet_channels"]
     if args["likelihood"] is not None:
         convnp_kwargs["likelihood"] = args["likelihood"]
-    # else:
+    else:
         # if precipitation, use bernoulli likelihood, otherwise default to cnp
-        # if variable == "precipitation": 
-        #     convnp_kwargs["likelihood"] = "bernoulli-gamma"
+        if variable == "precipitation": 
+            convnp_kwargs["likelihood"] = "bernoulli-gamma"
+        else:
+            convnp_kwargs["likelihood"] = "cnp"
     if args["internal_density"] is not None:
         convnp_kwargs["internal_density"] = args["internal_density"]
 
@@ -98,8 +100,8 @@ def main():
     else:
         suffix = '_hourly'
 
-    # data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}{suffix}.pkl'
-    data_processor_fpath = f'{model_dir}/data_processor_{2000}_{2001}{suffix}.pkl'
+    data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}{suffix}.pkl'
+    # data_processor_fpath = f'{model_dir}/data_processor_{2000}_{2001}{suffix}.pkl'
     # else:
     #     data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}_hourly.pkl'
 
