@@ -104,7 +104,7 @@ print(f"Metadata: {filtered_dict}")
 # change the validation date range to a testing range to see how the model performs on unseen data
 validation_date_range = [2015]  # inclusive
 print(
-    f"Validating model on date range: {validation_date_range[0]} - {validation_date_range[1]}"
+    f"Validating model on date range: {validation_date_range[0]} - {validation_date_range[-1]}"
 )
 # dp_path = base + f'models/{model_name[6:]}/not'
 dp_path = base + 'no'
@@ -149,6 +149,11 @@ validate = ValidateV1(
 )
 # validate.station_as_context = True
 #%%
+tasks_fpath = '/home/emily/deepsensor/deepweather-downscaling/experiments/models/temperature/hourly_v2/val_tasks.pickle'
+if os.path.exists(tasks_fpath):
+    with open(tasks_fpath, 'rb') as handle:
+        validate.val_tasks = pickle.load(handle)
+
 validate.load_model(
     load_model_path=model_path,
     save_data_processing_dict=save_dp,
@@ -192,8 +197,9 @@ if os.path.exists(prediction_fpath):
 else:
     print(f"Calculating predictions from {date_range[0]} to {date_range[-1]}")
     pred = validate.get_predictions(
-        dates,
+        # dates,
         model,
+        tasks=validate.val_tasks,
         verbose=True,
         save_preds=False,
         remove_stations_from_tasks=remove_stations_list,

@@ -168,7 +168,7 @@ class ValidateV1:
             self.model_metadata = self.get_metadata()
 
         model_setup = Train(processed_output_dict=self.processed_dict)
-        model_setup.setup_task_loader(validation=True)
+        model_setup.setup_task_loader(validation=True, val_tasks=self.val_tasks)
         model_setup.initialise_model(**self.model_metadata['convnp_kwargs'])
         training_output_dict = model_setup.get_training_output_dict()
         training_output_dict['metadata_dict'] = self.model_metadata
@@ -1055,44 +1055,50 @@ class ValidateV1:
             date = f'{date}T00:00:00.000000000'
         return date
     
-    def get_predictions(self, dates, model, verbose=False, save_preds=False, remove_stations_from_tasks=[]):
+    def get_predictions(self, model, dates=None, tasks=None, verbose=False, save_preds=False, remove_stations_from_tasks=[]):
         task_loader = self.task_loader
         # era5_raw_ds = self.processed_dict['era5_raw_ds']
         # highres_aux_raw_ds = self.processed_dict['highres_aux_raw_ds']
+
+        if dates is None:
+            assert tasks is not None, "Either dates or tasks must be provided"
+        if tasks is None:
+            assert dates is not None, "Either dates or tasks must be provided"
+
         if self.highres_aux_raw_ds is None:
             topo = self.processed_dict['highres_aux_ds']
             self.highres_aux_raw_ds = self.data_processor.unnormalise(topo)
         
         # era5_raw_ds = era5_raw_ds.sel({'time': dates})
 
-        pred, _ = self._get_predictions_and_tasks(dates, task_loader, model, 
+        pred, _ = self._get_predictions_and_tasks(task_loader, model, 
                                                   self.highres_aux_raw_ds,
+                                                  dates=dates, tasks=tasks,
                                                     return_dataarray=True, 
                                                     verbose=verbose, save_preds=save_preds,
                                                       remove_stations_from_tasks=remove_stations_from_tasks)
 
         return pred
     
-    def _get_predictions_and_tasks(self, dates, task_loader, model, highres_aux_raw_ds, return_dataarray=True, verbose=False, save_preds=False, remove_stations_from_tasks=[]):
-        if isinstance(dates, str):
-            dates = [dates]
-        if verbose:
-            print('Loading test tasks...')
+    def _get_predictions_and_tasks(self, task_loader, model, highres_aux_raw_ds, dates=None, tasks=None, return_dataarray=True, verbose=False, save_preds=False, remove_stations_from_tasks=[]):
+        if dates is not None:
+            if isinstance(dates, str):
+                dates = [dates]
+            if verbose:
+                print('Loading test tasks...')
         
         # remove stations in remove_stations_from_tasks from the station data to be used in test tasks
-        station_df = self.processed_dict['station_raw_df'].copy()
-        self.processed_dict['station_raw_df'] = self._remove_stations_from_station_df(station_df, remove_stations_from_tasks)
-        
-        # if self.model_metadata['station_as_context']:
-        #     context_sampling = ['all', 'all', 'all', 'all']
-        # else:
-        #     context_sampling = ['all', 'all', 'all']
-        # feed context sampling into task_loader if needed
+            station_df = self.processed_dict['station_raw_df'].copy()
+            self.processed_dict['station_raw_df'] = self._remove_stations_from_station_df(station_df, remove_stations_from_tasks)
 
-        test_task = task_loader(dates, target_sampling='all',  seed_override=42)
-        if verbose:
-            print('Test tasks loaded')
-        if len(dates) == 1:
+            test_task = task_loader(dates, target_sampling='all',  seed_override=42)
+            if verbose:
+                print('Test tasks loaded')
+        elif tasks is not None:
+            print('Loaded tasks from input')
+            test_task = tasks
+        
+        if len(test_task) == 1:
             test_task = test_task[0]
         if verbose:
             print('Calculating predictions...')

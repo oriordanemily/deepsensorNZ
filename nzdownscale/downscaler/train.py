@@ -96,6 +96,7 @@ class Train:
     def setup_task_loader(self, 
                           verbose=False, 
                           validation=False,
+                          val_tasks=None
                           ):
 
         era5_ds = self.era5_ds
@@ -104,6 +105,7 @@ class Train:
         station_df = self.station_df
         landmask_ds = self.landmask_ds
         station_as_context = self.station_as_context
+        self.val_tasks = val_tasks
         
         # start_year = self.start_year
         # end_year = self.end_year
@@ -163,15 +165,18 @@ class Train:
                 task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
                 train_tasks.append(task)
 
-        val_tasks = []
-        for date in tqdm(val_dates[::hours_interval], desc="Loading val tasks..."):
-            if context_sampling[-1] == 'random': #currently only implemented for stations
-                context_sampling_ = context_sampling[:-1] + [np.random.rand()]
-            else:
-                context_sampling_ = context_sampling
-            task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
-             # task["ops"] = ["numpy_mask", "nps_mask"]
-            val_tasks.append(task)
+        if self.val_tasks is None:
+            val_tasks = []
+            for date in tqdm(val_dates[::hours_interval], desc="Loading val tasks..."):
+                if context_sampling[-1] == 'random': #currently only implemented for stations
+                    context_sampling_ = context_sampling[:-1] + [np.random.rand()]
+                else:
+                    context_sampling_ = context_sampling
+                task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
+                # task["ops"] = ["numpy_mask", "nps_mask"]
+                val_tasks.append(task)
+        else:
+            val_tasks = self.val_tasks
 
         if verbose:
             print("Loading Dask arrays...")
