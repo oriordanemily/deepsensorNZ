@@ -63,6 +63,7 @@ class ValidateV1:
         self.validation_date_range = validation_date_range
         self.data_processor_dict = data_processor_dict
         self.crs = ccrs.PlateCarree()
+        self.val_tasks = None
 
         self.highres_aux_raw_ds = None
 
@@ -199,7 +200,7 @@ class ValidateV1:
                             self.task_loader, 
                             **convnp_kwargs,
                             )
-            _ = model(self.training_dict['val_tasks'][0])   # ? need ? 
+            # _ = model(self.training_dict['val_tasks'][0])   # ? need ? 
         return model
 
     def calculate_loss(self, dates: list or str, 

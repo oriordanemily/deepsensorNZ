@@ -4,9 +4,10 @@ from typing import Literal, List
 import xarray as xr
 import pandas as pd
 from tqdm import tqdm
+import numpy as np
 
 from nzdownscale.dataprocess.utils import DataProcess, PlotData
-from nzdownscale.dataprocess.config import VARIABLE_OPTIONS, VAR_STATIONS
+from nzdownscale.dataprocess.config import VARIABLE_OPTIONS, VAR_STATIONS, STATION_LATLON
 from nzdownscale.dataprocess.config_local import DATA_PATHS
 
 
@@ -187,5 +188,61 @@ class ProcessStations(DataProcess):
 
         return station_info
     
+    def load_stations_time(self, 
+                           var: str, 
+                           time, 
+                           remove_stations: list = [], 
+                           daily: bool=False):
+        if isinstance(time, list):
+            time = np.array(time, dtype='datetime64[ns]')
+            def condition(lst, ds_time): return len(set(lst).intersection(ds_time)) != 0 
+
+        else:
+            if isinstance(time, pd.Timestamp):
+                time = np.datetime64(time.to_pydatetime())
+            elif not isinstance(time, np.datetime64):
+                time = np.datetime64(time)
+            def condition(lst, ds_time): return lst in ds_time
+
+        paths = self.get_path_all_stations(var)
+
+        df_list = []
+        for path in tqdm(paths, desc='Loading stations'):
+            try:
+                with xr.open_dataset(path) as ds:
+                    if condition(time, ds.time.values):
+                        da = self.ds_to_da(ds, var)
+                        df_station = da.to_dataframe()
+                        if daily: 
+                            df_station = df_station.reset_index().resample('D', on='time').mean()[[VAR_STATIONS[var]['var_name']]]
+                        df_station = df_station.loc[time]
+                        lon, lat = self.get_lon_lat(ds)
+                        df_station['longitude'] = lon
+                        df_station['latitude'] = lat
+                        df_list.append(df_station)
+            except:
+                pass
+        
+        print(f'{len(df_list)} stations with data at {time}')
+                    
+        df = pd.concat(df_list)
+
+        if len(remove_stations) > 0:
+            for station in remove_stations:
+                print(f'Removing {station}')
+                latlon = (STATION_LATLON[station]['latitude'], STATION_LATLON[station]['longitude'])
+                df = df[~((df['latitude'] == latlon[0]) & (df['longitude'] == latlon[1]))]
+            print(f'Removed {len(remove_stations)} stations')
+
+        df = df.reset_index().rename(columns={'index': 'time'})
+        df = df.set_index(['time', 'latitude', 'longitude']).sort_index()
+
+        return df
+    
+        
+        
+
+       
+
 if __name__ == '__main__':
     pass

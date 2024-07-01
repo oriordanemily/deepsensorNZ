@@ -148,11 +148,12 @@ validate = ValidateV1(
     data_processor_dict=data_processor_dict,
 )
 # validate.station_as_context = True
-#%%
-tasks_fpath = '/home/emily/deepsensor/deepweather-downscaling/experiments/models/temperature/hourly_v2/val_tasks.pickle'
-if os.path.exists(tasks_fpath):
-    with open(tasks_fpath, 'rb') as handle:
-        validate.val_tasks = pickle.load(handle)
+
+# %%
+# tasks_fpath = '/home/emily/deepsensor/deepweather-downscaling/experiments/models/temperature/hourly_v2/val_tasks.pickle'
+# if os.path.exists(tasks_fpath):
+#     with open(tasks_fpath, 'rb') as handle:
+#         validate.val_tasks = pickle.load(handle)
 
 validate.load_model(
     load_model_path=model_path,

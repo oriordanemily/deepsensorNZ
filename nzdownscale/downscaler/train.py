@@ -151,8 +151,8 @@ class Train:
         if not validation:
             train_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in training_years]
             train_dates = [date for sublist in train_dates for date in sublist]
-        val_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in validation_years]
-        val_dates = [date for sublist in val_dates for date in sublist]
+            val_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in validation_years]
+            val_dates = [date for sublist in val_dates for date in sublist]
 
         hours_interval = 10
         if not validation:
@@ -165,7 +165,7 @@ class Train:
                 task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
                 train_tasks.append(task)
 
-        if self.val_tasks is None:
+            # if self.val_tasks is None:
             val_tasks = []
             for date in tqdm(val_dates[::hours_interval], desc="Loading val tasks..."):
                 if context_sampling[-1] == 'random': #currently only implemented for stations
@@ -175,8 +175,8 @@ class Train:
                 task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
                 # task["ops"] = ["numpy_mask", "nps_mask"]
                 val_tasks.append(task)
-        else:
-            val_tasks = self.val_tasks
+            # else:
+            #     val_tasks = self.val_tasks
 
         if verbose:
             print("Loading Dask arrays...")
@@ -188,7 +188,7 @@ class Train:
         self.task_loader = task_loader 
         if not validation:   
             self.train_tasks = train_tasks
-        self.val_tasks = val_tasks
+            self.val_tasks = val_tasks
         self.context = context
 
         return task_loader     
@@ -211,7 +211,7 @@ class Train:
                     )
     
         # Print number of parameters to check model is not too large for GPU memory
-        _ = model(self.val_tasks[0])
+        # _ = model(self.val_tasks[0])
         print(f"Model has {deepsensor.backend.nps.num_params(model.model):,} parameters")
         
         self.convnp_kwargs = dict(convnp_kwargs)
@@ -514,10 +514,10 @@ class TaskLoader_SampleStations(TaskLoader):
             self.time_slice_variable(var, date, delta_t)
             for var, delta_t in zip(self.context, self.context_delta_t)
         ]
-        target_slices = [
-            self.time_slice_variable(var, date, delta_t)
-            for var, delta_t in zip(self.target, self.target_delta_t)
-        ]
+        # target_slices = [
+        #     self.time_slice_variable(var, date, delta_t)
+        #     for var, delta_t in zip(self.target, self.target_delta_t)
+        # ]
 
         for i, (var, sampling_strat) in enumerate(zip(context_slices, context_sampling)):
             context_seed = seed + i if seed is not None else None

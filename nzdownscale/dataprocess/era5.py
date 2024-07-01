@@ -3,6 +3,7 @@ from typing import Literal, List
 import glob
 
 import xarray as xr
+from datetime import datetime
 
 from nzdownscale.dataprocess.utils import DataProcess
 from nzdownscale.dataprocess.config import VARIABLE_OPTIONS, VAR_ERA5
@@ -112,6 +113,24 @@ class ProcessERA5(DataProcess):
                     filenames = filenames + [f'{parent_path}/{fname}' for fname in os.listdir(parent_path) if str(year) in fname]
 
         return filenames
+
+    def load_ds_time(self, 
+                     var: Literal[tuple(VARIABLE_OPTIONS)],
+                     time,
+                     ) -> xr.Dataset:
+        """ 
+        Loads dataset with time dimension
+        Args: 
+            var (str): variable
+            time: datetime obj
+                    """
+        if isinstance(time, datetime):
+            year = [time.year]
+        elif isinstance(time, list):
+            year = set(t.year for t in time)
+        filenames = self.get_filenames(var, year)
+        ds = xr.open_mfdataset(filenames)
+        return ds.sel(time=time)
 
 
     def kelvin_to_celsius(self, da: xr.DataArray):
