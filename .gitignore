@@ -89,3 +89,6 @@ docs/_build/
 
 # Local info
 nzdownscale/dataprocess/config_local.py
+
+# profilers
+*.prof
