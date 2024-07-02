@@ -130,7 +130,7 @@ class ProcessERA5(DataProcess):
             year = set(t.year for t in time)
         filenames = self.get_filenames(var, year)
         ds = xr.open_mfdataset(filenames)
-        return ds.sel(time=time)
+        return ds.sel(time=time).load()
 
 
     def kelvin_to_celsius(self, da: xr.DataArray):

@@ -35,6 +35,12 @@ class ValidateV2:
 
         # Load elevation data
         self.ds_elev = self.top.open_ds()
+        self.ds_elev = self.ds_elev.coarsen(latitude=5, longitude=5,
+                                   boundary='trim').mean()
+        
+        pred_res = np.round(np.abs(np.diff(self.ds_elev.coords['latitude'].values)[0]), 5)
+        print('Producing predictions at resolution:', pred_res)
+
 
         # Load metadata
         self.var = self.meta['data_settings']['var']
