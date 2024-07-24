@@ -1,19 +1,19 @@
 # Variable to be downscaled (temperature or precipitation)
 variable:
-  arg: temperature 
-  # arg: precipitation
+  # arg: temperature 
+  arg: precipitation
   type: str
 
 # Training start year
 start_year:
   # arg: 2000
-  arg: 1995
+  arg: 2000
   type: int
 
 # Training end year (inclusive)
 end_year:
   # arg: 2011
-  arg: 2015
+  arg: 2001
   # arg: 2003
   type: int
 
@@ -21,19 +21,19 @@ end_year:
 # E.g. start_year=2000, end_year=2011, training_years_step=3, then training years are [2000, 2003, 2006, 2009]
 # If training_years_step is 1, then all years between start_year and end_year are used
 training_years_step:
-  arg: 3
+  arg: 1
   type: int
 
 # Validation start year
 val_start_year:
-  arg: 2014  
-  # arg: 2002
+  # arg: 2012
+  arg: 2002
   type: int
 
 # Validation end year (inclusive)
 val_end_year:
-  arg: 2014
-  # arg: 2002
+  # arg: 2012
+  arg: 2002
   type: int
 
 # Validation years are between val_start_year and val_end_year, and are separated by val_years_step
@@ -43,13 +43,13 @@ val_years_step:
 
 # Model name, if default it will be the time
 model_name:
-  arg: hourly_v2
+  arg: precip_v2
   # arg: default  
   type: str
 
 # Use daily data
 use_daily_data:
-  arg: False  
+  arg: True  
   type: bool
 
 # Coarsen factor for high resolution topography
@@ -99,7 +99,7 @@ station_as_context:
 
 # Number of epochs
 n_epochs:
-  arg: 10
+  arg: 50
   type: int
 
 # Channels for UNet

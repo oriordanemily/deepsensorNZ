@@ -102,7 +102,7 @@ print(f"Metadata: {filtered_dict}")
 # %% Load validation class
 
 # change the validation date range to a testing range to see how the model performs on unseen data
-validation_date_range = [2015]  # inclusive
+validation_date_range = [2016]  # inclusive
 print(
     f"Validating model on date range: {validation_date_range[0]} - {validation_date_range[-1]}"
 )
@@ -110,6 +110,7 @@ print(
 dp_path = base + 'no'
 # dp_path = base + f'models/{var}/{model_name}/data_processor_hourly.pkl'
 # dp_path = 'not'
+# dp_path = f'{model_dir}/data_processor.pkl'
 # dp_path = '/home/emily/deepsensor/deepweather-downscaling/data_processor_dict_temp_model_radiation.pkl'
 if os.path.exists(dp_path):
     with open(
@@ -198,9 +199,9 @@ if os.path.exists(prediction_fpath):
 else:
     print(f"Calculating predictions from {date_range[0]} to {date_range[-1]}")
     pred = validate.get_predictions(
-        # dates,
+        dates,
         model,
-        tasks=validate.val_tasks,
+        # tasks=validate.val_tasks,
         verbose=True,
         save_preds=False,
         remove_stations_from_tasks=remove_stations_list,

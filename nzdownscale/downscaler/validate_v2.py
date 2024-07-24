@@ -37,6 +37,7 @@ class ValidateV2:
         self.ds_elev = self.top.open_ds()
         self.ds_elev = self.ds_elev.coarsen(latitude=5, longitude=5,
                                    boundary='trim').mean()
+        self.pred_mask = ~np.isnan(self.ds_elev['elevation'])
         
         pred_res = np.round(np.abs(np.diff(self.ds_elev.coords['latitude'].values)[0]), 5)
         print('Producing predictions at resolution:', pred_res)
@@ -61,6 +62,10 @@ class ValidateV2:
         pred = self.model.predict(task, 
                                   X_t=self.ds_elev, 
                                   progress_bar=True)
+
+        for key in pred.keys():
+            pred[key]['mean'] = pred[key]['mean'].where(self.pred_mask)
+            pred[key]['std'] = pred[key]['std'].where(self.pred_mask)
         return pred
 
     def load_model(self):

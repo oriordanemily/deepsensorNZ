@@ -151,8 +151,8 @@ class Train:
         if not validation:
             train_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in training_years]
             train_dates = [date for sublist in train_dates for date in sublist]
-            val_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in validation_years]
-            val_dates = [date for sublist in val_dates for date in sublist]
+        val_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in validation_years]
+        val_dates = [date for sublist in val_dates for date in sublist]
 
         hours_interval = 10
         if not validation:
@@ -166,17 +166,18 @@ class Train:
                 train_tasks.append(task)
 
             # if self.val_tasks is None:
-            val_tasks = []
-            for date in tqdm(val_dates[::hours_interval], desc="Loading val tasks..."):
-                if context_sampling[-1] == 'random': #currently only implemented for stations
-                    context_sampling_ = context_sampling[:-1] + [np.random.rand()]
-                else:
-                    context_sampling_ = context_sampling
-                task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
-                # task["ops"] = ["numpy_mask", "nps_mask"]
-                val_tasks.append(task)
-            # else:
-            #     val_tasks = self.val_tasks
+        val_tasks = []
+        for date in tqdm(val_dates[:10], desc="Loading val tasks..."):
+        # for date in tqdm(val_dates[::hours_interval], desc="Loading val tasks..."):
+            if context_sampling[-1] == 'random': #currently only implemented for stations
+                context_sampling_ = context_sampling[:-1] + [np.random.rand()]
+            else:
+                context_sampling_ = context_sampling
+            task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
+            # task["ops"] = ["numpy_mask", "nps_mask"]
+            val_tasks.append(task)
+        # else:
+        #     val_tasks = self.val_tasks
 
         if verbose:
             print("Loading Dask arrays...")
@@ -188,7 +189,8 @@ class Train:
         self.task_loader = task_loader 
         if not validation:   
             self.train_tasks = train_tasks
-            self.val_tasks = val_tasks
+            
+        self.val_tasks = val_tasks
         self.context = context
 
         return task_loader     

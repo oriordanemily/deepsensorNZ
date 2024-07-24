@@ -223,7 +223,7 @@ class ProcessStations(DataProcess):
             except:
                 pass
         
-        print(f'{len(df_list)} stations with data at {time}')
+        print(f'{len(df_list)} stations with data at prediction time(s)')
                     
         df = pd.concat(df_list)
 
