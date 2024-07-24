@@ -11,6 +11,7 @@ from nzdownscale.dataprocess.config_local import DATA_PATHS
 
 import os 
 import shutil
+import argparse
 
 
 def main():
@@ -24,7 +25,21 @@ def main():
     # ------------------------------------------
     # Settings
     # ------------------------------------------
-    with open(DATA_PATHS['arguments']) as f:
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-arg_path", 
+                        help="The filepath of the arguments file",
+                        default=None,
+                        dest="arg_path")
+    args = parser.parse_args()
+    
+    # extract args from arg parser
+    if args.arg_path is None:
+        arg_path = DATA_PATHS['arguments']
+    else:
+        arg_path = args.arg_path
+            
+    with open(arg_path) as f:
         args = yaml.load(f, Loader=yaml.FullLoader)
         f.close()
 
