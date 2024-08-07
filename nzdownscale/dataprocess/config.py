@@ -11,6 +11,23 @@ VAR_STATIONS = {
                 'subdir': 'ScreenObs',
                 'var_name': 'dry_bulb'
             },
+            'pressure': {
+                'subdir': 'Pressure',
+                'var_name': 'stn_lev_pres'
+            },
+            'windspeed': {
+                'subdir': 'Surface_Wind',
+                'var_name': 'speed',
+            },
+            'winddirection': {
+                'subdir': 'Surface_Wind',
+                'var_name': 'direction',
+            },
+            'humidity': {
+                'subdir': 'ScreenObs',
+                'var_name': 'relative_humidity',
+            },
+
 }
 
 VAR_ERA5 = {
