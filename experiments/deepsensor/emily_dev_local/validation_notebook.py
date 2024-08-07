@@ -1,7 +1,7 @@
 # %%
 # use below when running interactively to reload modules
-%reload_ext autoreload
-%autoreload 2
+# %reload_ext autoreload
+# %autoreload 2
 
 import logging
 
@@ -39,30 +39,10 @@ era5_interp = None
 era5_interp_filled = None
 # %%  Load from saved model
 #### TEMP 
-# model_name = "test_model_1713164678"  # 100 - left out stations
-# model_name = "model_test_var_batching"
-# model_name = 'model_temp_incstations'
-# model_name = 'model_all_stations_context'
-# model_name = 'model_1714684457'
-# model_name = 'model_1716532171'
-# model_name = 'model_model_radiation'
-# model_name = 'model_full_allcontextvar'
-# model_name = 'dp_test'
-model_name = 'hourly_v2'
 
-# --- from mahuika ----
-# model_name = 'test_model_1712898775' # 50
-# model_name = 'test_model_1712875091' # 100
-# model_name = 'test_model_1712813969' # 250
-# model_name = 'test_model_1712551308' # 500
-# model_name = 'test_model_1712551280' # 750
-# model_name = 'test_model_1712551296' # 1000
-# model_name = 'test_model_1712647507' # 1500
-# model_name = 'test_model_1712649253' # 2000
-# model_name = 'test_model_1712792079' # 2000
-# model_name = '_model_1713135569'
-# model_name = '_model_1713136369'
-# model_name = 'stations02_wd1e-3'
+# model_name = 'dp_test'
+# model_name = 'hourly_v2'
+model_name = 'hourly_1e-5'
 
 # PRECIP
 # model_name = 'model_precip_100epochs'
@@ -107,10 +87,10 @@ print(
     f"Validating model on date range: {validation_date_range[0]} - {validation_date_range[-1]}"
 )
 # dp_path = base + f'models/{model_name[6:]}/not'
-dp_path = base + 'no'
+# dp_path = base + 'no'
 # dp_path = base + f'models/{var}/{model_name}/data_processor_hourly.pkl'
 # dp_path = 'not'
-# dp_path = f'{model_dir}/data_processor.pkl'
+dp_path = f'{model_dir}/data_processor.pkl'
 # dp_path = '/home/emily/deepsensor/deepweather-downscaling/data_processor_dict_temp_model_radiation.pkl'
 if os.path.exists(dp_path):
     with open(

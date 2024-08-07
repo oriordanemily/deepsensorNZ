@@ -100,18 +100,27 @@ class ValidateV2:
         self.highres_aux_ds = self.data_processor_dict['highres_aux_ds']
         self.landmask_ds = self.data_processor_dict['landmask_ds']
 
-        era5_ds_raw = self.load_era5(time)
+        self.era5_ds_raw = self.load_era5(time)
         stations_df_raw = self.load_stations(time, remove_stations)
 
         print('Pre-processing ERA5 data')
-        self.era5_ds = self.data_processor(era5_ds_raw)
+        era5_ds = self.era5_ds_raw.copy()
+        for var in self.era5_ds_raw:
+            method = self.data_processor.config[var]['method']
+            era5_ds[var] = self.data_processor(self.era5_ds_raw[var], method=method)
+        self.era5_ds = era5_ds
+        # self.era5_ds = self.data_processor(self.era5_ds_raw)
         self.ds_era = self.add_time_of_year(self.era5_ds)
 
         print('Pre-processing station data')
-        self.stations_df = self.data_processor(stations_df_raw)
+        method = self.data_processor.config[f"{self.var}_station"]['method']
+        self.stations_df = self.data_processor(stations_df_raw, method=method)
 
-    def load_stations(self, time, remove_stations):
-        stations_df = self.station.load_stations_time(self.var, time, remove_stations)
+    def load_stations(self, time, remove_stations=[], keep_stations=[]):
+        stations_df = self.station.load_stations_time(self.var, 
+                                                      time, 
+                                                      remove_stations, 
+                                                      keep_stations)
         return stations_df
         
     def load_era5(self, time):
