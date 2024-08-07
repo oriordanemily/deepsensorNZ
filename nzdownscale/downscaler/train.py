@@ -14,6 +14,7 @@ import torch
 import random
 import xarray as xr
 import pandas as pd
+import pickle
 
 import deepsensor.torch
 from deepsensor.data.loader import TaskLoader
@@ -88,12 +89,13 @@ class Train:
 
     def run_training_sequence(self, n_epochs, model_name='default', batch=False, batch_size=1, lr=5e-5, weight_decay=0, **convnp_kwargs,):
         
-        self.setup_task_loader()
+        self.setup_task_loader(model_name=model_name)
         self.initialise_model(**convnp_kwargs)
         self.train_model(n_epochs=n_epochs, model_name=model_name, batch=batch, batch_size=batch_size, lr=lr, weight_decay=weight_decay)
 
 
     def setup_task_loader(self, 
+                          model_name,
                           verbose=False, 
                           validation=False,
                           val_tasks=None
@@ -192,6 +194,10 @@ class Train:
             
         self.val_tasks = val_tasks
         self.context = context
+    
+        task_loader_path = f"{self.save_model_path}/{self.variable}/{model_name}/task_loader.pkl"
+        with open(task_loader_path, 'wb+') as f:
+                pickle.dump(task_loader, f)
 
         return task_loader     
 
