@@ -192,7 +192,20 @@ class ProcessStations(DataProcess):
                            var: str, 
                            time, 
                            remove_stations: list = [], 
+                           keep_stations: list = [],
                            daily: bool=False):
+        """Load the stations at a given time (or list of given times)
+
+        Args:
+            var (str): Station variable
+            time (_type_): Can be a list of times, a pd.Timestamp, or a np.datetime64
+            remove_stations (list, optional): List of station names to be dropped. Defaults to [].
+            keep_stations (list, optional): Only return these stations. Defaults to [].
+            daily (bool, optional): Resample to daily. Defaults to False.
+
+        Returns:
+            df: DataFrame of stations
+        """
         if isinstance(time, list):
             time = np.array(time, dtype='datetime64[ns]')
             def condition(lst, ds_time): return len(set(lst).intersection(ds_time)) != 0 
@@ -214,7 +227,10 @@ class ProcessStations(DataProcess):
                         da = self.ds_to_da(ds, var)
                         df_station = da.to_dataframe()
                         if daily: 
-                            df_station = df_station.reset_index().resample('D', on='time').mean()[[VAR_STATIONS[var]['var_name']]]
+                            if var == 'precipitation':
+                                df_station = df_station.reset_index().resample('D', on='time').sum()[[VAR_STATIONS[var]['var_name']]]
+                            else:
+                                df_station = df_station.reset_index().resample('D', on='time').mean()[[VAR_STATIONS[var]['var_name']]]
                         df_station = df_station.loc[time]
                         lon, lat = self.get_lon_lat(ds)
                         df_station['longitude'] = lon
@@ -233,6 +249,14 @@ class ProcessStations(DataProcess):
                 latlon = (STATION_LATLON[station]['latitude'], STATION_LATLON[station]['longitude'])
                 df = df[~((df['latitude'] == latlon[0]) & (df['longitude'] == latlon[1]))]
             print(f'Removed {len(remove_stations)} stations')
+        elif len(keep_stations) > 0:
+            new_df_list = []
+            for station in keep_stations:
+                print(f'Keeping {station}')
+                latlon = (STATION_LATLON[station]['latitude'], STATION_LATLON[station]['longitude'])
+                new_df_list.append(df[((df['latitude'] == latlon[0]) & (df['longitude'] == latlon[1]))])
+            df = pd.concat(new_df_list)
+            print(f'Kept {len(keep_stations)} stations')
 
         df = df.reset_index().rename(columns={'index': 'time'})
         df = df.set_index(['time', 'latitude', 'longitude']).sort_index()
