@@ -115,10 +115,8 @@ def main():
     else:
         suffix = '_hourly'
 
-    data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}{suffix}.pkl'
-    # data_processor_fpath = f'{model_dir}/data_processor_{2000}_{2001}{suffix}.pkl'
-    # else:
-    #     data_processor_fpath = f'{model_dir}/data_processor_{start_year}_{end_year}_hourly.pkl'
+    model_name_dir = f'{model_dir}/{model_name}'
+    data_processor_fpath = f'{model_name_dir}/data_processor.pkl'
 
     print('Looking for dataprocessor at:', data_processor_fpath)
     if os.path.exists(data_processor_fpath):
@@ -129,10 +127,10 @@ def main():
         print('No dataprocessor found, will be created')
         data_processor_dict = None
         save_data_processor_dict=data_processor_fpath
-        if not os.path.exists(model_dir):
-            os.makedirs(model_dir)
+        if not os.path.exists(model_name_dir):
+            os.makedirs(model_name_dir)
     
-    shutil.copy(DATA_PATHS['arguments'], model_dir)
+    shutil.copy(DATA_PATHS['arguments'], model_name_dir)
     
     print('Starting data processing')
     data.run_processing_sequence(
