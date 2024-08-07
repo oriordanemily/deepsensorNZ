@@ -43,7 +43,7 @@ val_years_step:
 
 # Model name, if default it will be the time
 model_name:
-  arg: precip_v2
+  arg: precip_test_bg_v3
   # arg: default  
   type: str
 
@@ -157,10 +157,10 @@ remove_stations:
 
 # Learning rate
 lr:
-  arg: 1e-4
+  arg: 1e-5
   type: float
 
 # Weight decay
 weight_decay:
-  arg: 1e-3
+  arg: 0
   type: float
