@@ -144,10 +144,16 @@ class PreprocessForDownscaling:
             if len(data_processor_dict['era5_ds'].time) == len(era5_raw_ds.time):
                 if (data_processor_dict['era5_ds'].time == era5_raw_ds.time).all():
                     print('Loading ERA5 and stations from Data Processor')
+                    # self.era5_ds = era5_raw_ds.copy()
+                    # for var in era5_raw_ds.data_vars:
+                    #     self.era5_ds[var] = data_processor_dict['']
+                    self.era5_ds = self.data_processor(era5_raw_ds)
+                    # just running the above to see if it works properly
                     self.era5_ds = data_processor_dict['era5_ds']
                     self.station_df = data_processor_dict['station_df']
                 else:
                     print('Not loading ERA5 and stations from Data Processor')
+
                     self.era5_ds = self.data_processor(era5_raw_ds)
                     self.station_df = self.data_processor(station_raw_df)
             else:
@@ -647,9 +653,6 @@ class PreprocessForDownscaling:
             )
         print('DataProcessor created in', time()-start, 'seconds')
 
-        if 'precipitation' in era5_raw_ds.data_vars:
-            era5_raw_ds['precipitation'] = np.log10(1 + era5_raw_ds['precipitation'])
-
         # Compute normalisation parameters
         start = time()
         print('Computing normalisation parameters...')
@@ -659,9 +662,32 @@ class PreprocessForDownscaling:
         if self.use_daily_data == False:
             _ = data_processor(utils.random_hour_subset_xr(era5_raw_ds))
             assert_computed = True
-        era5_ds = data_processor(era5_raw_ds, assert_computed=assert_computed)
-        station_df = data_processor(station_raw_df)
+    
+        era5_ds = era5_raw_ds.copy()
+        for var in era5_raw_ds.data_vars:
 
+            # TODO ! IF min < 0, x[x<0] = 0
+            if var == 'precipitation':
+                era5_ds[var] = data_processor(era5_raw_ds[var], 
+                                                  method='positive_semidefinite')
+            else:
+                era5_ds[var] = data_processor(era5_raw_ds[var], 
+                                                  method='mean_std',
+                                                  assert_computed=assert_computed)
+        # era5_ds = data_processor(era5_raw_ds, assert_computed=assert_computed)
+
+        if station_raw_df.columns[0] == self.var:
+            # Rename the df variable so it doesn't clash with the era5 variable
+            station_raw_df = station_raw_df.rename({self.var: f'{self.var}_station'}, axis=1)
+
+        if self.var == 'precipitation':
+            # TODO ! IF min < 0, x[x<0] = 0
+            station_df = data_processor(station_raw_df, 
+                                        method='positive_semidefinite') 
+        else:
+            station_df = data_processor(station_raw_df, 
+                                        method='mean_std')
+            
         # era5_ds, station_df = data_processor([era5_raw_ds, station_raw_df]) #meanstd
         aux_ds, highres_aux_ds = data_processor([aux_raw_ds, highres_aux_raw_ds], method="min_max") #minmax
         landmask_ds = data_processor(landmask_raw_ds, method='min_max') if landmask_raw_ds is not None else None
@@ -682,6 +708,8 @@ class PreprocessForDownscaling:
     
         data_processor_dict = {}
         data_processor_dict['data_processor'] = data_processor
+        # if self.var == 'precipitation':
+            # data_processor_dict['min_val'] = min_val
         data_processor_dict['aux_ds'] = aux_ds
         data_processor_dict['era5_ds'] = era5_ds
         data_processor_dict['highres_aux_ds'] = highres_aux_ds
@@ -691,7 +719,7 @@ class PreprocessForDownscaling:
         if save != None:
             data_processor_dict_fpath = save
             print(f'Saving data_processor_dict to {data_processor_dict_fpath}')
-            with open(data_processor_dict_fpath, 'wb') as f:
+            with open(data_processor_dict_fpath, 'wb+') as f:
                 pickle.dump(data_processor_dict, f)
          
         return data_processor_dict

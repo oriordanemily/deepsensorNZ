@@ -261,6 +261,9 @@ class ProcessStations(DataProcess):
         df = df.reset_index().rename(columns={'index': 'time'})
         df = df.set_index(['time', 'latitude', 'longitude']).sort_index()
 
+        df_column_name = df.columns[0]
+        df = df.rename(columns={df_column_name: f"{var}_station"})
+        
         return df
     
         
