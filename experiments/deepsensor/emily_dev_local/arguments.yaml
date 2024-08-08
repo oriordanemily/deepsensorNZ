@@ -1,7 +1,7 @@
 # Variable to be downscaled (temperature or precipitation)
 variable:
-  # arg: temperature 
-  arg: precipitation
+  arg: temperature 
+  # arg: precipitation
   type: str
 
 # Training start year
@@ -43,7 +43,7 @@ val_years_step:
 
 # Model name, if default it will be the time
 model_name:
-  arg: precip_test_bg_v3
+  arg: temperature_test
   # arg: default  
   type: str
 
@@ -51,6 +51,11 @@ model_name:
 use_daily_data:
   arg: True  
   type: bool
+
+# Take a subset of the data, e.g., dates[::time_intervals]
+time_intervals:
+  arg: 5
+  type: int
 
 # Coarsen factor for high resolution topography
 topography_highres_coarsen_factor:

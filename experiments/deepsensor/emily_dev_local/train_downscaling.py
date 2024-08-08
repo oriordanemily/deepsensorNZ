@@ -54,6 +54,7 @@ def main():
     val_end_year = args["val_end_year"]
     validation_years_step = args["val_years_step"]
     use_daily_data = args["use_daily_data"]
+    time_intervals = args["time_intervals"]
     include_time_of_year = args["include_time_of_year"]
     include_landmask = args["include_landmask"]
     context_variables = args["context_variables"]
@@ -152,7 +153,11 @@ def main():
     # ------------------------------------------
     print('Starting training')
     training = Train(processed_output_dict=processed_output_dict)
-    training.run_training_sequence(n_epochs, model_name, batch=batch, batch_size=batch_size, lr=lr, weight_decay=weight_decay, **convnp_kwargs)
+    training.run_training_sequence(n_epochs, model_name, batch=batch, 
+                                   batch_size=batch_size, lr=lr,
+                                   weight_decay=weight_decay, 
+                                   time_intervals=time_intervals,
+                                   **convnp_kwargs)
     training.model.save(model_dir)
 
 if __name__ == "__main__":

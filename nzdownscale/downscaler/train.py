@@ -87,9 +87,12 @@ class Train:
         pass
 
 
-    def run_training_sequence(self, n_epochs, model_name='default', batch=False, batch_size=1, lr=5e-5, weight_decay=0, **convnp_kwargs,):
+    def run_training_sequence(self, n_epochs, model_name='default', 
+                              batch=False, batch_size=1, lr=5e-5, 
+                              weight_decay=0, time_intervals=1, 
+                              **convnp_kwargs,):
         
-        self.setup_task_loader(model_name=model_name)
+        self.setup_task_loader(model_name=model_name, time_intervals=time_intervals)
         self.initialise_model(**convnp_kwargs)
         self.train_model(n_epochs=n_epochs, model_name=model_name, batch=batch, batch_size=batch_size, lr=lr, weight_decay=weight_decay)
 
@@ -98,7 +101,8 @@ class Train:
                           model_name,
                           verbose=False, 
                           validation=False,
-                          val_tasks=None
+                          val_tasks=None, 
+                          time_intervals=1,
                           ):
 
         era5_ds = self.era5_ds
@@ -149,6 +153,8 @@ class Train:
         # val_start = f'{val_start_year}-01-01'
         # val_end = f'{val_end_year}-12-31'
 
+        # From here downwards, could this be a separate function? 
+        # E.g. load_tasks() ?
         
         if not validation:
             train_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in training_years]
@@ -156,10 +162,9 @@ class Train:
         val_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in validation_years]
         val_dates = [date for sublist in val_dates for date in sublist]
 
-        hours_interval = 10
         if not validation:
             train_tasks = []
-            for date in tqdm(train_dates[::hours_interval], desc="Loading train tasks..."):
+            for date in tqdm(train_dates[::time_intervals], desc="Loading train tasks..."):
                 if context_sampling[-1] == 'random': #currently only implemented for stations
                     context_sampling_ = context_sampling[:-1] + [np.random.rand()]
                 else:
@@ -169,7 +174,7 @@ class Train:
 
             # if self.val_tasks is None:
         val_tasks = []
-        for date in tqdm(val_dates[:10], desc="Loading val tasks..."):
+        for date in tqdm(val_dates[::time_intervals], desc="Loading val tasks..."):
         # for date in tqdm(val_dates[::hours_interval], desc="Loading val tasks..."):
             if context_sampling[-1] == 'random': #currently only implemented for stations
                 context_sampling_ = context_sampling[:-1] + [np.random.rand()]
