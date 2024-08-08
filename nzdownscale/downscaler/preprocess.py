@@ -676,9 +676,10 @@ class PreprocessForDownscaling:
                                                   assert_computed=assert_computed)
         # era5_ds = data_processor(era5_raw_ds, assert_computed=assert_computed)
 
-        if station_raw_df.columns[0] == self.var:
+        # if station_raw_df.columns[0] == self.var:
             # Rename the df variable so it doesn't clash with the era5 variable
-            station_raw_df = station_raw_df.rename({self.var: f'{self.var}_station'}, axis=1)
+        
+        station_raw_df = station_raw_df.rename({station_raw_df.columns[0]: f'{self.var}_station'}, axis=1)
 
         if self.var == 'precipitation':
             # TODO ! IF min < 0, x[x<0] = 0
