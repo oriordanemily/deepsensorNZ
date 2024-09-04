@@ -1,19 +1,60 @@
+# ------------------------------------------
+# VARIABLE
+# ------------------------------------------
+
 # Variable to be downscaled (temperature or precipitation)
 variable:
   arg: temperature 
-  # arg: precipitation
   type: str
+  
+# Model name, if 'default' it will be the time
+model_name:
+  arg: hourly_1e-5
+  type: str
+
+# ------------------------------------------
+# TRAINING HYPERPARAMETERS
+# ------------------------------------------
+
+# Number of epochs
+n_epochs:
+  arg: 100
+  type: int
+  
+# Learning rate
+lr:
+  arg: 1e-5
+  type: float
+
+# Weight decay
+weight_decay:
+  arg: 0
+  type: float
+  
+# Batch training
+batch:
+  arg: False  
+  type: bool
+
+# Batch size for training, only used if batch=True
+batch_size:
+  arg: 4  
+  type: int
+  
+# ------------------------------------------
+# TRAINING PERIOD
+# ------------------------------------------
 
 # Training start year
 start_year:
   # arg: 2000
-  arg: 2000
+  arg: 1995
   type: int
 
 # Training end year (inclusive)
 end_year:
   # arg: 2011
-  arg: 2001
+  arg: 2015
   # arg: 2003
   type: int
 
@@ -21,41 +62,44 @@ end_year:
 # E.g. start_year=2000, end_year=2011, training_years_step=3, then training years are [2000, 2003, 2006, 2009]
 # If training_years_step is 1, then all years between start_year and end_year are used
 training_years_step:
-  arg: 1
+  arg: 3
   type: int
+  
+# Use daily data
+use_daily_data:
+  arg: False  
+  type: bool
+  
+# Take a subset of the data, e.g., dates[::time_intervals].
+# Applies to both training and validation dates
+time_intervals:
+  arg: 5
+  type: int
+  
+# ------------------------------------------
+# VALIDATION PERIOD
+# ------------------------------------------
 
 # Validation start year
 val_start_year:
-  # arg: 2012
-  arg: 2002
+  arg: 2014  
+  # arg: 2002
   type: int
 
 # Validation end year (inclusive)
 val_end_year:
-  # arg: 2012
-  arg: 2002
+  arg: 2014
+  # arg: 2002
   type: int
 
 # Validation years are between val_start_year and val_end_year, and are separated by val_years_step
 val_years_step:
   arg: 1
   type: int
-
-# Model name, if default it will be the time
-model_name:
-  arg: temperature_test
-  # arg: default  
-  type: str
-
-# Use daily data
-use_daily_data:
-  arg: True  
-  type: bool
-
-# Take a subset of the data, e.g., dates[::time_intervals]
-time_intervals:
-  arg: 5
-  type: int
+  
+# ------------------------------------------
+# MODEL RESOLUTION
+# ------------------------------------------
 
 # Coarsen factor for high resolution topography
 topography_highres_coarsen_factor:
@@ -71,6 +115,10 @@ topography_lowres_coarsen_factor:
 era5_coarsen_factor:
   arg: 1  
   type: int
+  
+# ------------------------------------------
+# INPUT VARIABLES
+# ------------------------------------------
 
 # Include time of year
 include_time_of_year:
@@ -101,41 +149,11 @@ context_variables:
 station_as_context:
   arg: random
   type: bool_or_float_or_str
-
-# Number of epochs
-n_epochs:
-  arg: 50
-  type: int
-
-# Channels for UNet
-unet_channels:
-  arg: None  
-  type: int_or_none
-
-# Likelihood
-likelihood:
-  arg: None  
-  type: str_or_none
-
-# Batch training
-batch:
-  arg: False  
-  type: bool
-
-# Batch size for training, only used if batch=True
-batch_size:
-  arg: 4  
-  type: int
-
-# Internal density
-internal_density:
-  arg: 250
-  type: int
-
-# Auto set internal density
-auto_set_internal_density:
-  arg: False  
-  type: bool
+  
+  
+# ------------------------------------------
+# SPATIAL DETAILS
+# ------------------------------------------
 
 # Area 
 # Select area of map, options specified in: PLOT_EXTENT in nzdownscale.dataprocess.config.py. 
@@ -160,12 +178,32 @@ remove_stations:
     ]  
   type: list
 
-# Learning rate
-lr:
-  arg: 1e-5
-  type: float
+# ------------------------------------------
+# NEURAL PROCESS PARAMETERS
+# ------------------------------------------
 
-# Weight decay
-weight_decay:
-  arg: 0
-  type: float
+# Channels for UNet
+unet_channels:
+  arg: None  
+  type: int_or_none
+
+# Likelihood
+likelihood:
+  arg: None  
+  type: str_or_none
+
+# Internal density
+internal_density:
+  arg: 250
+  type: int
+
+# Auto set internal density
+auto_set_internal_density:
+  arg: False  
+  type: bool
+
+
+
+
+
+

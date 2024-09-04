@@ -316,7 +316,7 @@ class Train:
             batched_train_tasks = self.batch_data_by_num_stations(train_tasks, batch_size=batch_size)
             batched_val_tasks = self.batch_data_by_num_stations(val_tasks, batch_size=batch_size)
 
-        for epoch in tqdm(range(n_epochs)):
+        for epoch in tqdm(range(n_epochs), desc="Training"):
             if batch:
                 batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}'], 
                                             batch_size=len(batched_train_tasks[f'{num_stations}']), 
