@@ -27,6 +27,7 @@ __pycache__
 *.txt
 *.png
 *.pkl
+*.pdf
 
 # wandb
 *wandb*
