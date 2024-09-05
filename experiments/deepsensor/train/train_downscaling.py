@@ -47,6 +47,7 @@ def main():
 
     print('ARGUMENTS:', args)    
     variable = args["variable"]
+    base = args["base"]
     start_year = args["start_year"]
     end_year = args["end_year"]
     training_years_step = args["training_years_step"]
@@ -103,7 +104,7 @@ def main():
     print('Validation years:', validation_years)
     data = PreprocessForDownscaling(
         variable=variable,
-        base='wrf',
+        base=base,
         training_years=training_years,
         validation_years=validation_years,
         training_months=[12],
