@@ -148,8 +148,9 @@ class Train:
             print(task_loader)
 
         task_loader_path = f"{self.save_model_path}/{self.variable}/{model_name}/task_loader.pkl"
-        with open(task_loader_path, 'wb+') as f:
-                pickle.dump(task_loader, f)
+        if not os.path.exists(task_loader_path):
+            with open(task_loader_path, 'wb+') as f:
+                    pickle.dump(task_loader, f)
 
         # if not validation:
         #     train_start = f'{start_year}-01-01'
