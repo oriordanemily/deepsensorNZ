@@ -101,3 +101,5 @@ experiments/deepsensor/emily_dev_local/arguments2.yaml
 experiments/deepsensor/emily_dev_local/arguments3.yaml
 experiments/deepsensor/emily_dev_local/arguments4.yaml
 experiments/deepsensor/emily_dev_local/val2.py
+experiments/deepsensor/train/arguments_wrf.yaml
+experiments/deepsensor/train/arguments_test.yaml

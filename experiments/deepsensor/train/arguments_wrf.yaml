@@ -6,6 +6,10 @@
 variable:
   arg: temperature 
   type: str
+
+base:
+  arg: wrf
+  type: str
   
 # Model name, if 'default' it will be the time
 model_name:
