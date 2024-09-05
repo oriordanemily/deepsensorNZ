@@ -1,5 +1,8 @@
 import logging
+
+from sklearn import base
 logging.captureWarnings(True)
+from cycler import V
 from typing_extensions import Literal
 from tqdm import tqdm
 import warnings
@@ -18,7 +21,7 @@ from sklearn.neighbors import NearestNeighbors
 from deepsensor.data.processor import DataProcessor
 from deepsensor.data.utils import construct_x1x2_ds
 from deepsensor.data import construct_circ_time_ds
-from nzdownscale.dataprocess import era5, stations, topography, utils, config
+from nzdownscale.dataprocess import era5, wrf, stations, topography, utils, config
 from nzdownscale.dataprocess.config import LOCATION_LATLON, PLOT_EXTENT
 from nzdownscale.dataprocess.config_local import DATA_PATHS
 
@@ -26,8 +29,11 @@ from nzdownscale.dataprocess.config_local import DATA_PATHS
 class PreprocessForDownscaling:
 
     def __init__(self,
+                 base='era5',
                  training_years=None,
                  validation_years=None,
+                 training_months=None,
+                 validation_months=None,
                  variable='temperature',
                  use_daily_data=True,
                  validation = False,
@@ -43,14 +49,17 @@ class PreprocessForDownscaling:
         self.use_daily_data = use_daily_data
         self.training_years = training_years
         self.validation_years = validation_years
+        self.base = base
         
         if validation:
             self.years = validation_years
+            self.months = validation_months
         else:
             if training_years is None or validation_years is None:
                 self.years = None
             else:
-                self.years = training_years + validation_years
+                self.years = list(set(training_years + validation_years))
+                self.months = list(set(training_months + validation_months))
 
         self.area = area
         
@@ -61,7 +70,10 @@ class PreprocessForDownscaling:
         self.dataprocess = utils.DataProcess()
 
         self.process_top = topography.ProcessTopography()
-        self.process_era = era5.ProcessERA5()
+        if base=='era5':
+            self.process_era = era5.ProcessERA5()
+        elif base=='wrf':
+            self.process_wrf = wrf.ProcessWRF()
         self.process_stations = stations.ProcessStations()
         self.nzplot = utils.PlotData()
 
@@ -69,12 +81,12 @@ class PreprocessForDownscaling:
         self.station_metadata = None
 
         self.ds_elev = None
-        self.ds_era = None
-        self.da_era = None
+        self.ds_base = None
+        self.da_base = None
 
         self.data_processor = None
         self.aux_ds = None
-        self.era5_ds = None
+        self.base_ds = None
         self.highres_aux_ds = None
         self.landmask_ds = None
         self.station_raw_df = None
@@ -88,14 +100,15 @@ class PreprocessForDownscaling:
     def _check_args(self):
         # if self.use_daily_data is False:
         #     raise NotImplementedError
-        if self.var == 'precipitation':
-            raise NotImplementedError
+        # if self.var == 'precipitation':
+        #     raise NotImplementedError
+        pass
 
     
     def run_processing_sequence(self,
         topography_highres_coarsen_factor,
         topography_lowres_coarsen_factor,
-        era5_coarsen_factor,
+        era5_coarsen_factor=1,
         include_time_of_year=False,
         include_landmask=False,
         data_processor_dict=None,
@@ -105,10 +118,17 @@ class PreprocessForDownscaling:
         ):
         
         self.load_topography()
-        self.load_era5()
+        if self.base == 'era5':
+            self.load_era5()
+        elif self.base == 'wrf':
+            self.load_wrf()
         self.load_stations()
         highres_aux_raw_ds, aux_raw_ds = self.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
-        era5_raw_ds = self.preprocess_era5(coarsen_factor=era5_coarsen_factor)
+        
+        if self.base == 'era5':
+            base_raw_ds = self.preprocess_era5(coarsen_factor=era5_coarsen_factor)
+        elif self.base == 'wrf':
+            base_raw_ds = self.preprocess_wrf()
         station_raw_df = self.preprocess_stations(remove_stations=remove_stations, fill_missing=True)
 
         if include_landmask:
@@ -118,7 +138,7 @@ class PreprocessForDownscaling:
 
         if data_processor_dict == None:
             data_processor_dict = self.process_all_for_training(
-                era5_raw_ds=era5_raw_ds, 
+                base_raw_ds=base_raw_ds, 
                 highres_aux_raw_ds=highres_aux_raw_ds, 
                 aux_raw_ds=aux_raw_ds, 
                 station_raw_df=station_raw_df,
@@ -129,9 +149,7 @@ class PreprocessForDownscaling:
                 )
             self.data_processor = data_processor_dict['data_processor']
             self.aux_ds = data_processor_dict['aux_ds']
-            self.era5_ds = data_processor_dict['era5_ds']
             self.highres_aux_ds = data_processor_dict['highres_aux_ds']
-            self.station_df = data_processor_dict['station_df']
             self.landmask_ds = data_processor_dict['landmask_ds']
         else:
             self.data_processor = data_processor_dict['data_processor']
@@ -139,36 +157,26 @@ class PreprocessForDownscaling:
             self.highres_aux_ds = data_processor_dict['highres_aux_ds']
             self.landmask_ds = data_processor_dict['landmask_ds']
             
-            print('Data Processor time:', data_processor_dict['era5_ds'].time)
-            print('ERA5 time:', era5_raw_ds.time)
-            if len(data_processor_dict['era5_ds'].time) == len(era5_raw_ds.time):
-                if (data_processor_dict['era5_ds'].time == era5_raw_ds.time).all():
-                    print('Loading ERA5 and stations from Data Processor')
-                    # self.era5_ds = era5_raw_ds.copy()
-                    # for var in era5_raw_ds.data_vars:
-                    #     self.era5_ds[var] = data_processor_dict['']
-                    self.era5_ds = self.data_processor(era5_raw_ds)
-                    # just running the above to see if it works properly
-                    self.era5_ds = data_processor_dict['era5_ds']
-                    self.station_df = data_processor_dict['station_df']
-                else:
-                    print('Not loading ERA5 and stations from Data Processor')
+            # print('Data Processor time:', data_processor_dict['base_ds'].time)
+            # print(f'{self.base} time:', base_raw_ds.time)
+            # if len(data_processor_dict['base_ds'].time) == len(base_raw_ds.time):
+            #     if (data_processor_dict['base_ds'].time == base_raw_ds.time).all():
+            #         print(f'Loading {self.base} and stations from Data Processor')
+            #         # self.era5_ds = self.data_processor(base_raw_ds)
+            #         # just running the above to see if it works properly
+            #         self.base_ds = data_processor_dict['base_ds']
+            #         self.station_df = data_processor_dict['station_df']
+            #     else:
+            #         print(f'Not loading {self.base} and stations from Data Processor')
 
-                    self.era5_ds = self.data_processor(era5_raw_ds)
-                    self.station_df = self.data_processor(station_raw_df)
-            else:
-                print('Not loading ERA5 and stations from Data Processor')
-                self.era5_ds = self.data_processor(era5_raw_ds)
-                self.station_df = self.data_processor(station_raw_df)
-
+            #         self.base_ds = self.data_processor(base_raw_ds)
+            #         self.station_df = self.data_processor(station_raw_df)
+            # else:
+                # print(f'Not loading {self.base} and stations from Data Processor')
+        print(f'Processing {self.base} and stations')
+        self.base_ds = self.data_processor(base_raw_ds)
+        self.station_df = self.data_processor(station_raw_df)
         self.station_as_context = station_as_context
-
-            # # self.aux_ds = self.data_processor(aux_raw_ds)
-            # self.era5_ds = self.data_processor(era5_raw_ds)
-            # # self.highres_aux_ds = self.data_processor(highres_aux_raw_ds)
-            # self.station_df = self.data_processor(station_raw_df)
-            # # self.landmask_ds = self.data_processor(landmask_raw_ds)
-            # self.station_as_context = data_processor_dict['station_as_context']
 
     def load_topography(self):
         print('Loading topography...')
@@ -183,16 +191,26 @@ class PreprocessForDownscaling:
     
     def load_era5(self):
         print('Loading era5...')
-        self.ds_era = self.process_era.load_ds(self.var, self.years)
+        self.base_ds = self.process_era.load_ds(self.var, self.years)
         for variable in self.context_variables:
             if variable != self.var:
                 da = self.process_era.load_ds(variable, self.years)
-                self.ds_era = xr.merge([self.ds_era, da])
+                self.base_ds = xr.merge([self.ds_era, da])
         
         print('loaded')
         # self.da_era = self.process_era.ds_to_da(self.ds_era, self.var)
 
-    
+    def load_wrf(self):
+        print('Loading wrf...')
+        print('USING SAVED TEST FILE - UNCOMMENT ACTUAL LOADING')
+        self.base_ds = xr.open_dataset('/home/emily/deepsensor/deepweather-downscaling/experiments/deepsensor/train/wrf_interp_test.nc')
+        # base_ds = self.process_wrf.load_ds(self.years, 
+        #                                         self.months, 
+        #                                         self.context_variables)
+        # self.base_ds = self.process_wrf.regrid_to_topo(base_ds,
+        #                                             self.ds_elev)
+        print('loaded')
+
     def load_stations(self, use_cache=False):
         print('Loading stations...')
 
@@ -236,30 +254,45 @@ class PreprocessForDownscaling:
         self.aux_raw_ds = aux_raw_ds # does this need to include coarsened TPI?
         return self.highres_aux_raw_ds, self.aux_raw_ds
 
+    def preprocess_wrf(self,):
+        
+        assert self.base_ds is not None, "Run load_wrf() first"
+        assert self.highres_aux_raw_ds is not None, "Run preprocess_topography() first"
+
+        if self.use_daily_data:
+            raise ValueError("Cannot convert WRF to daily data")
+
+        # Coarsening not implemented for WRF
+
+        # Trim to topography extent
+        ds_base_trimmed = self._trim_ds(self.base_ds, self.highres_aux_raw_ds)
+        self.base_raw_ds = ds_base_trimmed
+
+        return self.base_raw_ds
 
     def preprocess_era5(self,
                         coarsen_factor=10,
                         ):
         """ Gets self.era5_raw_ds """
 
-        assert self.ds_era is not None, "Run load_era5() first"
+        assert self.base_ds is not None, "Run load_era5() first"
         assert self.highres_aux_raw_ds is not None, "Run preprocess_topography() first"
 
         # Convert hourly to daily data
         if self.use_daily_data:
-            ds_era = self._convert_era5_to_daily(self.ds_era)
+            ds_era = self._convert_era5_to_daily(self.base_ds)
         else:
-            ds_era = self.ds_era
+            ds_era = self.base_ds
 
         # Coarsen
         self.era5_coarsen_factor = coarsen_factor
         self.ds_era_coarse = self._coarsen_era5(ds_era, self.era5_coarsen_factor)
 
         # Trim to topography extent
-        ds_era_trimmed = self._trim_era5(self.ds_era_coarse, self.highres_aux_raw_ds)
+        ds_era_trimmed = self._trim_ds(self.ds_era_coarse, self.highres_aux_raw_ds)
         
-        self.era5_raw_ds = ds_era_trimmed
-        return self.era5_raw_ds
+        self.base_raw_ds = ds_era_trimmed
+        return self.base_raw_ds
 
 
     def preprocess_stations(self, remove_stations=['None'], fill_missing=False):
@@ -426,27 +459,31 @@ class PreprocessForDownscaling:
         return da_era_coarse
 
 
-    def _trim_era5(self,
-                  da_era,
+    def _trim_ds(self,
+                  ds,
                   highres_aux_raw_ds,
                   plot=False,
                   ):
-        # Slice era5 data to elevation data's spatial extent
+        # Slice base data to elevation data's spatial extent
         top_min_lat = highres_aux_raw_ds['latitude'].min()
         top_max_lat = highres_aux_raw_ds['latitude'].max()
         top_min_lon = highres_aux_raw_ds['longitude'].min()
         top_max_lon = highres_aux_raw_ds['longitude'].max()
-
-        era5_raw_ds = da_era.sel(
-            latitude=slice(top_max_lat, top_min_lat),
+        
+        if self.base == 'era5':
+            lat_slice = slice(top_max_lat, top_min_lat)
+        elif self.base == 'wrf':
+            lat_slice = slice(top_min_lat, top_max_lat)
+        base_raw_ds = ds.sel(
+            latitude=lat_slice,
             longitude=slice(top_min_lon, top_max_lon))
 
         if plot:
             ax = self.nzplot.nz_map_with_coastlines()
-            era5_raw_ds.isel(time=0).plot()
-            ax.set_title('ERA5 with topography extent');
+            base_raw_ds.isel(time=0).plot()
+            ax.set_title(f'{self.base} with topography extent');
 
-        return era5_raw_ds
+        return base_raw_ds
 
 
     def _filter_stations(self, df_station_metadata, remove_stations=[None]):
@@ -624,7 +661,7 @@ class PreprocessForDownscaling:
 
 
     def process_all_for_training(self,
-                    era5_raw_ds,
+                    base_raw_ds,
                     aux_raw_ds,
                     highres_aux_raw_ds,
                     station_raw_df,
@@ -660,24 +697,24 @@ class PreprocessForDownscaling:
         assert_computed = False
         # If hourly data, take a random hour from each day and produce the normalization parameters from that
         if self.use_daily_data == False:
-            _ = data_processor(utils.random_hour_subset_xr(era5_raw_ds))
+            _ = data_processor(utils.random_hour_subset_xr(base_raw_ds))
             assert_computed = True
     
-        era5_ds = era5_raw_ds.copy()
-        for var in era5_raw_ds.data_vars:
+        base_ds = base_raw_ds.copy()
+        for var in base_raw_ds.data_vars:
 
             # TODO ! IF min < 0, x[x<0] = 0
             if var == 'precipitation':
-                era5_ds[var] = data_processor(era5_raw_ds[var], 
+                base_ds[var] = data_processor(base_raw_ds[var], 
                                                   method='positive_semidefinite')
             else:
-                era5_ds[var] = data_processor(era5_raw_ds[var], 
+                base_ds[var] = data_processor(base_raw_ds[var], 
                                                   method='mean_std',
                                                   assert_computed=assert_computed)
-        # era5_ds = data_processor(era5_raw_ds, assert_computed=assert_computed)
+        # base_ds = data_processor(base_raw_ds, assert_computed=assert_computed)
 
         # if station_raw_df.columns[0] == self.var:
-            # Rename the df variable so it doesn't clash with the era5 variable
+            # Rename the df variable so it doesn't clash with the base variable
         
         station_raw_df = station_raw_df.rename({station_raw_df.columns[0]: f'{self.var}_station'}, axis=1)
 
@@ -689,7 +726,7 @@ class PreprocessForDownscaling:
             station_df = data_processor(station_raw_df, 
                                         method='mean_std')
             
-        # era5_ds, station_df = data_processor([era5_raw_ds, station_raw_df]) #meanstd
+        # base_ds, station_df = data_processor([base_raw_ds, station_raw_df]) #meanstd
         aux_ds, highres_aux_ds = data_processor([aux_raw_ds, highres_aux_raw_ds], method="min_max") #minmax
         landmask_ds = data_processor(landmask_raw_ds, method='min_max') if landmask_raw_ds is not None else None
         print(data_processor)
@@ -697,14 +734,14 @@ class PreprocessForDownscaling:
 
         # Normalisation test (optional)
         if test_norm: 
-            self.test_normalisation(data_processor, era5_ds, aux_ds, highres_aux_ds, station_df, era5_raw_ds, aux_raw_ds, highres_aux_raw_ds, station_raw_df)
+            self.test_normalisation(data_processor, base_ds, aux_ds, highres_aux_ds, station_df, base_raw_ds, aux_raw_ds, highres_aux_raw_ds, station_raw_df)
 
         start = time()
         # Generate auxilary datasets with additional data
         print('Generating auxiliary datasets...')
         aux_ds = self.add_coordinates(aux_ds)
         if include_time_of_year:
-            era5_ds = self.add_time_of_year(era5_ds)
+            base_ds = self.add_time_of_year(base_ds)
         print('Auxiliary datasets generated in', time()-start, 'seconds')
     
         data_processor_dict = {}
@@ -712,9 +749,9 @@ class PreprocessForDownscaling:
         # if self.var == 'precipitation':
             # data_processor_dict['min_val'] = min_val
         data_processor_dict['aux_ds'] = aux_ds
-        data_processor_dict['era5_ds'] = era5_ds
+        # data_processor_dict['base_ds'] = base_ds
         data_processor_dict['highres_aux_ds'] = highres_aux_ds
-        data_processor_dict['station_df'] = station_df
+        # data_processor_dict['station_df'] = station_df
         data_processor_dict['landmask_ds'] = landmask_ds
         data_processor_dict['station_as_context'] = station_as_context
         if save != None:
@@ -726,17 +763,17 @@ class PreprocessForDownscaling:
         return data_processor_dict
         # self.data_processor = data_processor
         # self.aux_ds = aux_ds
-        # self.era5_ds = era5_ds
+        # self.base_ds = base_ds
         # self.highres_aux_ds = highres_aux_ds
         # self.station_df = station_df
         # self.landmask_ds = landmask_ds
 
 
-    def test_normalisation(self, data_processor, era5_ds, aux_ds, highres_aux_ds, station_df, era5_raw_ds, aux_raw_ds, highres_aux_raw_ds, station_raw_df):
+    def test_normalisation(self, data_processor, base_ds, aux_ds, highres_aux_ds, station_df, base_raw_ds, aux_raw_ds, highres_aux_raw_ds, station_raw_df):
 
-        for ds, raw_ds, ds_name in zip([era5_ds, aux_ds, highres_aux_ds], 
-                    [era5_raw_ds, aux_raw_ds, highres_aux_raw_ds], 
-                    ['ERA5', 'Topography', 'Topography (high res)']):
+        for ds, raw_ds, ds_name in zip([base_ds, aux_ds, highres_aux_ds], 
+                    [base_raw_ds, aux_raw_ds, highres_aux_raw_ds], 
+                    ['base', 'Topography', 'Topography (high res)']):
             ds_unnormalised = data_processor.unnormalise(ds)
             xr.testing.assert_allclose(raw_ds, ds_unnormalised, atol=1e-3)
             print(f"Unnormalised {ds_name} matches raw data")
@@ -766,17 +803,18 @@ class PreprocessForDownscaling:
 
         data_settings = {
             'var': self.var,
-            'era5_coarsen_factor': self.era5_coarsen_factor,
             'topography_highres_coarsen_factor': self.topography_highres_coarsen_factor,
             'topography_lowres_coarsen_factor': self.topography_lowres_coarsen_factor,
             'resolutions': self._get_resolutions_dict(),
             'area': self.area,
             'context_variables': self.context_variables,
         }
+        if self.base == 'era5':
+            data_settings['era5_coarsen_factor'] = self.era5_coarsen_factor
 
         processed_output_dict = {
             'data_processor': self.data_processor,
-            'era5_ds': self.era5_ds,
+            'base_ds': self.base_ds,
             'highres_aux_ds': self.highres_aux_ds,
             'aux_ds': self.aux_ds,
             'landmask_ds': self.landmask_ds,
@@ -784,7 +822,7 @@ class PreprocessForDownscaling:
             'station_as_context': self.station_as_context,
 
             'station_raw_df': self.station_raw_df,
-            'era5_raw_ds': self.era5_raw_ds,
+            'base_raw_ds': self.base_raw_ds,
             
             'data_settings': data_settings,
             'date_info': date_info,
@@ -796,12 +834,12 @@ class PreprocessForDownscaling:
 
 
     def plot_dataset(self,
-                     type: Literal['era5', 'top_highres', 'top_lowres'],
+                     type: Literal['base', 'top_highres', 'top_lowres'],
                      area=None,
                      with_stations=True):
         """
         Plot heatmap of processed data (input for model training)
-        type options: ['era5', 'top_highres', 'top_lowres']
+        type options: ['base', 'top_highres', 'top_lowres']
         """
         if area is None:
             area = self.area
@@ -814,12 +852,12 @@ class PreprocessForDownscaling:
             ds = self.aux_raw_ds
             assert ds is not None
             da_plot = self.process_top.ds_to_da(ds)
-        elif type == 'era5':
-            ds = self.era5_raw_ds
+        elif type == 'base':
+            ds = self.base_raw_ds
             assert ds is not None
             da_plot = ds.isel(time=0)
         else:
-            raise ValueError(f"type={type} not recognised, choose from ['era5', 'top_highres', 'top_lowres']")
+            raise ValueError(f"type={type} not recognised, choose from ['base', 'top_highres', 'top_lowres']")
 
         ax = self.nzplot.nz_map_with_coastlines(area)
         da_plot.plot()
@@ -838,7 +876,7 @@ class PreprocessForDownscaling:
         resolutions = {
             'topography_high_res': self._lat_lon_dict(self.highres_aux_raw_ds),
             'topography_low_res': self._lat_lon_dict(self.aux_raw_ds),
-            'era5': self._lat_lon_dict(self.era5_raw_ds),
+            self.base: self._lat_lon_dict(self.base_raw_ds),
         }
         self.resolutions = resolutions
         return resolutions
@@ -853,9 +891,11 @@ class PreprocessForDownscaling:
 
     def print_resolutions(self):
         resolutions = self._get_resolutions_dict()
-        print(f"Topography highres:\n  lon={resolutions['topography_high_res']['lon']:.4f}, lat={resolutions['topography_high_res']['lat']:.4f} \nTopography lowres:\n  lon={resolutions['topography_low_res']['lon']:.4f}, lat={resolutions['topography_low_res']['lat']:.4f}\nERA5:\n  lon={resolutions['era5']['lon']:.4f}, lat={resolutions['era5']['lat']:.4f} ")
-        if resolutions['topography_high_res']['lon'] > resolutions['era5']['lon'] or resolutions['topography_high_res']['lat'] > resolutions['era5']['lat']:
-            warnings.warn("highres topography resolution is higher than ERA5 resolution", UserWarning)
+        print(f"Topography highres:\n  lon={resolutions['topography_high_res']['lon']:.4f}, lat={resolutions['topography_high_res']['lat']:.4f}", 
+              f"\nTopography lowres:\n  lon={resolutions['topography_low_res']['lon']:.4f}, lat={resolutions['topography_low_res']['lat']:.4f}",
+              f"\n{self.base}:\n  lon={resolutions[self.base]['lon']:.4f}, lat={resolutions[self.base]['lat']:.4f} ")
+        if resolutions['topography_high_res']['lon'] > resolutions[self.base]['lon'] or resolutions['topography_high_res']['lat'] > resolutions[self.base]['lat']:
+            warnings.warn(f"highres topography resolution is higher than {self.base} resolution", UserWarning)
         if resolutions['topography_high_res']['lon'] > resolutions['topography_low_res']['lon'] or resolutions['topography_high_res']['lat'] > resolutions['topography_low_res']['lon']:
             warnings.warn("lowres topography resolution is higher than highres topography resolution", UserWarning)
 

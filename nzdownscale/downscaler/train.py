@@ -52,7 +52,7 @@ class Train:
         self.processed_output_dict = processed_output_dict
 
         self.variable = processed_output_dict['data_settings']['var']
-        self.era5_ds = processed_output_dict['era5_ds']
+        self.base_ds = processed_output_dict['base_ds']
         self.highres_aux_ds = processed_output_dict['highres_aux_ds']
         self.aux_ds = processed_output_dict['aux_ds']
         self.station_df = processed_output_dict['station_df']
@@ -105,7 +105,7 @@ class Train:
                           time_intervals=1,
                           ):
 
-        era5_ds = self.era5_ds
+        base_ds = self.base_ds
         highres_aux_ds = self.highres_aux_ds
         aux_ds = self.aux_ds
         station_df = self.station_df
@@ -121,7 +121,7 @@ class Train:
         training_years = self.training_years
         validation_years = self.validation_years
 
-        context = [era5_ds, aux_ds]
+        context = [base_ds, aux_ds]
         context_sampling = ["all", "all"]
 
         if landmask_ds is not None:
@@ -157,9 +157,9 @@ class Train:
         # E.g. load_tasks() ?
         
         if not validation:
-            train_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in training_years]
+            train_dates = [base_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in training_years]
             train_dates = [date for sublist in train_dates for date in sublist]
-        val_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in validation_years]
+        val_dates = [base_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in validation_years]
         val_dates = [date for sublist in val_dates for date in sublist]
 
         if not validation:

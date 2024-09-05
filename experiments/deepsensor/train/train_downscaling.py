@@ -18,7 +18,7 @@ def main():
     """
     Example:
 
-    python experiments/deepsensor/emily_dev_local/train_downscaling.py 
+    python experiments/deepsensor/train/train_downscaling.py 
     """
     
     print('Starting training script')
@@ -103,8 +103,11 @@ def main():
     print('Validation years:', validation_years)
     data = PreprocessForDownscaling(
         variable=variable,
+        base='wrf',
         training_years=training_years,
         validation_years=validation_years,
+        training_months=[12],
+        validation_months=[12],
         use_daily_data=use_daily_data,
         area=area,
         context_variables=context_variables,

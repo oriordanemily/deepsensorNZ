@@ -78,6 +78,27 @@ VAR_ERA5 = {
             # },
 }
 
+VAR_WRF = {
+        'temperature': {
+            'var_name': 'T2',
+        },
+        'precipitation': {
+            'var_name': 'RAINNC',
+        },
+        'surface_pressure': {
+            'var_name': 'PSFC',
+        },
+        '10m_u_component_of_wind': {
+            'var_name': 'U10',
+        },
+        '10m_v_component_of_wind': {
+            'var_name': 'V10',
+        },
+        'surface_solar_radiation_downwards': {
+            'var_name': 'SWDOWN', # not sure about this
+        },
+        }
+
 
 PLOT_EXTENT = {
             'all': {
