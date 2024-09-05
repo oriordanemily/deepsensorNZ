@@ -147,6 +147,10 @@ class Train:
         if verbose:
             print(task_loader)
 
+        task_loader_path = f"{self.save_model_path}/{self.variable}/{model_name}/task_loader.pkl"
+        with open(task_loader_path, 'wb+') as f:
+                pickle.dump(task_loader, f)
+
         # if not validation:
         #     train_start = f'{start_year}-01-01'
         #     train_end = f'{end_year}-12-31'
@@ -200,9 +204,10 @@ class Train:
         self.val_tasks = val_tasks
         self.context = context
     
-        task_loader_path = f"{self.save_model_path}/{self.variable}/{model_name}/task_loader.pkl"
-        with open(task_loader_path, 'wb+') as f:
-                pickle.dump(task_loader, f)
+        # think saving task_loader here saves all the tasks as well
+        # task_loader_path = f"{self.save_model_path}/{self.variable}/{model_name}/task_loader.pkl"
+        # with open(task_loader_path, 'wb+') as f:
+        #         pickle.dump(task_loader, f)
 
         return task_loader     
 
