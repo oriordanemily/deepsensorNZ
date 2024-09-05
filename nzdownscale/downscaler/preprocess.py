@@ -195,7 +195,7 @@ class PreprocessForDownscaling:
         for variable in self.context_variables:
             if variable != self.var:
                 da = self.process_era.load_ds(variable, self.years)
-                self.base_ds = xr.merge([self.ds_era, da])
+                self.base_ds = xr.merge([self.base_ds, da])
         
         print('loaded')
         # self.da_era = self.process_era.ds_to_da(self.ds_era, self.var)
@@ -534,12 +534,12 @@ class PreprocessForDownscaling:
             df_list.append(df)
         # print('Concatenating station data...')
         df = pd.concat(df_list)
-        station_raw_df = df.reset_index().set_index(['time', 
-                                                    'latitude', 
-                                                    'longitude']).sort_index()
+        # station_raw_df = df.reset_index().set_index(['time', 
+        #                                             'latitude', 
+        #                                             'longitude']).sort_index()
 
         ### filter years
-        station_raw_df_ = station_raw_df.reset_index()
+        station_raw_df_ = df.reset_index()
         station_raw_df_ = station_raw_df_[(station_raw_df_['time']>=str(years[0])) &
                                 (station_raw_df_['time']<=f'{str(years[-1])}-12-31')]
         station_raw_df = station_raw_df_.set_index(['time', 
