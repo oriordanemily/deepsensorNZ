@@ -16,13 +16,16 @@ for month in {01..12}; do
     if [ -d "$MONTH_DIR" ]; then
         echo "Processing month: $month"
 
-        for sub_dir in "$MONTH_DIR"/*/nz4kmN-ECMWF-SIGMA/; do
+        for sub_dir in "$MONTH_DIR"/*/nz4kmN-ECMWF-SIGMA; do
             # Check if the directory exists
             if [ -d "$sub_dir" ]; then
                 echo "Copying files from $sub_dir"
 
+                # Get the final foldername from sub_dir
+                foldername=$(basename "$(dirname "$sub_dir")")
+
                 # SCP all files in the nz4kmN-ECMWF-SIGMA/ directory
-                scp "$sub_dir"* "$DEST_USER@$DEST_SERVER:$DEST_PATH/$month/"
+                scp "$sub_dir"/*d02* "$DEST_SERVER:$DEST_PATH/$foldername/"
             fi
         done
 
