@@ -206,7 +206,7 @@ class ProcessStations(DataProcess):
         Returns:
             df: DataFrame of stations
         """
-        if isinstance(time, list):
+        if isinstance(time, (list, np.ndarray)):
             time = np.array(time, dtype='datetime64[ns]')
             def condition(lst, ds_time): return len(set(lst).intersection(ds_time)) != 0 
 

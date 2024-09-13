@@ -82,7 +82,7 @@ class ProcessERA5(DataProcess):
             parent = "parent_processed"
         else:
             parent = "parent"
-        return f'{DATA_PATHS["ERA5"][parent]}/{VAR_ERA5[var]["subdir"]}'
+        return f'{DATA_PATHS["era5"][parent]}/{VAR_ERA5[var]["subdir"]}'
     
 
     def get_filenames(self,

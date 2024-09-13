@@ -13,6 +13,10 @@ from nzdownscale.dataprocess.config import PLOT_EXTENT
 from nzdownscale.dataprocess.config_local import DATA_PATHS
 import argparse
 
+from dask.callbacks import Callback
+from tqdm.auto import tqdm
+
+
 def save_pickle(x, filename):
     with open(filename, 'wb') as pickle_file:
         pickle.dump(x, pickle_file)
@@ -26,6 +30,21 @@ def open_pickle(filename):
 def rmse(y_true, y_pred):
     return np.sqrt(np.mean((y_true - y_pred)**2))
 
+
+class ProgressBar(Callback):
+    def __init__(self, desc=""):
+        self.desc = desc
+
+    def _start_state(self, dsk, state):
+        self._tqdm = tqdm(total=sum(len(state[k]) 
+                                    for k in ['ready', 'waiting', 'running', 'finished']), 
+                                    desc=self.desc)
+
+    def _posttask(self, key, result, dsk, state, worker_id):
+        self._tqdm.update(1)
+
+    def _finish(self, dsk, state, errored):
+        pass
 
 class Caching:
     def __init__(self) -> None:
