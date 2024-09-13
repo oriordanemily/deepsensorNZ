@@ -95,7 +95,7 @@ VAR_WRF = {
             'var_name': 'V10',
         },
         'surface_solar_radiation_downwards': {
-            'var_name': 'SWDOWN', # not sure about this
+            'var_name': 'SWDOWN', 
         },
         }
 
