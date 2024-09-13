@@ -93,10 +93,11 @@ nzdownscale/dataprocess/config_local.py
 
 # profilers
 *.prof
-experiments/deepsensor/emily_dev_local/val.sl
-experiments/deepsensor/emily_dev_local/emilyoriordan_47973781_.ipynb
-experiments/deepsensor/emily_dev_local/arguments1.yaml
-experiments/deepsensor/emily_dev_local/arguments2.yaml
-experiments/deepsensor/emily_dev_local/arguments3.yaml
-experiments/deepsensor/emily_dev_local/arguments4.yaml
-experiments/deepsensor/emily_dev_local/val2.py
+experiments/deepsensor/train/val.sl
+experiments/deepsensor/train/emilyoriordan_47973781_.ipynb
+experiments/deepsensor/train/arguments1.yaml
+experiments/deepsensor/train/arguments2.yaml
+experiments/deepsensor/train/arguments3.yaml
+experiments/deepsensor/train/arguments4.yaml
+experiments/deepsensor/train/val2.py
+experiments/deepsensor/train/arguments_test.yaml
