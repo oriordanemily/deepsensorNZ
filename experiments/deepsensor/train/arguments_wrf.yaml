@@ -49,33 +49,20 @@ batch_size:
 # TRAINING PERIOD
 # ------------------------------------------
 
-# Training start year
-start_year:
+# Training start forecast initialisation
+start_init:
   # arg: 2000
-  arg: 2023
+  arg: 2023110100
   type: int
 
-# Training end year (inclusive)
-end_year:
+# Training end initialisation (inclusive)
+end_init:
   # arg: 2011
-  arg: 2023
+  arg: 2023112300
   # arg: 2003
   type: int
 
-# Training years are between start_year and end_year, and are separated by training_years_step
-# E.g. start_year=2000, end_year=2011, training_years_step=3, then training years are [2000, 2003, 2006, 2009]
-# If training_years_step is 1, then all years between start_year and end_year are used
-training_years_step:
-  arg: 1
-  type: int
-  
-# Use daily data
-use_daily_data:
-  arg: False  
-  type: bool
-  
-# Take a subset of the data, e.g., dates[::time_intervals].
-# Applies to both training and validation dates
+# Train/validate using every nth time interval 
 time_intervals:
   arg: 1
   type: int
@@ -84,22 +71,19 @@ time_intervals:
 # VALIDATION PERIOD
 # ------------------------------------------
 
-# Validation start year
-val_start_year:
-  arg: 2023 
-  # arg: 2002
+# Validation start initialisation
+val_start_init:
+  # arg: 2000
+  arg: 2023120100
   type: int
 
-# Validation end year (inclusive)
-val_end_year:
-  arg: 2023
-  # arg: 2002
+# Validation end initialisation (inclusive)
+val_end_init:
+  # arg: 2011
+  arg: 2023122300
+  # arg: 2003
   type: int
 
-# Validation years are between val_start_year and val_end_year, and are separated by val_years_step
-val_years_step:
-  arg: 1
-  type: int
   
 # ------------------------------------------
 # MODEL RESOLUTION
@@ -115,11 +99,7 @@ topography_lowres_coarsen_factor:
   arg: 4
   type: int
 
-# Coarsen factor for ERA5 data
-era5_coarsen_factor:
-  arg: 1  
-  type: int
-  
+
 # ------------------------------------------
 # INPUT VARIABLES
 # ------------------------------------------

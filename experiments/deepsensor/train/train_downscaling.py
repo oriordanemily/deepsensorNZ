@@ -5,7 +5,7 @@ import yaml
 
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
-from nzdownscale.dataprocess import config, config_local
+from nzdownscale.dataprocess import config, config_local, era5, wrf
 from nzdownscale.dataprocess.utils import validate_and_convert_args
 from nzdownscale.dataprocess.config_local import DATA_PATHS
 
@@ -48,13 +48,39 @@ def main():
     print('ARGUMENTS:', args)    
     variable = args["variable"]
     base = args["base"]
-    start_year = args["start_year"]
-    end_year = args["end_year"]
-    training_years_step = args["training_years_step"]
-    val_start_year = args["val_start_year"]
-    val_end_year = args["val_end_year"]
-    validation_years_step = args["val_years_step"]
-    use_daily_data = args["use_daily_data"]
+
+    training_years = None
+    validation_years = None
+    training_fpaths = None
+    validation_fpaths = None
+    use_daily_data = None
+
+    if base == "era5":
+        start_year = args["start_year"]
+        end_year = args["end_year"]
+        training_years_step = args["training_years_step"]
+        val_start_year = args["val_start_year"]
+        val_end_year = args["val_end_year"]
+        validation_years_step = args["val_years_step"]
+        use_daily_data = args["use_daily_data"]
+
+        training_years = list(range(start_year, end_year+1, training_years_step))
+        validation_years = list(range(val_start_year, val_end_year+1, validation_years_step))
+        print('Training years:', training_years)
+        print('Validation years:', validation_years)
+
+    elif base == "wrf":
+        train_start = args["start_init"]
+        train_end = args["end_init"]
+        val_start = args["val_start_init"]
+        val_end = args["val_end_init"]
+        print(f'Training period: {train_start} - {train_end}')
+        print(f'Validation period: {val_start} - {val_end}')
+
+        print('ONLY USING FIRST 30 TRAINING FILES AND 10 VALIDATION FILES')
+        training_fpaths = wrf.get_filepaths(train_start, train_end)[:30]
+        validation_fpaths = wrf.get_filepaths(val_start, val_end)[:10]
+        
     time_intervals = args["time_intervals"]
     include_time_of_year = args["include_time_of_year"]
     include_landmask = args["include_landmask"]
@@ -96,20 +122,14 @@ def main():
     # ------------------------------------------
     # Preprocess data
     # ------------------------------------------
-    training_years = list(range(start_year, end_year+1, training_years_step))
-    assert len(training_years) > 0, 'No training years found'
-    print('Training years:', training_years)
-    validation_years = list(range(val_start_year, val_end_year+1, validation_years_step))
-    assert len(validation_years) > 0, 'No validation years found'
-    print('Validation years:', validation_years)
     data = PreprocessForDownscaling(
         variable=variable,
         base=base,
-        training_years=training_years,
-        validation_years=validation_years,
-        training_months=[12],
-        validation_months=[12],
-        use_daily_data=use_daily_data,
+        training_years=training_years, #era
+        validation_years=validation_years, #era
+        training_fpaths=training_fpaths, #wrf
+        validation_fpaths=validation_fpaths, #wrf
+        use_daily_data=use_daily_data, #era
         area=area,
         context_variables=context_variables,
     )
@@ -156,7 +176,8 @@ def main():
     # Train model
     # ------------------------------------------
     print('Starting training')
-    training = Train(processed_output_dict=processed_output_dict)
+    training = Train(processed_output_dict=processed_output_dict,
+                     base=base)
     training.run_training_sequence(n_epochs, model_name, batch=batch, 
                                    batch_size=batch_size, lr=lr,
                                    weight_decay=weight_decay, 
@@ -165,4 +186,5 @@ def main():
     training.model.save(model_dir)
 
 if __name__ == "__main__":
+
     main()
