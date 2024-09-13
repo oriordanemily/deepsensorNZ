@@ -29,6 +29,7 @@ from sklearn.model_selection import train_test_split
 
 class Train:
     def __init__(self,
+                 base,
                  processed_output_dict,
                  save_model_path: str = 'default', 
                  use_gpu: bool = True,
@@ -46,13 +47,15 @@ class Train:
         if use_gpu:
             set_gpu_default_device()
 
+        self.base = base
+
         if save_model_path == 'default':
             save_model_path=config_local.DATA_PATHS['save_model']['fpath']
         self.save_model_path = save_model_path
         self.processed_output_dict = processed_output_dict
 
         self.variable = processed_output_dict['data_settings']['var']
-        self.era5_ds = processed_output_dict['era5_ds']
+        self.base_ds = processed_output_dict['base_ds']
         self.highres_aux_ds = processed_output_dict['highres_aux_ds']
         self.aux_ds = processed_output_dict['aux_ds']
         self.station_df = processed_output_dict['station_df']
@@ -65,8 +68,12 @@ class Train:
         # self.end_year = processed_output_dict['date_info']['end_year']
         # self.val_start_year = processed_output_dict['date_info']['val_start_year']
         # self.val_end_year = processed_output_dict['date_info']['val_end_year']
-        self.training_years = processed_output_dict['date_info']['training_years']
-        self.validation_years = processed_output_dict['date_info']['validation_years']
+        if self.base == 'era5':
+            self.training_years = processed_output_dict['date_info']['training_years']
+            self.validation_years = processed_output_dict['date_info']['validation_years']
+        elif self.base == 'wrf':
+            self.training_fpaths = processed_output_dict['date_info']['training_paths']
+            self.validation_fpaths = processed_output_dict['date_info']['validation_paths']
         # self.years = np.arange(self.start_year, self.end_year+1)
 
         self.model = None
@@ -105,7 +112,7 @@ class Train:
                           time_intervals=1,
                           ):
 
-        era5_ds = self.era5_ds
+        base_ds = self.base_ds
         highres_aux_ds = self.highres_aux_ds
         aux_ds = self.aux_ds
         station_df = self.station_df
@@ -117,11 +124,8 @@ class Train:
         # end_year = self.end_year
         # val_start_year = self.val_start_year
         # val_end_year = self.val_end_year
-        
-        training_years = self.training_years
-        validation_years = self.validation_years
 
-        context = [era5_ds, aux_ds]
+        context = [base_ds, aux_ds]
         context_sampling = ["all", "all"]
 
         if landmask_ds is not None:
@@ -142,69 +146,53 @@ class Train:
         self.task_loader = TaskLoader_SampleStations(context=context,
                                                 target=station_df, 
                                                 aux_at_targets=highres_aux_ds,)
-        task_loader = self.task_loader
-
         if verbose:
-            print(task_loader)
+            print(self.task_loader)
 
-        # if not validation:
-        #     train_start = f'{start_year}-01-01'
-        #     train_end = f'{end_year}-12-31'
-        # val_start = f'{val_start_year}-01-01'
-        # val_end = f'{val_end_year}-12-31'
+        # TODO ! save task loader without data (or with much less)
+        task_loader_path = f"{self.save_model_path}/{self.variable}/{model_name}/task_loader.pkl"
+        if not os.path.exists(task_loader_path):
+            with open(task_loader_path, 'wb+') as f:
+                    pickle.dump(self.task_loader, f)
 
-        # From here downwards, could this be a separate function? 
-        # E.g. load_tasks() ?
+        context_sampling_ = self._get_context_sampling(context_sampling)
+
+        if self.base == 'era5':
+            training_years = self.training_years
+            validation_years = self.validation_years
+
+            if not validation:
+                train_dates = [base_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in training_years]
+                train_dates = [date for sublist in train_dates for date in sublist]
+            val_dates = [base_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in validation_years]
+            val_dates = [date for sublist in val_dates for date in sublist]
+
+            if not validation:
+                train_tasks = self.create_tasks_era5(train_dates, context_sampling_, time_intervals)
+            val_tasks = self.create_tasks_era5(val_dates, context_sampling_, time_intervals)
         
-        if not validation:
-            train_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in training_years]
-            train_dates = [date for sublist in train_dates for date in sublist]
-        val_dates = [era5_ds.sel(time=slice(f'{year}-01-01', f'{year}-12-31')).time.values for year in validation_years]
-        val_dates = [date for sublist in val_dates for date in sublist]
+        elif self.base == 'wrf':
+            training_fpaths = self.training_fpaths
+            validation_fpaths = self.validation_fpaths
 
-        if not validation:
-            train_tasks = []
-            for date in tqdm(train_dates[::time_intervals], desc="Loading train tasks..."):
-                if context_sampling[-1] == 'random': #currently only implemented for stations
-                    context_sampling_ = context_sampling[:-1] + [np.random.rand()]
-                else:
-                    context_sampling_ = context_sampling
-                task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
-                train_tasks.append(task)
-
-            # if self.val_tasks is None:
-        val_tasks = []
-        for date in tqdm(val_dates[::time_intervals], desc="Loading val tasks..."):
-        # for date in tqdm(val_dates[::hours_interval], desc="Loading val tasks..."):
-            if context_sampling[-1] == 'random': #currently only implemented for stations
-                context_sampling_ = context_sampling[:-1] + [np.random.rand()]
-            else:
-                context_sampling_ = context_sampling
-            task = task_loader(date, context_sampling=context_sampling_, target_sampling="all")
-            # task["ops"] = ["numpy_mask", "nps_mask"]
-            val_tasks.append(task)
-        # else:
-        #     val_tasks = self.val_tasks
+            if not validation:
+                train_tasks = self.create_tasks_wrf(training_fpaths, context_sampling_, time_intervals)
+            val_tasks = self.create_tasks_wrf(validation_fpaths, context_sampling_, time_intervals)
 
         if verbose:
             print("Loading Dask arrays...")
-        task_loader.load_dask()
+        self.task_loader.load_dask()
         tic = time.time()
         if verbose:
             print(f"Done in {time.time() - tic:.2f}s")                
 
-        self.task_loader = task_loader 
         if not validation:   
             self.train_tasks = train_tasks
             
         self.val_tasks = val_tasks
         self.context = context
-    
-        task_loader_path = f"{self.save_model_path}/{self.variable}/{model_name}/task_loader.pkl"
-        with open(task_loader_path, 'wb+') as f:
-                pickle.dump(task_loader, f)
 
-        return task_loader     
+        return self.task_loader     
 
 
     def initialise_model(self, **convnp_kwargs):
@@ -265,6 +253,33 @@ class Train:
         deepsensor.plot.offgrid_context(ax, val_tasks[0], data_processor, task_loader, plot_target=True, add_legend=True, linewidths=0.5)
         plt.show()
 
+    def _get_context_sampling(self, context_sampling):
+        if context_sampling[-1] == 'random': #currently only implemented for stations
+            context_sampling_ = context_sampling[:-1] + [np.random.rand()]
+        else:
+            context_sampling_ = context_sampling
+        return context_sampling_
+
+    def create_tasks_era5(self, dates, context_sampling, time_intervals,):
+        tasks = []
+        for date in tqdm(dates[::time_intervals], desc="Loading tasks..."):
+            task = self.task_loader(date, context_sampling=context_sampling, target_sampling="all")
+            tasks.append(task)
+        return tasks
+    
+    def create_tasks_wrf(self, paths, context_sampling, time_intervals):
+
+        def path_to_date(path):
+            date_str = path.split('d02_')[1]
+            date = pd.to_datetime(date_str, format='%Y-%m-%d_%H:%M:%S')
+            return date
+        
+        tasks = []
+        for path in paths:
+            date = path_to_date(path)
+            task = self.task_loader(date, context_sampling=context_sampling, target_sampling="all")
+            tasks.append(task)
+        return tasks
 
     def train_model(self,
                     n_epochs=30,

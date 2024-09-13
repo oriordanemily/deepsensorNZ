@@ -1,4 +1,4 @@
-from nzdownscale.downscaler.validate_v2 import ValidateV2
+from nzdownscale.downscaler.validate_ERA import ValidateERA
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     ########## Load model ##########
     model_path, data_processor_path, task_loader_path, train_metadata_path  = get_paths(model_name, variable)
     print('Loading validation object')
-    validate = ValidateV2(model_path,  data_processor_path, task_loader_path, train_metadata_path,)
+    validate = ValidateERA(model_path,  data_processor_path, task_loader_path, train_metadata_path,)
     print('Validation object loaded')
 
     ########## Date information ##########

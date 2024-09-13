@@ -28,6 +28,7 @@ __pycache__
 *.png
 *.pkl
 *.pdf
+*.nc
 
 # wandb
 *wandb*

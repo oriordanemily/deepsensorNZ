@@ -1,4 +1,4 @@
-from nzdownscale.dataprocess import era5, stations, topography, utils, config
+from nzdownscale.dataprocess import era5, wrf, stations, topography, utils, config
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
 
@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Union
 import numpy as np
 
-class ValidateV2:
+class ValidateERA:
     def __init__(self,
                 model_path, 
                 data_processor_path,
@@ -31,13 +31,18 @@ class ValidateV2:
         # Instantiate classes
         self.top = topography.ProcessTopography()
         self.station = stations.ProcessStations()
-        self.e5 = era5.ProcessERA5()
+        self.base = self.meta['data_settings']['base']
+        if self.base == 'era5':
+            self.process_era = era5.ProcessERA5()
+        else:
+            self.process_wrf = wrf.ProcessWRF()
 
         # Load elevation data
         self.ds_elev = self.top.open_ds()
         self.ds_elev = self.ds_elev.coarsen(latitude=5, longitude=5,
                                    boundary='trim').mean()
         self.pred_mask = ~np.isnan(self.ds_elev['elevation'])
+      
         
         pred_res = np.round(np.abs(np.diff(self.ds_elev.coords['latitude'].values)[0]), 5)
         print('Producing predictions at resolution:', pred_res)
@@ -53,8 +58,9 @@ class ValidateV2:
     def predict(self, 
                 time: Union[datetime, str, list], 
                 remove_stations: list = [],
-                context_sampling: str = 'all'):
-        self.load_data(time, remove_stations)
+                context_sampling: str = 'all',
+                subdirs=None):
+        self.load_data(time, remove_stations, subdirs=subdirs)
         self.task_loader = self.create_task_loader()
         if self.model is None:
             self.model = self.load_model()
@@ -87,7 +93,7 @@ class ValidateV2:
     def create_task_loader(self):
         # Update context set to loaded data
         context = self.task_loader.context
-        self.task_loader.context = (self.era5_ds, 
+        self.task_loader.context = (self.base_ds, 
                                     context[1], 
                                     context[2], 
                                     self.stations_df)
@@ -96,23 +102,23 @@ class ValidateV2:
         self.task_loader.target = tuple(self.stations_df)
         return self.task_loader
 
-    def load_data(self, time, remove_stations):
+    def load_data(self, time, remove_stations, subdirs=None):
         self.aux_ds = self.data_processor_dict['aux_ds']
         self.highres_aux_ds = self.data_processor_dict['highres_aux_ds']
         self.landmask_ds = self.data_processor_dict['landmask_ds']
 
-        self.era5_ds_raw = self.load_era5(time)
+        self.base_ds_raw = self.load_ds(time, subdirs=subdirs)
+
         stations_df_raw = self.load_stations(time, remove_stations)
         self.stations_df_raw = stations_df_raw
 
-        print('Pre-processing ERA5 data')
-        era5_ds = self.era5_ds_raw.copy()
-        for var in self.era5_ds_raw:
+        print(f'Pre-processing {self.base} data')
+        base_ds = self.base_ds_raw.copy()
+        for var in self.base_ds_raw:
             method = self.data_processor.config[var]['method']
-            era5_ds[var] = self.data_processor(self.era5_ds_raw[var], method=method)
-        self.era5_ds = era5_ds
-        # self.era5_ds = self.data_processor(self.era5_ds_raw)
-        self.ds_era = self.add_time_of_year(self.era5_ds)
+            base_ds[var] = self.data_processor(self.base_ds_raw[var], method=method)
+        self.base_ds = base_ds
+        self.base_ds = self.add_time_of_year(self.base_ds)
 
         print('Pre-processing station data')
         method = self.data_processor.config[f"{self.var}_station"]['method']
@@ -125,39 +131,50 @@ class ValidateV2:
                                                       keep_stations)
         return stations_df
         
-    def load_era5(self, time):
-        era5_list = []
+    def load_ds(self, time, subdirs=None):
+        ds_list = []
 
         context_variables = self.meta['data_settings']['context_variables']
         if context_variables[0] != self.var:
             idx = context_variables.index(self.var)
             context_variables[0], context_variables[idx] = context_variables[idx], context_variables[0]
+            ds = xr.merge(ds_list)
 
-        for var in tqdm(context_variables, desc='Loading ERA5'):
-            era5_da = self.e5.load_ds_time(var, time)
-
-            if var == 'precipitation':
-                era5_da['precipitation'] = np.log10(1 + era5_da['precipitation'])
-
-            era5_list.append(era5_da)
-
-        ds_era = xr.merge(era5_list)
-        ds_era = self._trim_era5(ds_era, self.ds_elev)
+        if self.base == 'era5':
+            for var in tqdm(context_variables, desc=f'Loading {self.base}'):
+                base_da = self.process_era.load_ds_time(var, time)
+                ds_list.append(base_da)
+            ds = xr.merge(ds_list)
+            precip_name = config.VAR_ERA5['precipitation']['var_name']
         
-        return ds_era
+        elif self.base == 'wrf':
+            ds = self.process_wrf.load_ds(time=time, 
+                                               context_variables=context_variables,
+                                               subdirs=subdirs)
+            # aux_raw_ds = 
+            ds = self.process_wrf.regrid_to_topo(ds, self.aux_ds)
+            precip_name = config.VAR_WRF['precipitation']['var_name']
+            # ds = [vars].load()
+                # probably need to put interp function here
         
-    def _trim_era5(self, da_era, topo):
-        # Slice era5 data to elevation data's spatial extent
+        ds[precip_name] = np.log10(1 + ds[precip_name])
+
+        ds = self._trim_ds(ds, self.ds_elev)
+        
+        return ds
+        
+    def _trim_ds(self, ds, topo):
+        # Slice base data to elevation data's spatial extent
         top_min_lat = topo['latitude'].min()
         top_max_lat = topo['latitude'].max()
         top_min_lon = topo['longitude'].min()
         top_max_lon = topo['longitude'].max()
 
-        era5_raw_ds = da_era.sel(
+        ds_trimmed = ds.sel(
             latitude=slice(top_max_lat, top_min_lat),
             longitude=slice(top_min_lon, top_max_lon))
 
-        return era5_raw_ds
+        return ds_trimmed
 
     def add_time_of_year(self, ds):
         """ 
