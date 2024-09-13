@@ -1,6 +1,7 @@
 import logging
 
 from sklearn import base
+from sympy import stationary_points
 logging.captureWarnings(True)
 from cycler import V
 from typing_extensions import Literal
@@ -32,8 +33,8 @@ class PreprocessForDownscaling:
                  base='era5',
                  training_years=None,
                  validation_years=None,
-                 training_months=None,
-                 validation_months=None,
+                 training_fpaths=None,
+                 validation_fpaths=None,
                  variable='temperature',
                  use_daily_data=True,
                  validation = False,
@@ -46,20 +47,30 @@ class PreprocessForDownscaling:
         """
         
         self.var = variable
-        self.use_daily_data = use_daily_data
-        self.training_years = training_years
-        self.validation_years = validation_years
         self.base = base
-        
-        if validation:
-            self.years = validation_years
-            self.months = validation_months
-        else:
-            if training_years is None or validation_years is None:
-                self.years = None
+
+        if self.base == 'era5':
+            self.use_daily_data = use_daily_data
+            self.training_years = training_years
+            self.validation_years = validation_years
+
+            if validation:
+                self.years = validation_years
             else:
-                self.years = list(set(training_years + validation_years))
-                self.months = list(set(training_months + validation_months))
+                if training_years is None or validation_years is None:
+                    self.years = None
+                else:
+                    self.years = list(set(training_years + validation_years))
+
+        elif self.base == 'wrf':
+            self.use_daily_data = False
+            self.training_fpaths = training_fpaths
+            self.validation_fpaths = validation_fpaths
+            if validation:
+                self.all_paths = validation_fpaths
+            else:
+                self.all_paths = training_fpaths + validation_fpaths
+            self.years = None
 
         self.area = area
         
@@ -109,7 +120,7 @@ class PreprocessForDownscaling:
         topography_highres_coarsen_factor,
         topography_lowres_coarsen_factor,
         era5_coarsen_factor=1,
-        include_time_of_year=False,
+        include_time_of_year=True,
         include_landmask=False,
         data_processor_dict=None,
         save_data_processor_dict=None,
@@ -118,12 +129,14 @@ class PreprocessForDownscaling:
         ):
         
         self.load_topography()
+        highres_aux_raw_ds, aux_raw_ds = self.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
+        self.highres_aux_raw_ds, self.aux_raw_ds = highres_aux_raw_ds, aux_raw_ds
+
         if self.base == 'era5':
             self.load_era5()
         elif self.base == 'wrf':
             self.load_wrf()
         self.load_stations()
-        highres_aux_raw_ds, aux_raw_ds = self.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
         
         if self.base == 'era5':
             base_raw_ds = self.preprocess_era5(coarsen_factor=era5_coarsen_factor)
@@ -156,25 +169,13 @@ class PreprocessForDownscaling:
             self.aux_ds = data_processor_dict['aux_ds']
             self.highres_aux_ds = data_processor_dict['highres_aux_ds']
             self.landmask_ds = data_processor_dict['landmask_ds']
-            
-            # print('Data Processor time:', data_processor_dict['base_ds'].time)
-            # print(f'{self.base} time:', base_raw_ds.time)
-            # if len(data_processor_dict['base_ds'].time) == len(base_raw_ds.time):
-            #     if (data_processor_dict['base_ds'].time == base_raw_ds.time).all():
-            #         print(f'Loading {self.base} and stations from Data Processor')
-            #         # self.era5_ds = self.data_processor(base_raw_ds)
-            #         # just running the above to see if it works properly
-            #         self.base_ds = data_processor_dict['base_ds']
-            #         self.station_df = data_processor_dict['station_df']
-            #     else:
-            #         print(f'Not loading {self.base} and stations from Data Processor')
 
-            #         self.base_ds = self.data_processor(base_raw_ds)
-            #         self.station_df = self.data_processor(station_raw_df)
-            # else:
-                # print(f'Not loading {self.base} and stations from Data Processor')
         print(f'Processing {self.base} and stations')
         self.base_ds = self.data_processor(base_raw_ds)
+        if include_time_of_year:
+            self.base_ds = self.add_time_of_year(self.base_ds)
+
+        station_raw_df = station_raw_df.rename({station_raw_df.columns[0]: f'{self.var}_station'}, axis=1)
         self.station_df = self.data_processor(station_raw_df)
         self.station_as_context = station_as_context
 
@@ -197,19 +198,15 @@ class PreprocessForDownscaling:
                 da = self.process_era.load_ds(variable, self.years)
                 self.base_ds = xr.merge([self.base_ds, da])
         
-        print('loaded')
-        # self.da_era = self.process_era.ds_to_da(self.ds_era, self.var)
 
     def load_wrf(self):
         print('Loading wrf...')
-        print('USING SAVED TEST FILE - UNCOMMENT ACTUAL LOADING')
-        self.base_ds = xr.open_dataset('/home/emily/deepsensor/deepweather-downscaling/experiments/deepsensor/train/wrf_interp_test.nc')
-        # base_ds = self.process_wrf.load_ds(self.years, 
-        #                                         self.months, 
-        #                                         self.context_variables)
-        # self.base_ds = self.process_wrf.regrid_to_topo(base_ds,
-        #                                             self.ds_elev)
-        print('loaded')
+        base_ds = self.process_wrf.load_ds(filenames=self.all_paths,
+                                            context_variables = self.context_variables)
+        self.base_ds = self.process_wrf.regrid_to_topo(base_ds,
+                                                    self.aux_raw_ds)
+        times = self.base_ds.time.values
+        self.years = np.unique([t.year for t in pd.to_datetime(times)])
 
     def load_stations(self, use_cache=False):
         print('Loading stations...')
@@ -258,9 +255,6 @@ class PreprocessForDownscaling:
         
         assert self.base_ds is not None, "Run load_wrf() first"
         assert self.highres_aux_raw_ds is not None, "Run preprocess_topography() first"
-
-        if self.use_daily_data:
-            raise ValueError("Cannot convert WRF to daily data")
 
         # Coarsening not implemented for WRF
 
@@ -748,7 +742,9 @@ class PreprocessForDownscaling:
         data_processor_dict['data_processor'] = data_processor
         # if self.var == 'precipitation':
             # data_processor_dict['min_val'] = min_val
+        data_processor_dict['aux_raw_ds'] = aux_raw_ds
         data_processor_dict['aux_ds'] = aux_ds
+        # data_processor_dict['highres_aux_raw_ds'] = highres_aux_raw_ds
         # data_processor_dict['base_ds'] = base_ds
         data_processor_dict['highres_aux_ds'] = highres_aux_ds
         # data_processor_dict['station_df'] = station_df
@@ -793,16 +789,27 @@ class PreprocessForDownscaling:
         return ds
 
 
-    def get_processed_output_dict(self):
+    def get_processed_output_dict(self, validation=False):
 
-        date_info = {
-                'training_years': self.training_years,
-                'validation_years': self.validation_years,
-                'use_daily_data': self.use_daily_data,
-            }
+        if self.base == 'era5':
+            date_info = {
+                    'validation_years': self.validation_years,
+                    'use_daily_data': self.use_daily_data,
+                }
+            if not validation:
+                date_info['training_years'] = self.training_years
+
+        elif self.base == 'wrf':
+            date_info = {
+                    'validation_paths': self.validation_fpaths
+                }
+            if not validation:
+                date_info['training_paths'] = self.training_fpaths
+
 
         data_settings = {
             'var': self.var,
+            'base': self.base,
             'topography_highres_coarsen_factor': self.topography_highres_coarsen_factor,
             'topography_lowres_coarsen_factor': self.topography_lowres_coarsen_factor,
             'resolutions': self._get_resolutions_dict(),
@@ -903,3 +910,22 @@ class PreprocessForDownscaling:
         with open(fpath, 'rb') as f:
             data_processor_dict = pickle.load(f)
         return data_processor_dict
+
+# class PreprocessForDownscalingERA5(PreprocessForDownscaling):
+#     def __init__(self, var, training_years, validation_years, context_variables=['None'], 
+#                  use_daily_data=False, base='era5', validation=False,):
+#         super().__init__(var, training_years, validation_years, context_variables, 
+#                          use_daily_data, base, validation)
+        
+#         self.process_era = era5.ProcessERA5()
+#         self.process_stations = stations.ProcessStations()
+#         self.nzplot = utils.PlotData()
+
+#         if validation:
+#             self.years = validation_years
+#         else:
+#             if training_years is None or validation_years is None:
+#                 self.years = None
+#             else:
+#                 self.years = list(set(training_years + validation_years))
+
