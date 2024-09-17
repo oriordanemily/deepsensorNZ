@@ -35,9 +35,10 @@ def main():
     
     # extract args from arg parser
     if args.arg_path is None:
-        arg_path = DATA_PATHS['arguments']
+        arg_path = DATA_PATHS['arguments']['default']
     else:
         arg_path = args.arg_path
+        arg_path = f"{DATA_PATHS['arguments']['parent']}/{arg_path}"
             
     with open(arg_path) as f:
         args = yaml.load(f, Loader=yaml.FullLoader)
@@ -63,6 +64,8 @@ def main():
         val_end_year = args["val_end_year"]
         validation_years_step = args["val_years_step"]
         use_daily_data = args["use_daily_data"]
+        coarsen_factor = args["era5_coarsen_factor"]
+        time_intervals = args["time_intervals"]
 
         training_years = list(range(start_year, end_year+1, training_years_step))
         validation_years = list(range(val_start_year, val_end_year+1, validation_years_step))
@@ -74,14 +77,18 @@ def main():
         train_end = args["end_init"]
         val_start = args["val_start_init"]
         val_end = args["val_end_init"]
-        print(f'Training period: {train_start} - {train_end}')
-        print(f'Validation period: {val_start} - {val_end}')
+        time_intervals = args["time_intervals"]
 
-        print('ONLY USING FIRST 30 TRAINING FILES AND 10 VALIDATION FILES')
-        training_fpaths = wrf.get_filepaths(train_start, train_end)[:30]
-        validation_fpaths = wrf.get_filepaths(val_start, val_end)[:10]
+        training_fpaths = wrf.get_filepaths(train_start, train_end)[::time_intervals]
+        validation_fpaths = wrf.get_filepaths(val_start, val_end)[::time_intervals]
+        print(f'Training period: {train_start} - {train_end}, {len(training_fpaths)} files')
+        print(f'Validation period: {val_start} - {val_end}, {len(validation_fpaths)} files')
+
+        coarsen_factor = 1 # coarsening not implemented for wrf
+        time_intervals = 1 # time_intervals already implemented above in filepaths
         
-    time_intervals = args["time_intervals"]
+    pretrained_model = args["pretrained_model"]
+    pretrained_processor = args["pretrained_processor"]
     include_time_of_year = args["include_time_of_year"]
     include_landmask = args["include_landmask"]
     context_variables = args["context_variables"]
@@ -93,7 +100,6 @@ def main():
     weight_decay = args["weight_decay"]
     topography_highres_coarsen_factor = args["topography_highres_coarsen_factor"]
     topography_lowres_coarsen_factor = args["topography_lowres_coarsen_factor"]
-    era5_coarsen_factor = args["era5_coarsen_factor"]
     n_epochs = args["n_epochs"]
     station_as_context = args["station_as_context"]
 
@@ -135,13 +141,13 @@ def main():
     )
     
     model_dir = os.path.join(DATA_PATHS['save_model']['fpath'], variable)#, model_name)
-    if use_daily_data:
-        suffix = ''
-    else:
-        suffix = '_hourly'
 
     model_name_dir = f'{model_dir}/{model_name}'
-    data_processor_fpath = f'{model_name_dir}/data_processor.pkl'
+    if pretrained_processor:
+        data_processor_fpath = f'{model_dir}/{pretrained_model}/data_processor.pkl'
+        assert os.path.exists(data_processor_fpath), f'Pretrained data processor not found at {data_processor_fpath}'
+    else:
+        data_processor_fpath = f'{model_name_dir}/data_processor.pkl'
 
     print('Looking for dataprocessor at:', data_processor_fpath)
     if os.path.exists(data_processor_fpath):
@@ -151,17 +157,18 @@ def main():
     else:
         print('No dataprocessor found, will be created')
         data_processor_dict = None
+        assert data_processor_fpath == f'{model_name_dir}/data_processor.pkl' # only save if not pretrained
         save_data_processor_dict=data_processor_fpath
         if not os.path.exists(model_name_dir):
             os.makedirs(model_name_dir)
     
-    shutil.copy(DATA_PATHS['arguments'], model_name_dir)
+    shutil.copy(arg_path, model_name_dir)
     
     print('Starting data processing')
     data.run_processing_sequence(
         topography_highres_coarsen_factor,
         topography_lowres_coarsen_factor,
-        era5_coarsen_factor,
+        coarsen_factor,
         include_time_of_year=include_time_of_year,
         include_landmask=include_landmask,
         remove_stations=remove_stations,
@@ -175,10 +182,11 @@ def main():
     # ------------------------------------------
     # Train model
     # ------------------------------------------
-    print('Starting training')
     training = Train(processed_output_dict=processed_output_dict,
                      base=base)
-    training.run_training_sequence(n_epochs, model_name, batch=batch, 
+    training.run_training_sequence(n_epochs, model_name, 
+                                   pretrained_model=pretrained_model,
+                                   batch=batch, 
                                    batch_size=batch_size, lr=lr,
                                    weight_decay=weight_decay, 
                                    time_intervals=time_intervals,

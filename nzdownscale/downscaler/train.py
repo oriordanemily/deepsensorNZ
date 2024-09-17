@@ -95,13 +95,26 @@ class Train:
 
 
     def run_training_sequence(self, n_epochs, model_name='default', 
+                              pretrained_model=None,
                               batch=False, batch_size=1, lr=5e-5, 
                               weight_decay=0, time_intervals=1, 
                               **convnp_kwargs,):
+        print('Running training sequence:')
+        print('Setting up task loader')
+        self.setup_task_loader(model_name=model_name, 
+                               time_intervals=time_intervals)
         
-        self.setup_task_loader(model_name=model_name, time_intervals=time_intervals)
-        self.initialise_model(**convnp_kwargs)
-        self.train_model(n_epochs=n_epochs, model_name=model_name, batch=batch, batch_size=batch_size, lr=lr, weight_decay=weight_decay)
+        print('Initialising model')
+        self.initialise_model(pretrained_model=pretrained_model, 
+                              **convnp_kwargs)
+        
+        print('Training model')
+        self.train_model(n_epochs=n_epochs, 
+                         model_name=model_name, 
+                         batch=batch, 
+                         batch_size=batch_size, 
+                         lr=lr, 
+                         weight_decay=weight_decay)
 
 
     def setup_task_loader(self, 
@@ -195,9 +208,11 @@ class Train:
         return self.task_loader     
 
 
-    def initialise_model(self, **convnp_kwargs):
+    def initialise_model(self, pretrained_model=None, **convnp_kwargs):
         """
         Args:
+            pretrained_model (str):
+                Name of a pretrained model. If None, train from scratch. Defaults to None.
             convnp_kwargs (dict):
                 Inputs to deepsensor.model.convnp.ConvNP(). Uses default CONVNP_KWARGS_DEFAULT if not provided.
         """
@@ -210,14 +225,24 @@ class Train:
                     self.task_loader, 
                     **convnp_kwargs,
                     )
-    
+        
+        if pretrained_model is not None:
+            pretrained_model_path = f"{self.save_model_path}/{self.variable}/{pretrained_model}/{pretrained_model}.pt"
+            if not os.path.exists(pretrained_model_path):
+                raise FileNotFoundError(f"Pretrained model {pretrained_model_path} not found, filepath: {pretrained_model_path}")
+            print(f'Fine-tuning model {pretrained_model}')
+            model.model.load_state_dict(torch.load(pretrained_model_path))
+
+            # Freeze encoder weights
+            for param in model.model.encoder.parameters():
+                param.requires_grad = False
+
         # Print number of parameters to check model is not too large for GPU memory
         # _ = model(self.val_tasks[0])
         print(f"Model has {deepsensor.backend.nps.num_params(model.model):,} parameters")
         
         self.convnp_kwargs = dict(convnp_kwargs)
         self.model = model
-
 
 
     def plot_context_encodings(self):
@@ -310,7 +335,7 @@ class Train:
             model_id = str(round(time.time()))
             model_name = f'model_{model_id}'
 
-        self.set_save_dir(model_name)
+        self.save_dir = self.get_model_dir(model_name)
 
         def compute_val_loss(model, val_tasks):
             val_losses = []
@@ -387,11 +412,11 @@ class Train:
     #     te = train_epoch(model, train_tasks)
     #     return te 
 
-    def set_save_dir(self, model_name):
-        self.save_dir = f'{self.save_model_path}/{self.variable}/{model_name}'
-        if not os.path.exists(self.save_dir): 
-            os.makedirs(self.save_dir)
-
+    def get_model_dir(self, model_name):
+        save_dir = f'{self.save_model_path}/{self.variable}/{model_name}'
+        if not os.path.exists(save_dir): 
+            os.makedirs(save_dir)
+        return save_dir
     
     def batch_data_by_num_stations(self, tasks, batch_size=None):
         # if batch_size == None, return a dict in which each key value pair is a 

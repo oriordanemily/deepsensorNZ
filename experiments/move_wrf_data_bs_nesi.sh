@@ -1,14 +1,16 @@
 #!/bin/bash
 
+YEAR="2023"
+
 # Base directory path
-BASE_DIR="/mnt/deepweather_data/metservice/2024"
+BASE_DIR="/mnt/deepweather_data/metservice/$YEAR"
 
 # Destination server details
 DEST_SERVER="mahuika"
-DEST_PATH="//nesi/nobackup/nesi03947/deepweather_data/2024"
+DEST_PATH="//nesi/nobackup/nesi03947/deepweather_data/$YEAR"
 
 ## SCP only files in the nz4kmN-ECMWF-SIGMA/ directories
-for month in {01..12}; do
+for month in {09..12}; do
     # Construct the month directory path
     MONTH_DIR="$BASE_DIR/$month"
 
@@ -25,7 +27,7 @@ for month in {01..12}; do
                 foldername=$(basename "$(dirname "$sub_dir")")
 
                 # SCP all files in the nz4kmN-ECMWF-SIGMA/ directory
-                scp "$sub_dir"/*d02* "$DEST_SERVER:$DEST_PATH/$foldername/"
+                scp "$sub_dir"/*d02*00 "$DEST_SERVER:$DEST_PATH/$foldername/" # only copying the midnight runs for now
             fi
         done
 
