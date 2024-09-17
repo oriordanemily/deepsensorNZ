@@ -1,0 +1,1 @@
+*.ipynb linguist-vendored  # Exclude all Jupyter notebooks from language stats
