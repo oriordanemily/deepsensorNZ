@@ -13,7 +13,7 @@ base:
   
 # Model name, if 'default' it will be the time
 model_name:
-  arg: wrf_test
+  arg: wrf_pretrained_era5
   type: str
 
 # ------------------------------------------
@@ -22,13 +22,22 @@ model_name:
 
 # Number of epochs
 n_epochs:
-  arg: 5
+  arg: 100
   type: int
   
 # Learning rate
 lr:
   arg: 1e-5
   type: float
+
+# Pretrained model path
+pretrained_model:
+  arg: hourly_1e-5_v2_copy  
+  type: str_or_none
+
+pretrained_processor:
+  arg: True
+  type: bool
 
 # Weight decay
 weight_decay:
@@ -51,15 +60,12 @@ batch_size:
 
 # Training start forecast initialisation
 start_init:
-  # arg: 2000
-  arg: 2023110100
+  arg: 2023090100
   type: int
 
 # Training end initialisation (inclusive)
 end_init:
-  # arg: 2011
-  arg: 2023112300
-  # arg: 2003
+  arg: 2023113012
   type: int
 
 # Train/validate using every nth time interval 
@@ -80,7 +86,7 @@ val_start_init:
 # Validation end initialisation (inclusive)
 val_end_init:
   # arg: 2011
-  arg: 2023122300
+  arg: 2023123111
   # arg: 2003
   type: int
 
