@@ -13,6 +13,7 @@ from tqdm import tqdm
 import dask.array as da
 from dask import delayed, compute
 from dask.distributed import Client, LocalCluster
+import xesmf as xe
 
 from nzdownscale.dataprocess.utils import DataProcess
 from nzdownscale.dataprocess.config import VARIABLE_OPTIONS, VAR_WRF
@@ -47,7 +48,8 @@ def get_filepaths(start_init, end_init,
     """
 
     if model == 'nz4kmN-ECMWF-SIGMA':
-        interval_hours = 12
+        print('Currently using midnight runs only')
+        interval_hours = 24 # change to 12
     else:
         ValueError(f'Model {model} not yet implemented')
 
@@ -58,7 +60,7 @@ def get_filepaths(start_init, end_init,
     for subdir in sub_dirs:
         subdir_dt = datetime.strptime(subdir, '%Y%m%d%H')
         files = glob.glob(f'{wrf_base}/{subdir_dt.year}/{str(subdir_dt.month).zfill(2)}/{subdir}/{model}/*d02*00')
-        files = sorted(files)[6:] # exclude the first 6 files as they are spinup files
+        files = sorted(files)[6:12] # just take the 6th-12th files for training
         paths.extend(files)
     
     return paths
@@ -200,7 +202,44 @@ class ProcessWRF(DataProcess):
     def kelvin_to_celsius(self, da: xr.DataArray):
         return da - 273.15
 
-    def regrid_to_topo(self, ds: xr.DataArray, topo: xr.DataArray) -> xr.DataArray:
+    def regrid_to_topo(self, ds: xr.Dataset, topo: xr.DataArray,) -> xr.Dataset:
+
+        hold = ds.copy()
+        hold = hold.where(hold['XLONG'] > 0, drop=True)
+        # hold = hold.rename({'XLONG': 'lon', 'XLAT': 'lat'})
+        hold.encoding.clear()  # Clear encoding to avoid integer scaling
+
+        ds_out = xr.Dataset({
+            'latitude': (['latitude'], topo.latitude.values),
+            'longitude': (['longitude'], topo.longitude.values),
+        })
+        
+        method = 'bilinear'
+        Ny_in, Nx_in = len(hold.south_north), len(hold.west_east)
+        Ny_out, Nx_out = topo['elevation'].shape
+        filename = f'{method}_{Ny_in}x{Nx_in}_{Ny_out}x{Nx_out}.nc'
+        filepath = os.path.join(DATA_PATHS['regridder_weights']['parent'], filename)
+        if os.path.exists(filepath):
+            regridder = xe.Regridder(hold.isel(Time=0), 
+                                     ds_out, 
+                                     'bilinear', 
+                                     reuse_weights=True,
+                                     filename=filepath
+                                     )
+        else:
+            regridder = xe.Regridder(hold.isel(Time=0), 
+                                     ds_out, 
+                                     'bilinear', 
+                                     reuse_weights=False,
+                                     filename=filepath
+                                     )
+            regridder.to_netcdf(filepath)
+        
+        interp_hold = regridder(hold)
+        return interp_hold.rename({'Time': 'time', 'XTIME': 'time'})
+
+
+    def regrid_to_topo_old(self, ds: xr.DataArray, topo: xr.DataArray) -> xr.DataArray:
         """
         Generates a high resolution version of the field passed via data.
         Returns:
