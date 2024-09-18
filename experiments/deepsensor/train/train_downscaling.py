@@ -86,9 +86,11 @@ def main():
 
         coarsen_factor = 1 # coarsening not implemented for wrf
         time_intervals = 1 # time_intervals already implemented above in filepaths
-        
+
     pretrained_model = args["pretrained_model"]
-    pretrained_processor = args["pretrained_processor"]
+    if pretrained_model is not None:
+        pretrained_processor = args["pretrained_processor"]
+
     include_time_of_year = args["include_time_of_year"]
     include_landmask = args["include_landmask"]
     context_variables = args["context_variables"]
@@ -146,7 +148,7 @@ def main():
     if not os.path.exists(model_name_dir):
         os.makedirs(model_name_dir)
     
-    if pretrained_processor:
+    if pretrained_model is not None and pretrained_processor:
         data_processor_fpath = f'{model_dir}/{pretrained_model}/data_processor.pkl'
         assert os.path.exists(data_processor_fpath), f'Pretrained data processor not found at {data_processor_fpath}'
     else:
@@ -160,7 +162,7 @@ def main():
     else:
         print('No dataprocessor found, will be created')
         data_processor_dict = None
-        assert data_processor_fpath == f'{model_name_dir}/data_processor.pkl' # only save if not pretrained
+        assert data_processor_fpath == f'{model_name_dir}data_processor.pkl' # only save if not pretrained
         save_data_processor_dict=data_processor_fpath
     
     shutil.copy(arg_path, model_name_dir)
