@@ -10,7 +10,7 @@ DEST_SERVER="mahuika"
 DEST_PATH="//nesi/nobackup/nesi03947/deepweather_data/$YEAR"
 
 ## SCP only files in the nz4kmN-ECMWF-SIGMA/ directories
-for month in {09..12}; do
+for month in {10..12}; do
     # Construct the month directory path
     MONTH_DIR="$BASE_DIR/$month"
 
@@ -18,7 +18,7 @@ for month in {09..12}; do
     if [ -d "$MONTH_DIR" ]; then
         echo "Processing month: $month"
 
-        for sub_dir in "$MONTH_DIR"/*/nz4kmN-ECMWF-SIGMA; do
+        for sub_dir in "$MONTH_DIR"/*00/nz4kmN-ECMWF-SIGMA; do # *00 = only copying the midnight runs for now. change to * for all runs
             # Check if the directory exists
             if [ -d "$sub_dir" ]; then
                 echo "Copying files from $sub_dir"
@@ -27,7 +27,7 @@ for month in {09..12}; do
                 foldername=$(basename "$(dirname "$sub_dir")")
 
                 # SCP all files in the nz4kmN-ECMWF-SIGMA/ directory
-                scp "$sub_dir"/*d02*00 "$DEST_SERVER:$DEST_PATH/$foldername/" # only copying the midnight runs for now
+                scp "$sub_dir"/*d02* "$DEST_SERVER:$DEST_PATH/$foldername/" 
             fi
         done
 
