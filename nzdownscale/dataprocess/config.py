@@ -11,7 +11,7 @@ VAR_STATIONS = {
                 'subdir': 'ScreenObs',
                 'var_name': 'dry_bulb'
             },
-            'pressure': {
+            'surface_pressure': {
                 'subdir': 'Pressure',
                 'var_name': 'stn_lev_pres'
             },
