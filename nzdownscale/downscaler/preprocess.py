@@ -642,7 +642,7 @@ class PreprocessForDownscaling:
             dates = pd.date_range(ds.time.values.min(), ds.time.values.max(), freq=freq)
         else:
             freq='H'
-            dates = pd.DateTimeIndex(ds.time.values)
+            dates = pd.DatetimeIndex(ds.time.values)
         doy_ds = construct_circ_time_ds(dates, freq=freq)
         
         # ds = xr.Dataset({
