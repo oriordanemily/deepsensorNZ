@@ -1,4 +1,4 @@
-# Plot ERA5
+# Plot WRF
 
 #%%
 
@@ -15,12 +15,12 @@ import scipy.stats as stats
 from scipy.stats import gamma, bernoulli
 from scipy.optimize import minimize
 
-from nzdownscale.dataprocess.wrf import ProcessWRF
+from nzdownscale.dataprocess import wrf
 from nzdownscale.dataprocess.utils import PlotData
 
-#%% Load ERA5 data
+#%% Load WRF data
 
-wrf = ProcessWRF()
+p_wrf = wrf.ProcessWRF()
 plotnz = PlotData()
 
 # %%
@@ -28,24 +28,39 @@ def neg_log_likelihood(params, non_zero_data):
     alpha, beta = params[0], params[1]
     return -np.sum(gamma.logpdf(non_zero_data, alpha, scale=1/beta))
 
-#%% Load specific year only
+#%%
 
-for var in [
-        'temperature',
+filenames = wrf.get_filepaths('2024010100', '2024010200')
+
+context_variables = ['temperature',
         'precipitation',
         '10m_u_component_of_wind',
         '10m_v_component_of_wind',
         'surface_pressure',
         'surface_solar_radiation_downwards',
-        ]:
+        ]
+    
+ds = p_wrf.load_ds(filenames=filenames, context_variables=context_variables)
 
-    ds = wrf.load_ds([2024], [1], [var])
-    da = wrf.ds_to_da(ds, var)
+#%% Test what timezone WRF is in by plotting a timeseries of temperature
+fig, ax = plt.subplots()
+# ds['T2'].mean(['south_north', 'west_east']).plot(ax=ax)
+ax.set_xlabel('Time')
+ax.set_ylabel('Temperature')
+ax.scatter(ds['XTIME'].values[:24], ds['T2'].mean(['south_north', 'west_east']).values[:24])
+ax.set_xticks(ds['XTIME'].values[:24])
+ax.set_xticklabels(ds['XTIME'].values[:24], rotation=90);
+
+
+print('Looks as though timezone is UTC')
+#%%
+for var in context_variables:
+    da = p_wrf.ds_to_da(ds, var)
 
     # Plot timeslice
     # ax = plotnz.nz_map_with_coastlines()
-    # da_to_plot = da.isel(time=0)
-    # da_to_plot.plot()
+    da_to_plot = da.isel(Time=0)
+    da_to_plot.plot()
     # plt.title(f'ERA5-land: {var}\n{da_to_plot["time"].values}')
     # # plt.savefig('./tmp/fig.png')
     # plt.show()
@@ -53,7 +68,7 @@ for var in [
     # Plot histogram of all values
     fig, ax = plt.subplots()
     da.plot.hist(ax=ax, bins=100, density=True, label=f'WRF 2024 Jan {var} histogram')
-    print('Plotted histogram')
+    # print('Plotted histogram')
 
     # # plot gaussian
     mean = da.mean().values
@@ -62,13 +77,13 @@ for var in [
 
     ax.plot(x, stats.norm.pdf(x, mean, std), c='r', 
             label = f'N({mean:.2f}, {std:.2f})')
-    print('Plotted gaussian')
+    # print('Plotted gaussian')
 
     plt.title(f'WRF: {var} histogram')
     # # plot bernoulli-gamma
    
     # Aggregate data across latitudes and longitudes
-    data = da.mean(dim=['latitude', 'longitude'])
+    data = da.mean(dim=['south_north', 'west_east'])
 
     # Calculate Bernoulli parameter (probability of success)
     p = data.mean().values
