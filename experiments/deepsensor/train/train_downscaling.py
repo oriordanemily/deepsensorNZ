@@ -142,12 +142,15 @@ def main():
     
     model_dir = os.path.join(DATA_PATHS['save_model']['fpath'], variable)#, model_name)
 
-    model_name_dir = f'{model_dir}/{model_name}'
+    model_name_dir = f'{model_dir}/{model_name}/'
+    if not os.path.exists(model_name_dir):
+        os.makedirs(model_name_dir)
+    
     if pretrained_processor:
         data_processor_fpath = f'{model_dir}/{pretrained_model}/data_processor.pkl'
         assert os.path.exists(data_processor_fpath), f'Pretrained data processor not found at {data_processor_fpath}'
     else:
-        data_processor_fpath = f'{model_name_dir}/data_processor.pkl'
+        data_processor_fpath = f'{model_name_dir}data_processor.pkl'
 
     print('Looking for dataprocessor at:', data_processor_fpath)
     if os.path.exists(data_processor_fpath):
@@ -159,8 +162,6 @@ def main():
         data_processor_dict = None
         assert data_processor_fpath == f'{model_name_dir}/data_processor.pkl' # only save if not pretrained
         save_data_processor_dict=data_processor_fpath
-        if not os.path.exists(model_name_dir):
-            os.makedirs(model_name_dir)
     
     shutil.copy(arg_path, model_name_dir)
     
