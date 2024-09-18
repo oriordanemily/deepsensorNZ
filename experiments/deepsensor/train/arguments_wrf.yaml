@@ -4,7 +4,7 @@
 
 # Variable to be downscaled (temperature or precipitation)
 variable:
-  arg: temperature 
+  arg: precipitation 
   type: str
 
 base:
@@ -32,7 +32,7 @@ lr:
 
 # Pretrained model path
 pretrained_model:
-  arg: hourly_1e-5_v2_copy  
+  arg: 240809_1e-3 
   type: str_or_none
 
 pretrained_processor:
