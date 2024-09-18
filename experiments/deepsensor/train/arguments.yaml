@@ -6,7 +6,12 @@
 variable:
   arg: temperature 
   type: str
-  
+
+# Whether to use ERA5 or WRF
+base:
+  arg: era5
+  type: str
+
 # Model name, if 'default' it will be the time
 model_name:
   arg: hourly_1e-5
