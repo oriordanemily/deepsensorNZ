@@ -62,6 +62,7 @@ def get_filepaths(start_init, end_init,
         files = glob.glob(f'{wrf_base}/{subdir_dt.year}/{str(subdir_dt.month).zfill(2)}/{subdir}/{model}/*d02*00')
         files = sorted(files)[6:12] # just take the 6th-12th files for training
         paths.extend(files)
+    print('Also only using the 6th-12th files from each directory')
     
     return paths
 
