@@ -168,7 +168,7 @@ class Train:
             with open(task_loader_path, 'wb+') as f:
                     pickle.dump(self.task_loader, f)
 
-        context_sampling_ = self._get_context_sampling(context_sampling)
+        # context_sampling_ = self._get_context_sampling(context_sampling)
 
         if self.base == 'era5':
             training_years = self.training_years
@@ -181,16 +181,16 @@ class Train:
             val_dates = [date for sublist in val_dates for date in sublist]
 
             if not validation:
-                train_tasks = self.create_tasks_era5(train_dates, context_sampling_, time_intervals)
-            val_tasks = self.create_tasks_era5(val_dates, context_sampling_, time_intervals)
+                train_tasks = self.create_tasks_era5(train_dates, context_sampling, time_intervals)
+            val_tasks = self.create_tasks_era5(val_dates, context_sampling, time_intervals)
         
         elif self.base == 'wrf':
             training_fpaths = self.training_fpaths
             validation_fpaths = self.validation_fpaths
 
             if not validation:
-                train_tasks = self.create_tasks_wrf(training_fpaths, context_sampling_, time_intervals)
-            val_tasks = self.create_tasks_wrf(validation_fpaths, context_sampling_, time_intervals)
+                train_tasks = self.create_tasks_wrf(training_fpaths, context_sampling, time_intervals)
+            val_tasks = self.create_tasks_wrf(validation_fpaths, context_sampling, time_intervals)
 
         if verbose:
             print("Loading Dask arrays...")
@@ -288,7 +288,9 @@ class Train:
     def create_tasks_era5(self, dates, context_sampling, time_intervals,):
         tasks = []
         for date in tqdm(dates[::time_intervals], desc="Loading tasks..."):
-            task = self.task_loader(date, context_sampling=context_sampling, target_sampling="all")
+            if context_sampling[-1] == 'random':
+                context_sampling_ = context_sampling[:-1] + [np.random.rand()]
+            task = self.task_loader(date, context_sampling=context_sampling_, target_sampling="all")
             tasks.append(task)
         return tasks
     
@@ -302,7 +304,10 @@ class Train:
         tasks = []
         for path in paths:
             date = path_to_date(path)
-            task = self.task_loader(date, context_sampling=context_sampling, target_sampling="all")
+            if context_sampling[-1] == 'random':
+                context_sampling_ = context_sampling[:-1] + [np.random.rand()]
+            
+            task = self.task_loader(date, context_sampling=context_sampling_, target_sampling="all")
             tasks.append(task)
         return tasks
 
