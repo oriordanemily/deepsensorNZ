@@ -34,6 +34,8 @@ class ProcessStations(DataProcess):
             ds (xr.Dataset): dataset
             var (str): variable
         """
+        if 'wind' in var:
+            self.get_wind_components(ds)
         return ds[VAR_STATIONS[var]['var_name']]
 
 
@@ -266,7 +268,15 @@ class ProcessStations(DataProcess):
         
         return df
     
-        
+    def get_wind_components(self,
+                            ds: xr.Dataset,
+                            ):
+
+        W = ds['speed']
+        theta_rad = np.deg2rad(ds['direction'])
+        ds['u'] = - W * np.sin(theta_rad)
+        ds['v'] = - W * np.cos(theta_rad)
+        return ds
         
 
        

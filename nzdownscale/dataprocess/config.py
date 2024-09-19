@@ -23,6 +23,14 @@ VAR_STATIONS = {
                 'subdir': 'Surface_Wind',
                 'var_name': 'direction',
             },
+            '10m_u_component_of_wind': {
+                'subdir': 'Surface_Wind', 
+                'var_name': 'u', # not actually in files - created in stations.ProcessStations.get_wind_components
+            },
+            '10m_v_component_of_wind': {
+                'subdir': 'Surface_Wind',
+                'var_name': 'v',
+            },
             'humidity': {
                 'subdir': 'ScreenObs',
                 'var_name': 'relative_humidity',
