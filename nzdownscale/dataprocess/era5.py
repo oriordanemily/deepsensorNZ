@@ -136,6 +136,42 @@ class ProcessERA5(DataProcess):
     def kelvin_to_celsius(self, da: xr.DataArray):
         return da - 273.15
     
+import xesmf as xe
+def interpolate_era5(era5, ds, var):
+    "Interpolate ERA5 to match the resolution of ds"
+    era5_var = VAR_ERA5[var]['var_name']
+    if type(era5) is xr.Dataset:
+        era5 = era5[era5_var]
+    
+    ds_out = xr.Dataset({
+        'latitude': (['latitude'], ds.latitude.values),
+        'longitude': (['longitude'], ds.longitude.values),
+    })
+
+    # method = 'bilinear'
+    # Ny_in, Nx_in = len(era5.latitude), len(era5.longitude)
+    # Ny_out, Nx_out = len(ds.latitude), len(ds.longitude)
+    # filename = f'{method}_{Ny_in}x{Nx_in}_{Ny_out}x{Nx_out}.nc'
+    # filepath = os.path.join(DATA_PATHS['regridder_weights']['parent'], filename)
+    # if os.path.exists(filepath):
+    #     regridder = xe.Regridder(hold.isel(Time=0), 
+    #                                 ds_out, 
+    #                                 'bilinear', 
+    #                                 reuse_weights=True,
+    #                                 filename=filepath
+    #                                 )
+    # else:
+    regridder = xe.Regridder(era5.isel(time=0), 
+                            ds_out, 
+                            'bilinear', 
+                            reuse_weights=False,
+                            # filename=filepath
+                            )
+    # regridder.to_netcdf(filepath)
+    
+    interp_hold = regridder(era5)
+    return interp_hold
+
 
 if __name__ == '__main__':
     pass
