@@ -34,6 +34,8 @@ class ProcessStations(DataProcess):
             ds (xr.Dataset): dataset
             var (str): variable
         """
+        if 'wind' in var:
+            self.get_wind_components(ds)
         return ds[VAR_STATIONS[var]['var_name']]
 
 
@@ -181,12 +183,30 @@ class ProcessStations(DataProcess):
         station_info = {}
         for station in stations_list:
             name = station.attrs['site name']
-            station_info[name] = {'station_no': station.attrs['agent_number'],
-                                'latitude': float(station['latitude'].values),
-                                'longitude': float(station['longitude'].values),
-                                'elevation': float(station['station_height'].values),}
-
+            no = station.attrs['agent_number']
+            latitude = float(station['latitude'].values)
+            longitude = float(station['longitude'].values)
+            try:
+                elevation = float(station['station_height'].values)
+            except:
+                print('Missing elevation for station:', name, 'station_no:', station.attrs['agent_number'])
+                elevation = np.nan
+            station_info[name] = {'station_no': no,
+                                'latitude': latitude,
+                                'longitude': longitude,
+                                'elevation': elevation,}
         return station_info
+
+    def get_all_station_info(self):
+        station_info_master = {}
+        for var in VARIABLE_OPTIONS:
+            print(f'Getting {var} station info')
+            station_info = self.get_station_info(var)
+            for k, v in station_info.items():
+                if k not in station_info_master:
+                    station_info_master[k] = v
+            print('Number of stations:', len(station_info_master))
+        return station_info_master
     
     def load_stations_time(self, 
                            var: str, 
@@ -216,28 +236,28 @@ class ProcessStations(DataProcess):
             elif not isinstance(time, np.datetime64):
                 time = np.datetime64(time)
             def condition(lst, ds_time): return lst in ds_time
-
+        
+        pd_time = pd.DatetimeIndex(time)
         paths = self.get_path_all_stations(var)
 
         df_list = []
         for path in tqdm(paths, desc='Loading stations'):
-            try:
-                with xr.open_dataset(path) as ds:
-                    if condition(time, ds.time.values):
-                        da = self.ds_to_da(ds, var)
-                        df_station = da.to_dataframe()
-                        if daily: 
-                            if var == 'precipitation':
-                                df_station = df_station.reset_index().resample('D', on='time').sum()[[VAR_STATIONS[var]['var_name']]]
-                            else:
-                                df_station = df_station.reset_index().resample('D', on='time').mean()[[VAR_STATIONS[var]['var_name']]]
-                        df_station = df_station.loc[time]
-                        lon, lat = self.get_lon_lat(ds)
-                        df_station['longitude'] = lon
-                        df_station['latitude'] = lat
-                        df_list.append(df_station)
-            except:
-                pass
+            with xr.open_dataset(path) as ds:
+                station_name = ds.attrs['site name']
+                if condition(time, ds.time.values):
+                    da = self.ds_to_da(ds, var)
+                    df_station = da.to_dataframe()
+                    if daily: 
+                        if var == 'precipitation':
+                            df_station = df_station.reset_index().resample('D', on='time').sum()[[VAR_STATIONS[var]['var_name']]]
+                        else:
+                            df_station = df_station.reset_index().resample('D', on='time').mean()[[VAR_STATIONS[var]['var_name']]]
+                    df_station = df_station.loc[pd_time.intersection(df_station.index)]
+                    lon, lat = self.get_lon_lat(ds)
+                    df_station['longitude'] = lon
+                    df_station['latitude'] = lat
+                    df_station['station_name'] = station_name
+                    df_list.append(df_station)
         
         print(f'{len(df_list)} stations with data at prediction time(s)')
                     
@@ -253,22 +273,29 @@ class ProcessStations(DataProcess):
             new_df_list = []
             for station in keep_stations:
                 print(f'Keeping {station}')
-                latlon = (STATION_LATLON[station]['latitude'], STATION_LATLON[station]['longitude'])
-                new_df_list.append(df[((df['latitude'] == latlon[0]) & (df['longitude'] == latlon[1]))])
+                # latlon = (STATION_LATLON[station]['latitude'], STATION_LATLON[station]['longitude'])
+                # new_df_list.append(df[((df['latitude'] == latlon[0]) & (df['longitude'] == latlon[1]))])
+                new_df_list.append(df[df['station_name'] == station])
             df = pd.concat(new_df_list)
             print(f'Kept {len(keep_stations)} stations')
 
         df = df.reset_index().rename(columns={'index': 'time'})
-        df = df.set_index(['time', 'latitude', 'longitude']).sort_index()
+        df = df.set_index(['time', 'latitude', 'longitude', 'station_name']).sort_index()
 
         df_column_name = df.columns[0]
         df = df.rename(columns={df_column_name: f"{var}_station"})
         
         return df
     
-        
-        
+    def get_wind_components(self,
+                            ds: xr.Dataset,
+                            ):
 
+        W = ds['speed']
+        theta_rad = np.deg2rad(ds['direction'])
+        ds['u'] = - W * np.sin(theta_rad)
+        ds['v'] = - W * np.cos(theta_rad)
+        return ds       
        
 
 if __name__ == '__main__':
