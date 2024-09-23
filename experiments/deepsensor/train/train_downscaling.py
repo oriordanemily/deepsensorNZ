@@ -108,14 +108,12 @@ def main():
     convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
     if args["unet_channels"] is not None:
         convnp_kwargs["unet_channels"] = args["unet_channels"]
+
     if args["likelihood"] is not None:
         convnp_kwargs["likelihood"] = args["likelihood"]
     else:
-        # if precipitation, use bernoulli likelihood, otherwise default to cnp
-        if variable == "precipitation": 
-            convnp_kwargs["likelihood"] = "bernoulli-gamma"
-        else:
-            convnp_kwargs["likelihood"] = "cnp"
+        convnp_kwargs["likelihood"] = config.LIKELIHOODS[variable]
+
     if args["internal_density"] is not None:
         convnp_kwargs["internal_density"] = args["internal_density"]
 

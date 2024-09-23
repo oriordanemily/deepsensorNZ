@@ -140,6 +140,15 @@ PLOT_EXTENT = {
             },
         }
 
+LIKELIHOODS = {
+    'temperature': 'cnp',
+    'precipitation': 'bernoulli-gamma',
+    'surface_pressure': 'cnp',
+    'humidity': 'cnp-spikes-beta',
+    '10m_u_component_of_wind': 'cnp',
+    '10m_v_component_of_wind': 'cnp',
+}
+
 LOCATION_LATLON = {
     'alexandra': np.array([-45.2479, 169.2844]),
     'arthurs_pass': np.array([-42.9402, 171.5620]),
