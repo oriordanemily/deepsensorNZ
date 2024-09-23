@@ -130,6 +130,9 @@ class ProcessERA5(DataProcess):
             year = set(t.year for t in time)
         filenames = self.get_filenames(var, year)
         ds = xr.open_mfdataset(filenames)
+        if 'expver' in list(ds.coords):
+            ds = ds.sel(expver=1)
+            ds = ds.drop('expver')
         return ds.sel(time=time).load()
 
 

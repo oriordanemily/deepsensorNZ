@@ -176,6 +176,7 @@ class PreprocessForDownscaling:
             self.base_ds = self.add_time_of_year(self.base_ds)
 
         station_raw_df = station_raw_df.rename({station_raw_df.columns[0]: f'{self.var}_station'}, axis=1)
+        station_raw_df = station_raw_df.drop(columns=['station_name'])
         self.station_df = self.data_processor(station_raw_df)
         self.station_as_context = station_as_context
 
@@ -712,6 +713,7 @@ class PreprocessForDownscaling:
             # Rename the df variable so it doesn't clash with the base variable
         
         station_raw_df = station_raw_df.rename({station_raw_df.columns[0]: f'{self.var}_station'}, axis=1)
+        station_raw_df = station_raw_df.drop(columns=['station_name'])
 
         if self.var == 'precipitation':
             # TODO ! IF min < 0, x[x<0] = 0

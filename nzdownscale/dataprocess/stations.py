@@ -27,15 +27,18 @@ class ProcessStations(DataProcess):
     def ds_to_da(self,
                  ds: xr.Dataset,
                  var: Literal[tuple(VARIABLE_OPTIONS)],
-                 ) -> xr.DataArray:
+                 return_uv=False) -> xr.DataArray:
         """
         Extracts dataarray from dataset (variable data only, loses some metadata)
         Args: 
             ds (xr.Dataset): dataset
             var (str): variable
+            return_uv (bool): return both wind components u and v
         """
         if 'wind' in var:
             self.get_wind_components(ds)
+            if return_uv:
+                return ds[['u', 'v']]
         return ds[VAR_STATIONS[var]['var_name']]
 
 
@@ -57,16 +60,18 @@ class ProcessStations(DataProcess):
                         filepath: str,
                         var: str,
                         daily: bool = False,
-                        fill_missing: bool = True
+                        fill_missing: bool = True,
+                        return_uv: bool = False,
                         ) -> pd.DataFrame:
         ds = self.load_station(filepath)
-        da = self.ds_to_da(ds, var)
+        da = self.ds_to_da(ds, var, return_uv)
         df_station = da.to_dataframe()
         if daily: 
             df_station = df_station.reset_index().resample('D', on='time').mean()[[VAR_STATIONS[var]['var_name']]]
         lon, lat = self.get_lon_lat(ds)
         df_station['longitude'] = lon
         df_station['latitude'] = lat
+        df_station['station_name'] = ds.attrs['site name']
 
         return df_station
 
@@ -297,6 +302,30 @@ class ProcessStations(DataProcess):
         ds['v'] = - W * np.cos(theta_rad)
         return ds       
        
+    def load_stations(self, var, years, return_uv=False):
+        if isinstance(years, int):
+            years = [years]
 
+        stations_meta = self.get_metadata_df(var)
+        condition = stations_meta.apply(lambda row: any(year in range(row['start_year'], row['end_year'] + 1) for year in years), axis=1)
+        stations_filtered = stations_meta[condition]
+
+        df_list = []
+        for path in tqdm(list(stations_filtered.index), desc='Filtering stations'):
+            station_df = self.load_station_df(path, var, return_uv=return_uv)
+            df_list.append(station_df)
+
+        print('Concatenating stations into pd.DataFrame')
+        df = pd.concat(df_list)
+
+        station_df_ = df.reset_index()
+        station_df_ = station_df_[(station_df_['time']>=str(years[0])) &
+                                (station_df_['time']<=f'{str(years[-1])}-12-31')]
+        station_df = station_df_.set_index(['time',
+                                            'station_name',
+                                            'latitude', 
+                                            'longitude']).sort_index()
+
+        return station_df
 if __name__ == '__main__':
     pass

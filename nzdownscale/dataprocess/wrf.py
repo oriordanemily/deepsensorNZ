@@ -104,7 +104,8 @@ class ProcessWRF(DataProcess):
             # if type(years) != int:
             #     ValueError (f'For WRF, years can only be int, not {type(years)}')
             if type(years) == list:
-                years = years[0]
+                years = years[0] 
+                print(f'Only loading {years}')
             filenames = self.get_filenames(years, months, subdirs=subdirs)
 
         wrf_vars = [VAR_WRF[var]['var_name'] for var in context_variables]
