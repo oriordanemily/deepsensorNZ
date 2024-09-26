@@ -285,7 +285,7 @@ class ProcessStations(DataProcess):
             print(f'Kept {len(keep_stations)} stations')
 
         df = df.reset_index().rename(columns={'index': 'time'})
-        df = df.set_index(['time', 'latitude', 'longitude', 'station_name']).sort_index()
+        df = df.set_index(['time', 'latitude', 'longitude', 'station_name'])
 
         df_column_name = df.columns[0]
         df = df.rename(columns={df_column_name: f"{var}_station"})
