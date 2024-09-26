@@ -103,3 +103,6 @@ experiments/deepsensor/train/arguments4.yaml
 experiments/deepsensor/train/val2.py
 experiments/deepsensor/train/arguments_test.yaml
 experiments/deepsensor/train/arguments_wrf_test.yaml
+
+# Nesi
+*.sl
