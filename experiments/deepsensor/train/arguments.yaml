@@ -2,9 +2,10 @@
 # VARIABLE
 # ------------------------------------------
 
-# Variable to be downscaled (temperature or precipitation)
+# Variable to be downscaled (temperature, precipitation, 
+# surface_pressure, 10m_u_component_of_wind, 10m_v_component_of_wind, humidity)
 variable:
-  arg: temperature 
+  arg: 10m_v_component_of_wind
   type: str
 
 # Whether to use ERA5 or WRF
@@ -14,7 +15,7 @@ base:
 
 # Model name, if 'default' it will be the time
 model_name:
-  arg: hourly_1e-5
+  arg: era5_test
   type: str
 
 # ------------------------------------------
@@ -30,6 +31,16 @@ n_epochs:
 lr:
   arg: 1e-5
   type: float
+
+# Pretrained model path
+pretrained_model:
+  arg: None
+  type: str_or_none
+
+# Use new processor or pretrained model's 
+pretrained_processor:
+  arg: False
+  type: bool
 
 # Weight decay
 weight_decay:
@@ -108,7 +119,7 @@ val_years_step:
 
 # Coarsen factor for high resolution topography
 topography_highres_coarsen_factor:
-  arg: 5  
+  arg: 5
   type: int
 
 # Coarsen factor for low resolution topography
@@ -170,7 +181,7 @@ area:
 # Remove stations
 # List of station names to remove from the dataset
 remove_stations:
-  arg: ["TAUPO AWS",
+  arg: ["TAUPO AERO AWS",
     "CHRISTCHURCH AERO",
     "KAITAIA AERO",
     "MT COOK EWS",
