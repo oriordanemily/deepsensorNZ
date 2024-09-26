@@ -96,13 +96,21 @@ nzdownscale/dataprocess/config_local.py
 *.prof
 experiments/deepsensor/train/val.sl
 experiments/deepsensor/train/emilyoriordan_47973781_.ipynb
+experiments/deepsensor/train/val2.py
+
+
+# Nesi
+*.sl
+
+# Arguments files
+experiments/deepsensor/train/arguments_test.yaml
+experiments/deepsensor/train/arguments_wrf_test.yaml
 experiments/deepsensor/train/arguments1.yaml
 experiments/deepsensor/train/arguments2.yaml
 experiments/deepsensor/train/arguments3.yaml
 experiments/deepsensor/train/arguments4.yaml
-experiments/deepsensor/train/val2.py
-experiments/deepsensor/train/arguments_test.yaml
-experiments/deepsensor/train/arguments_wrf_test.yaml
+experiments/deepsensor/train/arguments_humidity.yaml
+experiments/deepsensor/train/arguments_temp_hr.yaml
 
 # paper
 outputs/*
