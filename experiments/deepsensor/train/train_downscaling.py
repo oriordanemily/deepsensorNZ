@@ -113,6 +113,7 @@ def main():
         convnp_kwargs["likelihood"] = args["likelihood"]
     else:
         convnp_kwargs["likelihood"] = config.LIKELIHOODS[variable]
+    print('Likelihood being used:', convnp_kwargs["likelihood"])
 
     if args["internal_density"] is not None:
         convnp_kwargs["internal_density"] = args["internal_density"]
