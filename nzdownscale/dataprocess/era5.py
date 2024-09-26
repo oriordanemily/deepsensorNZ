@@ -1,7 +1,7 @@
 import os
 from typing import Literal, List
 import glob
-
+import pandas as pd
 import xarray as xr
 from datetime import datetime
 
@@ -126,7 +126,7 @@ class ProcessERA5(DataProcess):
                     """
         if isinstance(time, datetime):
             year = [time.year]
-        elif isinstance(time, list):
+        elif isinstance(time, (list, pd.DatetimeIndex)):
             year = set(t.year for t in time)
         filenames = self.get_filenames(var, year)
         ds = xr.open_mfdataset(filenames)
