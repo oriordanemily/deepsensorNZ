@@ -171,13 +171,30 @@ class PreprocessForDownscaling:
             self.landmask_ds = data_processor_dict['landmask_ds']
 
         print(f'Processing {self.base} and stations')
-        self.base_ds = self.data_processor(base_raw_ds)
+        
+        base_ds = base_raw_ds.copy()
+        for var in base_raw_ds.data_vars:
+            var_method = self.data_processor.config[var]['method']
+            base_ds[var] = self.data_processor(base_raw_ds[var], 
+                                                method=var_method,
+                                                assert_computed=True)
+        self.base_ds = base_ds
+
         if include_time_of_year:
             self.base_ds = self.add_time_of_year(self.base_ds)
 
         station_raw_df = station_raw_df.rename({station_raw_df.columns[0]: f'{self.var}_station'}, axis=1)
         station_raw_df = station_raw_df.drop(columns=['station_name'])
-        self.station_df = self.data_processor(station_raw_df)
+        # if self.var != 'humidity':
+        station_column_name = station_raw_df.columns[0]
+        station_method = self.data_processor.config[station_column_name]['method']
+        self.station_df = self.data_processor(station_raw_df, 
+                                              method=station_method, 
+                                              assert_computed=True)
+        if self.var == 'humidity':
+            self.station_df = (self.station_df + 1) / 2
+        # else:
+            # self.station_df = station_raw_df / 100
         self.station_as_context = station_as_context
 
     def load_topography(self):
@@ -700,6 +717,7 @@ class PreprocessForDownscaling:
         for var in base_raw_ds.data_vars:
 
             # TODO ! IF min < 0, x[x<0] = 0
+            # Change humidity
             if var == 'precipitation':
                 base_ds[var] = data_processor(base_raw_ds[var], 
                                                   method='positive_semidefinite')
@@ -719,6 +737,11 @@ class PreprocessForDownscaling:
             # TODO ! IF min < 0, x[x<0] = 0
             station_df = data_processor(station_raw_df, 
                                         method='positive_semidefinite') 
+        elif self.var == 'humidity':
+            station_df = data_processor(station_raw_df,
+                                        method='min_max')
+            station_df = (station_df + 1) / 2 # shift to 0-1
+            # station_df = station_raw_df / 100
         else:
             station_df = data_processor(station_raw_df, 
                                         method='mean_std')
