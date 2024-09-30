@@ -65,13 +65,16 @@ class ValidateERA:
                 time: Union[datetime, str, list], 
                 remove_stations: list = [],
                 context_sampling: str = 'all',
-                subdirs=None):
+                subdirs=None,
+                float32: bool = True):
         self.load_data(time, remove_stations, subdirs=subdirs)
         self.task_loader = self.create_task_loader()
         if self.model is None:
             self.model = self.load_model()
         
         task = self.task_loader(time, context_sampling=context_sampling)
+        if float32:
+            task.cast_to_float32()
         pred = self.model.predict(task, 
                                   X_t=self.ds_elev, 
                                   progress_bar=True)
