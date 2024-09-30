@@ -1,5 +1,7 @@
 from nzdownscale.downscaler.validate_ERA import ValidateERA
+from nzdownscale.dataprocess.utils import save_netcdf
 from datetime import datetime, timedelta
+from functools import partial
 import matplotlib.pyplot as plt
 import pandas as pd
 import xarray as xr
@@ -56,7 +58,7 @@ if __name__ == '__main__':
 
     # Model setup
     var = 'temperature'
-    model_name = 'hourly_1e-5_v2'
+    model_name = 'high_res' #'hourly_1e-5_v2'
     print('Predictions for:', var, model_name)
     save_dir = f'{top_dir}/{var}/{model_name}/outputs/'
     if not os.path.exists(save_dir):
@@ -77,6 +79,10 @@ if __name__ == '__main__':
 
     validate = setup_validation_class(var, model_name)
 
+    save_netcdf_partial = partial(save_netcdf, 
+                                 compress=5, 
+                                 dtype='float32', 
+                                 engine='netcdf4')
     # Dates
     months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     print('Predicting year:', year)
@@ -85,6 +91,9 @@ if __name__ == '__main__':
         print('Predicting month:', month)
         # Predict
         time = get_dates(year, month)
+        save_netcdf_chunk_dict = {'time': len(time), 
+                                  'lat': 250, 
+                                  'lon': 250}
         preds = validate.predict(time, remove_stations=remove_stations_list)
         preds = preds[f'{var}_station']
         preds = preds.rename({'mean': var})
@@ -93,4 +102,5 @@ if __name__ == '__main__':
         write_standard_metadata(preds)
         save_path = f'{save_dir}predictions_{year}{str(month).zfill(2)}.nc'
         print('Saving to:', save_path)
-        preds.to_netcdf(save_path, )
+        save_netcdf_partial(preds, save_path, chunk_dict=save_netcdf_chunk_dict)
+        # preds.to_netcdf(save_path, )

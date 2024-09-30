@@ -1,7 +1,7 @@
 import os
-from typing_extensions import Literal
+from typing_extensions import Literal, Union
 import pickle
-
+from dask.distributed import Client
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -281,3 +281,41 @@ def random_hour_subset_xr(ds: xr.Dataset):
     ds_random_hour_per_day = xr.concat(selected_hours, dim='time')
 
     return ds_random_hour_per_day
+
+def save_netcdf(ds: Union[xr.Dataset, xr.DataArray], path: str, compress: Literal[None, int]=5, 
+                dtype: Literal[None, str]='float32', engine: Literal['netcdf4', 'h5netcdf']='netcdf4',
+                chunk_dict: dict=None,):
+    """Save an xarray dataset or dataarray to netcdf file, with optional compression and chunking
+
+    Args:
+        ds (Union[xr.Dataset, xr.DataArray]): xarray dataset or dataarray
+        path (str): path to save file to
+        compress (Literal[None, int], optional): Compresion level (1-9). Defaults to 5. Use None for no compression.
+        dtype (Literal[None, str], optional): dtype for saving. Defaults to 'float32'. Use None for no conversion.
+        engine (Literal['netcdf4';, 'h5netcdf'], optional): NetCDF engine to use. Defaults to 'netcdf4'.
+        chunk_dict (dict, optional): Dictionary with chunk sizes for each dimension. Defaults to None.
+    """
+    
+    with Client() as client:
+
+        # Convert datatype
+        if dtype is not None:
+            ds = ds.astype(dtype)
+
+        # Chunking
+        if chunk_dict is not None:
+            ds = ds.chunk(chunk_dict)
+        elif not ds.chunks:
+            ds = ds.chunk() # default chunking
+        
+        # Compression
+        if compress is not None:
+            comp = dict(zlib=True, complevel=compress)
+            if isinstance(ds, xr.Dataset):
+                for var in ds.data_vars: 
+                    ds[var].encoding.update(comp)
+            elif isinstance(ds, xr.DataArray):
+                ds.encoding.update(comp)
+
+        # Save
+        ds.to_netcdf(path, engine=engine)

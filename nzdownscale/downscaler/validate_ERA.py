@@ -43,7 +43,9 @@ class ValidateERA:
         # Load elevation data
         print('Loading elevation data')
         self.ds_elev = self.top.open_ds()
-        self.ds_elev = self.ds_elev.coarsen(latitude=5, longitude=5,
+        high_res_coarsen_factor = self.meta['data_settings']['topography_highres_coarsen_factor']
+        self.ds_elev = self.ds_elev.coarsen(latitude=high_res_coarsen_factor, 
+                                            longitude=high_res_coarsen_factor,
                                    boundary='trim').mean()
         self.pred_mask = ~np.isnan(self.ds_elev['elevation'])
       
@@ -127,6 +129,8 @@ class ValidateERA:
         print('Pre-processing station data')
         method = self.data_processor.config[f"{self.var}_station"]['method']
         self.stations_df = self.data_processor(self.stations_df_raw, method=method)
+        if self.var == 'humidity':
+            self.stations_df = (self.stations_df + 1) / 2
 
     def load_stations(self, time, remove_stations=[], keep_stations=[]):
         stations_df = self.station.load_stations_time(self.var, 
@@ -149,7 +153,7 @@ class ValidateERA:
                 base_da = self.process_era.load_ds_time(var, time)
                 ds_list.append(base_da)
             ds = xr.merge(ds_list)
-            precip_name = config.VAR_ERA5['precipitation']['var_name']
+            # precip_name = config.VAR_ERA5['precipitation']['var_name']
         
         elif self.base == 'wrf':
             ds = self.process_wrf.load_ds(time=time, 
@@ -157,11 +161,11 @@ class ValidateERA:
                                                subdirs=subdirs)
             # aux_raw_ds = 
             ds = self.process_wrf.regrid_to_topo(ds, self.aux_ds)
-            precip_name = config.VAR_WRF['precipitation']['var_name']
+            # precip_name = config.VAR_WRF['precipitation']['var_name']
             # ds = [vars].load()
                 # probably need to put interp function here
         
-        ds[precip_name] = np.log10(1 + ds[precip_name])
+        # ds[precip_name] = np.log10(1 + ds[precip_name])
 
         ds = self._trim_ds(ds, self.ds_elev)
         
