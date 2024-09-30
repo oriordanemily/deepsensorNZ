@@ -1,5 +1,7 @@
 from nzdownscale.downscaler.validate_ERA import ValidateERA
 from nzdownscale.dataprocess.utils import save_netcdf
+from nzdownscale.dataprocess.config_local import DATA_PATHS
+
 from datetime import datetime, timedelta
 from functools import partial
 import matplotlib.pyplot as plt
@@ -11,8 +13,7 @@ import os
 import calendar
 import argparse
 
-top_dir = '/mnt/temp/projects/DeepWeather/data_delete/DeepSensor/models'
-
+top_dir = DATA_PATHS['save_model']['fpath']
 def get_paths(var, model_name):
     
     model_dir = f'{top_dir}/{var}/{model_name}'
