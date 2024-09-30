@@ -74,7 +74,7 @@ class ValidateERA:
         
         task = self.task_loader(time, context_sampling=context_sampling)
         if float32:
-            task.cast_to_float32()
+            task = [t.cast_to_float32() for t in task]
         pred = self.model.predict(task, 
                                   X_t=self.ds_elev, 
                                   progress_bar=True)
@@ -146,6 +146,10 @@ class ValidateERA:
         ds_list = []
 
         context_variables = self.meta['data_settings']['context_variables']
+        
+        if self.var not in context_variables:
+            context_variables = [self.var] + context_variables
+
         if context_variables[0] != self.var:
             idx = context_variables.index(self.var)
             context_variables[0], context_variables[idx] = context_variables[idx], context_variables[0]
