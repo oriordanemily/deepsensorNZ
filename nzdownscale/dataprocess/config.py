@@ -71,7 +71,7 @@ VAR_ERA5 = {
             },
             'humidity': {
                 'subdir': 'relative_humidity',
-                'var_name': 'VAR_2U',
+                'var_name': 'u2m',
                 'folder': 'NZ_land_processed'
             },
             'surface_net_solar_radiation': {
@@ -144,7 +144,7 @@ LIKELIHOODS = {
     'temperature': 'cnp',
     'precipitation': 'bernoulli-gamma',
     'surface_pressure': 'cnp',
-    'humidity': 'cnp-spikes-beta',
+    'humidity': 'cnp',
     '10m_u_component_of_wind': 'cnp',
     '10m_v_component_of_wind': 'cnp',
 }

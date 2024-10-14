@@ -221,6 +221,12 @@ class Train:
             convnp_kwargs = config.CONVNP_KWARGS_DEFAULT
     
         # Set up model
+        # if self.variable == 'humidity':
+        #     model = ConvNP_sigmoid(self.data_processor,
+        #             self.task_loader, 
+        #             **convnp_kwargs,
+        #     )
+        # else:
         model = ConvNP(self.data_processor,
                     self.task_loader, 
                     **convnp_kwargs,
@@ -613,3 +619,21 @@ class TaskLoader_SampleStations(TaskLoader):
             )
 
         return Task(task)
+
+class ConvNP_sigmoid(ConvNP):
+    def __init__(self, data_processor, task_loader, **kwargs):
+        super().__init__(data_processor, task_loader, **kwargs)
+        
+
+    def __call__(self, task):
+        convnp_output = super().__call__(task)
+
+        # Transform mean based on sigmoid
+        mean_transformed = B.sigmoid(convnp_output['mean'])
+
+        # Transform std based on derivative of sigmoid
+        std_transformed = convnp_output['std'] * (mean_transformed * (1 - mean_transformed))
+        
+        convnp_output['mean'] = mean_transformed
+        convnp_output['std'] = std_transformed
+        return convnp_output
