@@ -48,18 +48,23 @@ def write_standard_metadata(ds: xr.Dataset):
 if __name__ == '__main__':
 
     argparser = argparse.ArgumentParser()
+    argparser.add_argument('--var', type=str)
+    argparser.add_argument('--model_name', type=str)
     argparser.add_argument('--year', type=int)
     argparser.add_argument('--gpu', type=int, default=0)
 
     args = argparser.parse_args()
     year = args.year
     gpu = args.gpu
+    var = args.var
+    model_name = args.model_name
 
     os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu)
 
     # Model setup
-    var = 'temperature'
-    model_name = 'high_res' #'hourly_1e-5_v2'
+    # var = 'temperature'
+    # model_name = 'high_res' #'hourly_1e-5_v2'
+    
     print('Predictions for:', var, model_name)
     save_dir = f'{top_dir}/{var}/{model_name}/outputs/'
     if not os.path.exists(save_dir):
@@ -93,8 +98,8 @@ if __name__ == '__main__':
         # Predict
         time = get_dates(year, month)
         save_netcdf_chunk_dict = {'time': len(time), 
-                                  'lat': 250, 
-                                  'lon': 250}
+                                  'lat': 150, 
+                                  'lon': 150}
         preds = validate.predict(time, remove_stations=remove_stations_list)
         preds = preds[f'{var}_station']
         preds = preds.rename({'mean': var})
