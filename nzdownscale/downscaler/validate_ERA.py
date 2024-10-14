@@ -66,7 +66,8 @@ class ValidateERA:
                 remove_stations: list = [],
                 context_sampling: str = 'all',
                 subdirs=None,
-                float32: bool = True):
+                float32: bool = True,
+                kwargs: dict = {}):
         self.load_data(time, remove_stations, subdirs=subdirs)
         self.task_loader = self.create_task_loader()
         if self.model is None:
@@ -77,11 +78,13 @@ class ValidateERA:
             task = [t.cast_to_float32() for t in task]
         pred = self.model.predict(task, 
                                   X_t=self.ds_elev, 
-                                  progress_bar=True)
+                                  progress_bar=True,
+                                  **kwargs)
 
         for key in pred.keys():
-            pred[key]['mean'] = pred[key]['mean'].where(self.pred_mask)
-            pred[key]['std'] = pred[key]['std'].where(self.pred_mask)
+            for key2 in pred[key].keys():
+                pred[key][key2] = pred[key][key2].where(self.pred_mask)
+
         return pred
 
     def load_model(self):
@@ -125,13 +128,17 @@ class ValidateERA:
         base_ds = self.base_ds_raw.copy()
         for var in self.base_ds_raw:
             method = self.data_processor.config[var]['method']
-            base_ds[var] = self.data_processor(self.base_ds_raw[var], method=method)
+            base_ds[var] = self.data_processor(self.base_ds_raw[var], 
+                                               method=method,
+                                               assert_computed=True)
         self.base_ds = base_ds
         self.base_ds = self.add_time_of_year(self.base_ds)
 
         print('Pre-processing station data')
         method = self.data_processor.config[f"{self.var}_station"]['method']
-        self.stations_df = self.data_processor(self.stations_df_raw, method=method)
+        self.stations_df = self.data_processor(self.stations_df_raw, 
+                                               method=method,
+                                               assert_computed=True)
         if self.var == 'humidity':
             self.stations_df = (self.stations_df + 1) / 2
 
