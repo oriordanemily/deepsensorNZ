@@ -114,3 +114,4 @@ experiments/deepsensor/train/arguments_temp_hr.yaml
 
 # paper
 outputs/*
+experiments/deepsensor/train/arguments_wrf_temp.yaml
