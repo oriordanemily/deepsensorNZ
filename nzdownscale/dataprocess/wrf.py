@@ -21,7 +21,18 @@ from nzdownscale.dataprocess.config_local import DATA_PATHS
 
 from dask.diagnostics import ProgressBar
 
-def generate_datetimes(start_str, end_str, interval_hours=12):
+def generate_datetimes(start_str: str, end_str: str, val_day:str=None, interval_hours:int=12):
+    """Generate datetimes for finding filepaths
+
+    Args:
+        start_str (str): start date
+        end_str (str): end date
+        val_day (str, optional): If not None, return just this day of the month. Defaults to None.
+        interval_hours (int, optional): Add 12. Defaults to 12.
+
+    Returns:
+        _type_: _description_
+    """
     # Convert strings to datetime objects
     start_date = datetime.strptime(str(start_str), '%Y%m%d%H')
     end_date = datetime.strptime(str(end_str), '%Y%m%d%H')
@@ -32,13 +43,17 @@ def generate_datetimes(start_str, end_str, interval_hours=12):
     # Generate datetimes at the specified interval
     current_date = start_date
     while current_date <= end_date:
-        datetimes.append(current_date.strftime('%Y%m%d%H'))
+        if val_day is not None:
+            if current_date.day == val_day:
+                datetimes.append(current_date.strftime('%Y%m%d%H'))
+        else:
+            datetimes.append(current_date.strftime('%Y%m%d%H'))
         current_date += timedelta(hours=interval_hours)
 
     return datetimes
 
 
-def get_filepaths(start_init, end_init,
+def get_filepaths(start_init, end_init, val_day=None,
                   model='nz4kmN-ECMWF-SIGMA'):
     """
     Returns list of filepaths for WRF data
@@ -52,8 +67,8 @@ def get_filepaths(start_init, end_init,
         interval_hours = 24 # change to 12
     else:
         ValueError(f'Model {model} not yet implemented')
-
-    sub_dirs = generate_datetimes(start_init, end_init, interval_hours)
+    
+    sub_dirs = generate_datetimes(start_init, end_init, val_day=val_day, interval_hours=interval_hours)
     wrf_base = DATA_PATHS["wrf"]["parent"]
 
     paths = []

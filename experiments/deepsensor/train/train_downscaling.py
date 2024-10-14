@@ -75,12 +75,20 @@ def main():
     elif base == "wrf":
         train_start = args["start_init"]
         train_end = args["end_init"]
-        val_start = args["val_start_init"]
-        val_end = args["val_end_init"]
+        val_day = args["val_day"]
+        if val_day is not None:
+            val_start = train_start
+            val_end = train_end
+        else:
+            val_start = args["val_start_init"]
+            val_end = args["val_end_init"]
         time_intervals = args["time_intervals"]
 
         training_fpaths = wrf.get_filepaths(train_start, train_end)[::time_intervals]
-        validation_fpaths = wrf.get_filepaths(val_start, val_end)[::time_intervals]
+        validation_fpaths = wrf.get_filepaths(val_start, val_end, val_day)[::time_intervals]
+        for fpath in training_fpaths:
+            if fpath in validation_fpaths:
+                training_fpaths.remove(fpath)
         print(f'Training period: {train_start} - {train_end}, {len(training_fpaths)} files')
         print(f'Validation period: {val_start} - {val_end}, {len(validation_fpaths)} files')
 
