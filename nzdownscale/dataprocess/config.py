@@ -71,8 +71,8 @@ VAR_ERA5 = {
             },
             'humidity': {
                 'subdir': 'relative_humidity',
-                'var_name': 'VAR_2U',
-                'folder': 'NZ_land_processed'
+                'var_name': 'u2m', #'VAR_2U',
+                'folder': 'NZ_land_processed_synctodatasets'
             },
             'surface_net_solar_radiation': {
                 'subdir': 'surface_net_solar_radiation',

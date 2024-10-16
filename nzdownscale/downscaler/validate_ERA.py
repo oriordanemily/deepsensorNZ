@@ -126,6 +126,16 @@ class ValidateERA:
 
         print(f'Pre-processing {self.base} data')
         base_ds = self.base_ds_raw.copy()
+
+        # handling change in humidity name
+        if 'VAR_2U' in self.data_processor.config:
+            if 'VAR_2U' not in base_ds:
+                self.data_processor.config['u2m'] = self.data_processor.config['VAR_2U']
+                del self.data_processor.config['VAR_2U']
+        else:
+            if 'VAR_2U' in base_ds:
+                self.base_ds_raw = self.base_ds_raw.rename({'VAR_2U': 'u2m'})
+                
         for var in self.base_ds_raw:
             method = self.data_processor.config[var]['method']
             base_ds[var] = self.data_processor(self.base_ds_raw[var], 

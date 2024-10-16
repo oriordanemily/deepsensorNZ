@@ -78,7 +78,9 @@ class ProcessERA5(DataProcess):
     def get_parent_path(self,
                         var: Literal[tuple(VARIABLE_OPTIONS)],
                         ):
-        if VAR_ERA5[var]['folder'] == 'NZ_land_processed':
+        if VAR_ERA5[var]['folder'] == 'NZ_land_processed_synctodatasets':
+            parent = "parent_processed_synctodatasets"
+        elif VAR_ERA5[var]['folder'] == 'NZ_land_processed':
             parent = "parent_processed"
         else:
             parent = "parent"
@@ -104,7 +106,7 @@ class ProcessERA5(DataProcess):
                         filenames_year = glob.glob(f'{parent_path}/{year}/*/*.nc')
                     filenames = filenames + filenames_year
 
-        elif VAR_ERA5[var]['folder'] == 'NZ_land_processed': #var == 'precipitation':  # relative_humidity
+        elif 'NZ_land_processed' in VAR_ERA5[var]['folder']:# == 'NZ_land_processed': #var == 'precipitation':  # relative_humidity
             if years is None:
                 filenames = glob.glob(f'{parent_path}/*.nc')
             else:
