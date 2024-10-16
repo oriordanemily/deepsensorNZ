@@ -74,10 +74,12 @@ def get_filepaths(start_init, end_init, val_day=None,
     paths = []
     for subdir in sub_dirs:
         subdir_dt = datetime.strptime(subdir, '%Y%m%d%H')
-        files = glob.glob(f'{wrf_base}/{subdir_dt.year}/{str(subdir_dt.month).zfill(2)}/{subdir}/{model}/*d02*00')
-        files = sorted(files)[6:12] # just take the 6th-12th files for training
+        files = glob.glob(f'{wrf_base}/{subdir_dt.year}/{subdir}/*d02*00')
+        files = sorted(files)[6:31] # just take the 6-30th files for training
+        # we ignore the first 6 as they are spin up
+        # we then take the next 24 hours so the model learns diurnal cycle
         paths.extend(files)
-    print('Also only using the 6th-12th files from each directory')
+    print('Also only using the 6th-30th files from each directory')
     
     return paths
 
@@ -128,13 +130,23 @@ class ProcessWRF(DataProcess):
 
 
         with ProgressBar():
-            ds = xr.open_mfdataset(filenames, 
-                                preprocess = partial_preprocess,
-                                parallel = True,
-                                concat_dim='Time',
-                                engine = 'netcdf4',
-                                combine = 'nested'
-                                )
+            try:
+                ds = xr.open_mfdataset(filenames, 
+                                    preprocess = partial_preprocess,
+                                    parallel = True,
+                                    concat_dim='Time',
+                                    engine = 'netcdf4',
+                                    combine = 'nested'
+                                    )
+            except Exception as e:
+                print(f'Error loading dataset: {e}')
+                # Find the file that is causing the error
+                for f in filenames:
+                    try:
+                        ds = xr.open_dataset(f)
+                    except Exception as e:
+                        print(f'Error loading {f}: {e}')
+                    
         # if time is not None:
         #     ds.sel(Time=time)
         print('Loading data from dask')
