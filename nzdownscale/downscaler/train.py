@@ -43,7 +43,7 @@ class Train:
             use_gpu (bool): 
                 Uses GPU if True       
         """
-
+        self.use_gpu = use_gpu
         if use_gpu:
             set_gpu_default_device()
 
@@ -237,7 +237,10 @@ class Train:
             if not os.path.exists(pretrained_model_path):
                 raise FileNotFoundError(f"Pretrained model {pretrained_model_path} not found, filepath: {pretrained_model_path}")
             print(f'Fine-tuning model {pretrained_model}')
-            model.model.load_state_dict(torch.load(pretrained_model_path))
+            if self.use_gpu:
+                model.model.load_state_dict(torch.load(pretrained_model_path))
+            else:
+                model.model.load_state_dict(torch.load(pretrained_model_path, map_location=torch.device('cpu')))
 
             # Freeze encoder weights
             for param in model.model.encoder.parameters():
