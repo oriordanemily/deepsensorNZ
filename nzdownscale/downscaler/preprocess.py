@@ -23,7 +23,7 @@ from deepsensor.data.processor import DataProcessor
 from deepsensor.data.utils import construct_x1x2_ds
 from deepsensor.data import construct_circ_time_ds
 from nzdownscale.dataprocess import era5, wrf, stations, topography, utils, config
-from nzdownscale.dataprocess.config import LOCATION_LATLON, PLOT_EXTENT
+from nzdownscale.dataprocess.config import LOCATION_LATLON, PLOT_EXTENT, VAR_ERA5, VAR_WRF
 from nzdownscale.dataprocess.config_local import DATA_PATHS
 
 
@@ -211,6 +211,9 @@ class PreprocessForDownscaling:
     def load_era5(self):
         print('Loading era5...')
         self.base_ds = self.process_era.load_ds(self.var, self.years)
+        if 'expver' in self.base_ds.coords:
+            self.base_ds = self.base_ds.sel(expver=1)
+            self.base_ds = self.base_ds.drop('expver')
         for variable in self.context_variables:
             if variable != self.var:
                 da = self.process_era.load_ds(variable, self.years)
@@ -279,6 +282,10 @@ class PreprocessForDownscaling:
         # Trim to topography extent
         ds_base_trimmed = self._trim_ds(self.base_ds, self.highres_aux_raw_ds)
         self.base_raw_ds = ds_base_trimmed
+
+        # Change names to ERA5 names
+        for var in self.context_variables:
+            self.base_raw_ds = self.base_raw_ds.rename({VAR_WRF[var]['var_name']: VAR_ERA5[var]['var_name']})
 
         return self.base_raw_ds
 
