@@ -86,8 +86,8 @@ def main():
 
         training_fpaths = wrf.get_filepaths(train_start, train_end)[::time_intervals]
         validation_fpaths = wrf.get_filepaths(val_start, val_end, val_day)[::time_intervals]
-        for fpath in training_fpaths:
-            if fpath in validation_fpaths:
+        for fpath in validation_fpaths:
+            if fpath in training_fpaths:
                 training_fpaths.remove(fpath)
         print(f'Training period: {train_start} - {train_end}, {len(training_fpaths)} files')
         print(f'Validation period: {val_start} - {val_end}, {len(validation_fpaths)} files')
