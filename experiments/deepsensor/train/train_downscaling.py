@@ -13,7 +13,6 @@ import os
 import shutil
 import argparse
 
-
 def main():
     """
     Example:
@@ -158,6 +157,7 @@ def main():
     if pretrained_model is not None and pretrained_processor:
         data_processor_fpath = f'{model_dir}/{pretrained_model}/data_processor.pkl'
         assert os.path.exists(data_processor_fpath), f'Pretrained data processor not found at {data_processor_fpath}'
+        shutil.copyfile(data_processor_fpath, f'{model_name_dir}data_processor.pkl') # copy the pretrained data processor into the new model directory
     else:
         data_processor_fpath = f'{model_name_dir}data_processor.pkl'
 
@@ -192,8 +192,14 @@ def main():
     # ------------------------------------------
     # Train model
     # ------------------------------------------
+    use_gpu = True
     training = Train(processed_output_dict=processed_output_dict,
-                     base=base)
+                     base=base, use_gpu=use_gpu)
+    if not use_gpu:
+        print('NOT USING GPU')
+    else:
+        print('USING GPU')
+
     training.run_training_sequence(n_epochs, model_name, 
                                    pretrained_model=pretrained_model,
                                    batch=batch, 
