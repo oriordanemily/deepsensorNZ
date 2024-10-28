@@ -378,7 +378,7 @@ class Train:
                 # batch_losses = [train_epoch(model, batched_train_tasks[f'{num_stations}']) for num_stations in batched_train_tasks.keys()]
                 batch_losses = [item for sublist in batch_losses for item in sublist]
             else:
-                batch_losses = train_epoch(model, train_tasks, opt=opt)
+                batch_losses = train_epoch(model, train_tasks, opt=opt, progress_bar=True)
             batch_losses_not_nan = [arr for arr in batch_losses if~ np.isnan(arr)]
             
             train_loss = np.mean(batch_losses_not_nan)
