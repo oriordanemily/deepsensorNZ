@@ -177,6 +177,12 @@ class PlotData:
         ax = fig.add_subplot(1, 1, 1, projection=proj)
         ax.tick_params(axis='both', labelsize=15)
         ax.coastlines()
+
+        # # Remove the axes
+        # ax.set_axis_off()
+
+        # # Remove title (if it was set automatically or manually)
+        # ax.set_title('') 
         ax.set_extent([lon_lim[0], lon_lim[1], lat_lim[0], lat_lim[1]], proj)
         ax.gridlines(draw_labels=True, crs=proj)
         return ax

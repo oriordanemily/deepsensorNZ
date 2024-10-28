@@ -74,8 +74,12 @@ def get_filepaths(start_init, end_init, val_day=None,
     paths = []
     for subdir in sub_dirs:
         subdir_dt = datetime.strptime(subdir, '%Y%m%d%H')
-        files = glob.glob(f'{wrf_base}/{subdir_dt.year}/{subdir}/*d02*00')
-        files = sorted(files)[6:30] # just take the 6-30th files for training
+        if 'mnt' in wrf_base:
+            fpath = f'{wrf_base}/{subdir_dt.year}/{str(subdir_dt.month).zfill(2)}/{subdir}/nz4kmN-ECMWF-SIGMA/'
+        else:
+            fpath = f'{wrf_base}/{subdir_dt.year}/{subdir}/'
+        files = glob.glob(f'{fpath}*d02*00')
+        files = sorted(files)[6:31] # just take the 6-30th files for training
         # we ignore the first 6 as they are spin up
         # we then take the next 24 hours so the model learns diurnal cycle
         paths.extend(files)

@@ -39,7 +39,7 @@ class ValidateWRF:
         # Unpack data processor
         self.data_processor = self.data_processor_dict['data_processor']
         self.aux_ds = self.data_processor_dict['aux_ds']
-        self.aux_raw_ds = self.data_processor_dict['aux_raw_ds']
+        # self.aux_raw_ds = self.data_processor_dict['aux_raw_ds']
         self.highres_aux_ds = self.data_processor_dict['highres_aux_ds']
         self.landmask_ds = self.data_processor_dict['landmask_ds']
 
@@ -142,7 +142,15 @@ class ValidateWRF:
         self.stations_raw_df = stations_df.copy()
 
         processing_method = self.data_processor.config[f"{self.variable}_station"]['method']
+        reset_index_stations = stations_df.reset_index()
+        latitude = reset_index_stations['latitude'].values
+        longitude = reset_index_stations['longitude'].values
+        original_values = reset_index_stations[f"{self.variable}_station"].values
         stations_df = self.data_processor(stations_df, method=processing_method)
+        stations_df[f"{self.variable}_station_original"] = original_values
+        stations_df['latitude'] = latitude
+        stations_df['longitude'] = longitude
+        stations_df = stations_df.reset_index().set_index(['time', 'x1', 'x2', 'station_name', 'latitude', 'longitude'])
         self.stations_df = stations_df.copy()
 
         return stations_df
