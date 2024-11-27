@@ -25,15 +25,20 @@ class ValidateWRF:
                 model_path, 
                 data_processor_path,
                 task_loader_path, 
-                train_metadata_path):
+                train_metadata_path,
+                verbose=True):
 
         # Load necessary items
         self.model_path = model_path
-        print('Loading data processor')
+        self.verbose = verbose
+        if self.verbose:
+            print('Loading data processor')
         self.data_processor_dict = self.unpickle(data_processor_path)
-        print('Loading task loader')
+        if self.verbose:
+            print('Loading task loader')
         self.task_loader = self.unpickle(task_loader_path)
-        print('Loading metadata')
+        if self.verbose:
+            print('Loading metadata')
         self.meta = self.unpickle(train_metadata_path)
 
         # Unpack data processor
@@ -74,7 +79,9 @@ class ValidateWRF:
                                             boundary='trim').mean()
         self.pred_mask = ~np.isnan(self.ds_elev['elevation'])
         pred_res = np.round(np.abs(np.diff(self.ds_elev.coords['latitude'].values)[0]), 5)
-        print('Producing predictions at resolution:', pred_res)
+        
+        if self.verbose:
+            print('Producing predictions at resolution:', pred_res)
         
     def get_filepaths(self, forecast_init, forecast_end=-1, forecast_start=0, model='nz4kmN-ECMWF-SIGMA'):
         base_dir = config_local.DATA_PATHS['wrf']['parent']
@@ -189,7 +196,8 @@ class ValidateWRF:
 
         pred = self.model.predict(task,
                                 X_t = self.ds_elev,
-                                progress_bar = True)
+                                progress_bar = True,
+                                )
 
         for key in pred.keys():
             pred[key]['mean'] = pred[key]['mean'].where(self.pred_mask)
@@ -273,7 +281,9 @@ class ValidateWRF:
                        self.task_loader,
                        **convnp_kwargs)
 
-        model.model.load_state_dict(torch.load(self.model_path))
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        model.model.load_state_dict(torch.load(self.model_path, map_location=device))
 
         return model    
     
