@@ -156,9 +156,17 @@ class Train:
             elif station_as_context == 'random':
                 context_sampling += ['random']
 
-        self.task_loader = TaskLoader_SampleStations(context=context,
-                                                target=station_df, 
-                                                aux_at_targets=highres_aux_ds,)
+        if len(context_sampling) == 3:
+            self.task_loader = TaskLoader(context=context,
+                                        target=station_df, 
+                                        aux_at_targets=highres_aux_ds,)
+        elif len(context_sampling) == 4:
+            self.task_loader = TaskLoader_SampleStations(context=context,
+                                                    target=station_df, 
+                                                    aux_at_targets=highres_aux_ds,)
+        else:
+            raise ValueError(f"Context sampling length not supported: {len(context_sampling)}, currently only 3 (no stations) or 4 (stations) supported")
+        
         if verbose:
             print(self.task_loader)
 
@@ -299,6 +307,8 @@ class Train:
         for date in tqdm(dates[::time_intervals], desc="Loading tasks..."):
             if context_sampling[-1] == 'random':
                 context_sampling_ = context_sampling[:-1] + [np.random.rand()]
+            else:
+                context_sampling_ = context_sampling
             task = self.task_loader(date, context_sampling=context_sampling_, target_sampling="all")
             tasks.append(task)
         return tasks
