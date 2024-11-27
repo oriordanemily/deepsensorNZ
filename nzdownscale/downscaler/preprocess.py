@@ -39,7 +39,8 @@ class PreprocessForDownscaling:
                  use_daily_data=True,
                  validation = False,
                  area=None,
-                 context_variables=[]
+                 context_variables=[],
+                 verbose=None
                  ) -> None:
         
         """
@@ -104,6 +105,14 @@ class PreprocessForDownscaling:
         self.station_df = None
 
         self._ds_elev_hr = None
+
+        if verbose is not None:
+            self.verbose = verbose
+        else:
+            if validation:
+                self.verbose = False
+            else:
+                self.verbose = True
 
         # self._check_args()
 
@@ -170,7 +179,8 @@ class PreprocessForDownscaling:
             self.highres_aux_ds = data_processor_dict['highres_aux_ds']
             self.landmask_ds = data_processor_dict['landmask_ds']
 
-        print(f'Processing {self.base} and stations')
+        if self.verbose:
+            print(f'Processing {self.base} and stations')
         
         base_ds = base_raw_ds.copy()
         for var in base_raw_ds.data_vars:
@@ -198,7 +208,8 @@ class PreprocessForDownscaling:
         self.station_as_context = station_as_context
 
     def load_topography(self):
-        print('Loading topography...')
+        if self.verbose:
+            print('Loading topography...')
         self.ds_elev = self.process_top.open_ds()
         if self.area is not None:
             minlon = PLOT_EXTENT[self.area]['minlon']
@@ -209,7 +220,8 @@ class PreprocessForDownscaling:
 
     
     def load_era5(self):
-        print('Loading era5...')
+        if self.verbose:
+            print('Loading era5...')
         self.base_ds = self.process_era.load_ds(self.var, self.years)
         if 'expver' in self.base_ds.coords:
             self.base_ds = self.base_ds.sel(expver=1)
@@ -221,7 +233,8 @@ class PreprocessForDownscaling:
         
 
     def load_wrf(self):
-        print('Loading wrf...')
+        if self.verbose:
+            print('Loading wrf...')
         base_ds = self.process_wrf.load_ds(filenames=self.all_paths,
                                             context_variables = self.context_variables)
         self.base_ds = self.process_wrf.regrid_to_topo(base_ds,
@@ -230,7 +243,8 @@ class PreprocessForDownscaling:
         self.years = np.unique([t.year for t in pd.to_datetime(times)])
 
     def load_stations(self, use_cache=False):
-        print('Loading stations...')
+        if self.verbose:
+            print('Loading stations...')
 
         if use_cache:
             if "cache" not in DATA_PATHS.keys():
@@ -534,7 +548,8 @@ class PreprocessForDownscaling:
 
         df_station_metadata_filtered = df_filtered_area
 
-        print(f'Number of stations used: {len(df_station_metadata_filtered)}')
+        if self.verbose:
+            print(f'Number of stations used: {len(df_station_metadata_filtered)}')
         self.station_metadata_filtered = df_station_metadata_filtered
 
         return self.station_metadata_filtered
@@ -548,7 +563,7 @@ class PreprocessForDownscaling:
         station_paths = list(df_station_metadata.index)
 
         df_list = []
-        for path in tqdm(station_paths, desc='Loading filtered stations'):
+        for path in tqdm(station_paths, desc='Loading filtered stations', disable=not self.verbose):
             df = self.process_stations.load_station_df(path, var, daily=self.use_daily_data)
             df_list.append(df)
         # print('Concatenating station data...')
