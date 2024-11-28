@@ -18,12 +18,13 @@ import matplotlib.pyplot as plt
 import cartopy.feature as cf
 from scipy.ndimage import gaussian_filter
 from sklearn.neighbors import NearestNeighbors
+from scipy.stats import skewnorm, norm
 
 from deepsensor.data.processor import DataProcessor
 from deepsensor.data.utils import construct_x1x2_ds
 from deepsensor.data import construct_circ_time_ds
 from nzdownscale.dataprocess import era5, wrf, stations, topography, utils, config
-from nzdownscale.dataprocess.config import LOCATION_LATLON, PLOT_EXTENT, VAR_ERA5, VAR_WRF
+from nzdownscale.dataprocess.config import LOCATION_LATLON, PLOT_EXTENT, VAR_ERA5, VAR_WRF, NORMALISATION, VAR_TO_STD
 from nzdownscale.dataprocess.config_local import DATA_PATHS
 
 
@@ -103,6 +104,7 @@ class PreprocessForDownscaling:
         self.landmask_ds = None
         self.station_raw_df = None
         self.station_df = None
+        self.transform_params = {}
 
         self._ds_elev_hr = None
 
@@ -137,29 +139,32 @@ class PreprocessForDownscaling:
         station_as_context=False
         ):
         
+        # Load ancillary data
         self.load_topography()
         highres_aux_raw_ds, aux_raw_ds = self.preprocess_topography(topography_highres_coarsen_factor, topography_lowres_coarsen_factor)
         self.highres_aux_raw_ds, self.aux_raw_ds = highres_aux_raw_ds, aux_raw_ds
-
-        if self.base == 'era5':
-            self.load_era5()
-        elif self.base == 'wrf':
-            self.load_wrf()
-        self.load_stations()
-        
-        if self.base == 'era5':
-            base_raw_ds = self.preprocess_era5(coarsen_factor=era5_coarsen_factor)
-        elif self.base == 'wrf':
-            base_raw_ds = self.preprocess_wrf()
-        station_raw_df = self.preprocess_stations(remove_stations=remove_stations, fill_missing=True)
-
         if include_landmask:
             landmask_raw_ds = self.load_landmask()
         else:
             landmask_raw_ds = None
+        self.station_as_context = station_as_context
 
+        # Load and preprocess base data
+        if self.base == 'era5':
+            self.load_era5()
+            base_raw_ds = self.preprocess_era5(coarsen_factor=era5_coarsen_factor)
+        elif self.base == 'wrf':
+            self.load_wrf()
+            base_raw_ds = self.preprocess_wrf()
+            
+        # Load and preprocess stations
+        self.load_stations()
+        station_raw_df = self.preprocess_stations(remove_stations=remove_stations, fill_missing=False)
+
+        # Load or create data processor
         if data_processor_dict == None:
-            data_processor_dict = self.process_all_for_training(
+            # Create data processor
+            data_processor_dict = self.calculate_data_processor(
                 base_raw_ds=base_raw_ds, 
                 highres_aux_raw_ds=highres_aux_raw_ds, 
                 aux_raw_ds=aux_raw_ds, 
@@ -169,43 +174,61 @@ class PreprocessForDownscaling:
                 save=save_data_processor_dict,
                 station_as_context=station_as_context
                 )
-            self.data_processor = data_processor_dict['data_processor']
-            self.aux_ds = data_processor_dict['aux_ds']
-            self.highres_aux_ds = data_processor_dict['highres_aux_ds']
-            self.landmask_ds = data_processor_dict['landmask_ds']
-        else:
-            self.data_processor = data_processor_dict['data_processor']
-            self.aux_ds = data_processor_dict['aux_ds']
-            self.highres_aux_ds = data_processor_dict['highres_aux_ds']
-            self.landmask_ds = data_processor_dict['landmask_ds']
+
+        # Load data processor items
+        self.data_processor = data_processor_dict['data_processor']
+        self.aux_ds = data_processor_dict['aux_ds']
+        self.highres_aux_ds = data_processor_dict['highres_aux_ds']
+        self.landmask_ds = data_processor_dict['landmask_ds']
+        if 'transform_params' in data_processor_dict.keys():
+            self.transform_params = data_processor_dict['transform_params']
 
         if self.verbose:
             print(f'Processing {self.base} and stations')
         
+        # Apply data processor to base_ds
         base_ds = base_raw_ds.copy()
         for var in base_raw_ds.data_vars:
+            var_name = VAR_TO_STD[self.base][var]
             var_method = self.data_processor.config[var]['method']
-            base_ds[var] = self.data_processor(base_raw_ds[var], 
+
+            base_ds[var] = self.data_processor(base_raw_ds[var],
                                                 method=var_method,
                                                 assert_computed=True)
+
+            if var_name == 'surface_pressure':
+                # Transform from skewnorm to normal
+                skewnorm_params = self.transform_params['skewnorm_grid']
+                base_ds[var] = self.transform_skewnorm_to_normal(base_ds[var], skewnorm_params)
+
+            elif var_name == 'humidity':
+                # Transform from [-1, 1] to [0, 1] range
+                base_ds[var] = (base_ds[var] + 1) / 2
+
         self.base_ds = base_ds
 
+        # Add time of year
         if include_time_of_year:
             self.base_ds = self.add_time_of_year(self.base_ds)
 
+        # Apply data processor to station_df
         station_raw_df = station_raw_df.rename({station_raw_df.columns[0]: f'{self.var}_station'}, axis=1)
         station_raw_df = station_raw_df.drop(columns=['station_name'])
-        # if self.var != 'humidity':
         station_column_name = station_raw_df.columns[0]
         station_method = self.data_processor.config[station_column_name]['method']
-        self.station_df = self.data_processor(station_raw_df, 
-                                              method=station_method, 
-                                              assert_computed=True)
-        if self.var == 'humidity':
+
+        self.station_df = self.data_processor(station_raw_df,
+                                                method=station_method)
+
+        if self.var == 'surface_pressure':
+            # Transform from skewnorm to normal
+            skewnorm_params = self.transform_params['skewnorm_station']
+            self.station_df = self.transform_skewnorm_to_normal(self.station_df, skewnorm_params)
+
+        elif self.var == 'humidity':
+            # Transform from [-1, 1] to [0, 1] range
             self.station_df = (self.station_df + 1) / 2
-        # else:
-            # self.station_df = station_raw_df / 100
-        self.station_as_context = station_as_context
+
 
     def load_topography(self):
         if self.verbose:
@@ -694,8 +717,33 @@ class PreprocessForDownscaling:
         ds[f"sin_{freq}"] = doy_ds[f"sin_{freq}"]
         return ds
 
+    def calculate_skewnorm_params(self, data,):
+        """
+        Calcuate skewnorm parameters for normalisation
 
-    def process_all_for_training(self,
+        Parameters
+        ----------
+        data : xr.DataArray or pd.DataFrame
+            Data to be processed.
+        
+        Returns
+        -------
+        dict : skewnorm parameters
+        
+        """
+
+        # SURFACE PRESSURE: transform from skewnorm to normal
+        # if var == 'surface_pressure':
+        if type(data) == pd.DataFrame:
+            data = data.dropna() # drop nan values in df
+        elif type(data) == xr.DataArray:
+            data = data.values # fill nan values with mean in xr
+            data = data[~np.isnan(data)]
+
+        a, loc, scale = skewnorm.fit(data)
+        return {'a': a, 'loc': loc, 'scale': scale}
+
+    def calculate_data_processor(self,
                     base_raw_ds,
                     aux_raw_ds,
                     highres_aux_raw_ds,
@@ -710,11 +758,11 @@ class PreprocessForDownscaling:
         """
         Creates DataProcessor:
         Gets processed data for deepsensor input
-        Normalises all data and add necessary dims
+
         """
         start = time()
         # if data_processor_dict is None:
-        print('Creating DataProcessor...')
+        print('Instantiating DataProcessor...')
         data_processor = DataProcessor(
             x1_name="latitude", 
             x1_map=(highres_aux_raw_ds["latitude"].min(), 
@@ -723,52 +771,44 @@ class PreprocessForDownscaling:
             x2_map=(highres_aux_raw_ds["longitude"].min(), 
                     highres_aux_raw_ds["longitude"].max()),
             )
-        print('DataProcessor created in', time()-start, 'seconds')
 
         # Compute normalisation parameters
         start = time()
         print('Computing normalisation parameters...')
-
-        assert_computed = False
+        
+        # BASE DS NORMALISATION
+        base_ds = base_raw_ds.copy()
         # If hourly data, take a random hour from each day and produce the normalization parameters from that
         if self.use_daily_data == False:
-            _ = data_processor(utils.random_hour_subset_xr(base_raw_ds))
-            assert_computed = True
-    
-        base_ds = base_raw_ds.copy()
+            subset_base_raw_ds = utils.random_hour_subset_xr(base_raw_ds)
+        else:
+            subset_base_raw_ds = base_raw_ds
+
         for var in base_raw_ds.data_vars:
+            var_name = VAR_TO_STD[self.base][var]
+            var_method = NORMALISATION[var_name]
+            
+            # Compute normalisation parameters
+            subset_base_raw_ds[var] = data_processor(subset_base_raw_ds[var], method=var_method)
 
-            # TODO ! IF min < 0, x[x<0] = 0
-            # Change humidity
-            if var == 'precipitation':
-                base_ds[var] = data_processor(base_raw_ds[var], 
-                                                  method='positive_semidefinite')
-            else:
-                base_ds[var] = data_processor(base_raw_ds[var], 
-                                                  method='mean_std',
-                                                  assert_computed=assert_computed)
-        # base_ds = data_processor(base_raw_ds, assert_computed=assert_computed)
+            if var_name == 'surface_pressure':
+                # if skewnorm parameters haven't already been calculated, calculate them
+                if not(hasattr(self, 'transform_params') and 'skewnorm_grid' in self.transform_params.keys()):
+                    self.transform_params['skewnorm_grid'] = self.calculate_skewnorm_params(subset_base_raw_ds[var])
 
-        # if station_raw_df.columns[0] == self.var:
-            # Rename the df variable so it doesn't clash with the base variable
-        
+        # STATION DF NORMALISATION
         station_raw_df = station_raw_df.rename({station_raw_df.columns[0]: f'{self.var}_station'}, axis=1)
         station_raw_df = station_raw_df.drop(columns=['station_name'])
 
-        if self.var == 'precipitation':
-            # TODO ! IF min < 0, x[x<0] = 0
-            station_df = data_processor(station_raw_df, 
-                                        method='positive_semidefinite') 
-        elif self.var == 'humidity':
-            station_df = data_processor(station_raw_df,
-                                        method='min_max')
-            station_df = (station_df + 1) / 2 # shift to 0-1
-            # station_df = station_raw_df / 100
-        else:
-            station_df = data_processor(station_raw_df, 
-                                        method='mean_std')
-            
-        # base_ds, station_df = data_processor([base_raw_ds, station_raw_df]) #meanstd
+        method = NORMALISATION[self.var]
+        station_df = data_processor(station_raw_df, method=method)
+        
+        if self.var == 'surface_pressure':
+            # if skewnorm parameters haven't already been calculated, calculate them
+            if not(hasattr(self, 'transform_params') and 'skewnorm_station' in self.transform_params.keys()):
+                self.transform_params['skewnorm_station'] = self.calculate_skewnorm_params(station_df)
+
+        # ANCILLARY NORMALISATION
         aux_ds, highres_aux_ds = data_processor([aux_raw_ds, highres_aux_raw_ds], method="min_max") #minmax
         landmask_ds = data_processor(landmask_raw_ds, method='min_max') if landmask_raw_ds is not None else None
         print(data_processor)
@@ -778,26 +818,23 @@ class PreprocessForDownscaling:
         if test_norm: 
             self.test_normalisation(data_processor, base_ds, aux_ds, highres_aux_ds, station_df, base_raw_ds, aux_raw_ds, highres_aux_raw_ds, station_raw_df)
 
-        start = time()
         # Generate auxilary datasets with additional data
-        print('Generating auxiliary datasets...')
         aux_ds = self.add_coordinates(aux_ds)
         if include_time_of_year:
             base_ds = self.add_time_of_year(base_ds)
-        print('Auxiliary datasets generated in', time()-start, 'seconds')
-    
+
+        # Create data_processor_dict
         data_processor_dict = {}
         data_processor_dict['data_processor'] = data_processor
-        # if self.var == 'precipitation':
-            # data_processor_dict['min_val'] = min_val
         data_processor_dict['aux_raw_ds'] = aux_raw_ds
         data_processor_dict['aux_ds'] = aux_ds
-        # data_processor_dict['highres_aux_raw_ds'] = highres_aux_raw_ds
-        # data_processor_dict['base_ds'] = base_ds
         data_processor_dict['highres_aux_ds'] = highres_aux_ds
-        # data_processor_dict['station_df'] = station_df
         data_processor_dict['landmask_ds'] = landmask_ds
         data_processor_dict['station_as_context'] = station_as_context
+        if hasattr(self, 'transform_params'):
+            data_processor_dict['transform_params'] = self.transform_params
+
+        # Save data_processor_dict
         if save != None:
             data_processor_dict_fpath = save
             print(f'Saving data_processor_dict to {data_processor_dict_fpath}')
@@ -805,12 +842,57 @@ class PreprocessForDownscaling:
                 pickle.dump(data_processor_dict, f)
          
         return data_processor_dict
-        # self.data_processor = data_processor
-        # self.aux_ds = aux_ds
-        # self.base_ds = base_ds
-        # self.highres_aux_ds = highres_aux_ds
-        # self.station_df = station_df
-        # self.landmask_ds = landmask_ds
+
+    def transform_skewnorm_to_normal(self, data, skewnorm_params):
+        """ 
+        Transform skewnorm data to normal using skewnorm parameters. 
+        Data can be a pandas DataFrame or an xarray DataArray.
+
+        Parameters
+        ----------
+        data : pd.DataFrame or xr.DataArray
+            Data to be transformed.
+        skewnorm_params : dict
+            Skewnorm parameters (calculated in calculate_data_processor).
+
+        Returns
+        -------
+        pd.DataFrame or xr.DataArray
+            Transformed data.
+
+        """
+
+        a, loc, scale = skewnorm_params['a'], skewnorm_params['loc'], skewnorm_params['scale']
+
+        if type(data) == pd.DataFrame:
+            # Remove NaNs
+            station_df = data.dropna().reset_index()
+            values = station_df['surface_pressure_station']
+
+            # Transform from skewnorm to normal
+            uniform_data = skewnorm.cdf(values, a, loc, scale)
+            station_df[f'{self.var}_station'] = norm.ppf(uniform_data)
+
+            # Reset index 
+            station_df = station_df.set_index(['time', 'x1', 'x2'])
+
+            return station_df
+            
+        elif type(data) == xr.DataArray:
+            # Create mask for missing values
+            values = data.values
+            mask = np.isnan(values)
+
+            # Copy the original values to preserve NaNs in the final output
+            values_filled = np.copy(values)
+
+            # Transform from skew-normal to normal using the inverse CDF
+            values_filled[~mask] = skewnorm.cdf(values[~mask], a, loc, scale)
+            norm_values = norm.ppf(values_filled)
+
+            # Create new DataArray with the transformed values
+            norm_values = xr.DataArray(norm_values, coords=data.coords, dims=data.dims)
+            return norm_values
 
 
     def test_normalisation(self, data_processor, base_ds, aux_ds, highres_aux_ds, station_df, base_raw_ds, aux_raw_ds, highres_aux_raw_ds, station_raw_df):
