@@ -54,7 +54,7 @@ class ValidateV1:
             validation_date_range (list, optional):
                 List of two years in format 'YYYY' for start and end of validation period (inclusive) e.g. ['2005', '2006']. Only include if different from model training period.
             data_processor_dict (dict, optional):
-                Dict output from nzdownscale.downscaler.preprocess.PreprocessForDownscaling.process_all_for_training()
+                Dict output from nzdownscale.downscaler.preprocess.PreprocessForDownscaling.calculate_data_processor()
         """
         
         self.processed_output_dict = processed_output_dict
