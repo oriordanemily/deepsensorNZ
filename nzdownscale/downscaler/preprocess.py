@@ -178,6 +178,8 @@ class PreprocessForDownscaling:
         # Load data processor items
         self.data_processor = data_processor_dict['data_processor']
         self.aux_ds = data_processor_dict['aux_ds']
+        if not hasattr(self, 'aux_raw_ds') and 'aux_raw_ds' in data_processor_dict.keys():
+            self.aux_raw_ds = data_processor_dict['aux_raw_ds']
         self.highres_aux_ds = data_processor_dict['highres_aux_ds']
         self.landmask_ds = data_processor_dict['landmask_ds']
         if 'transform_params' in data_processor_dict.keys():
@@ -189,14 +191,17 @@ class PreprocessForDownscaling:
         # Apply data processor to base_ds
         base_ds = base_raw_ds.copy()
         for var in base_raw_ds.data_vars:
-            var_name = VAR_TO_STD[self.base][var]
+            try:
+                var_name = VAR_TO_STD['era5'][var]
+            except:
+                var_name = VAR_TO_STD['wrf'][var]
             var_method = self.data_processor.config[var]['method']
 
             base_ds[var] = self.data_processor(base_raw_ds[var],
                                                 method=var_method,
                                                 assert_computed=True)
 
-            if var_name == 'surface_pressure':
+            if var_name == 'surface_pressure' and 'skewnorm_grid' in self.transform_params.keys():
                 # Transform from skewnorm to normal
                 skewnorm_params = self.transform_params['skewnorm_grid']
                 base_ds[var] = self.transform_skewnorm_to_normal(base_ds[var], skewnorm_params)
@@ -220,7 +225,7 @@ class PreprocessForDownscaling:
         self.station_df = self.data_processor(station_raw_df,
                                                 method=station_method)
 
-        if self.var == 'surface_pressure':
+        if self.var == 'surface_pressure' and 'skewnorm_station' in self.transform_params.keys():
             # Transform from skewnorm to normal
             skewnorm_params = self.transform_params['skewnorm_station']
             self.station_df = self.transform_skewnorm_to_normal(self.station_df, skewnorm_params)
