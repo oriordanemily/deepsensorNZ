@@ -153,6 +153,8 @@ class ProcessWRF(DataProcess):
                     
         # if time is not None:
         #     ds.sel(Time=time)
+        if len(ds.dims) != 3:
+            raise ValueError(f'Incorrect dimensions: {ds.dims}, there should be 3 dimensions: Time, south_north, west_east')
         print('Loading data from dask')
         with ProgressBar():
             ds = ds.load()

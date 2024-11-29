@@ -91,6 +91,24 @@ VAR_ERA5 = {
             # },
 }
 
+VAR_TO_STD = {
+    'era5':
+        {'t2m': 'temperature',
+        'precipitation': 'precipitation',
+        'sp': 'surface_pressure',
+        'u10': '10m_u_component_of_wind',
+        'v10': '10m_v_component_of_wind',
+        'ssr': 'surface_net_solar_radiation',
+        'ssrd': 'surface_solar_radiation_downwards'},
+    'wrf':
+        {'T2': 'temperature',
+        'RAINNC': 'precipitation',
+        'PSFC': 'surface_pressure',
+        'U10': '10m_u_component_of_wind',
+        'V10': '10m_v_component_of_wind',
+        'SWDOWN': 'surface_solar_radiation_downwards'}
+}
+
 VAR_WRF = {
         'temperature': {
             'var_name': 'T2',
@@ -111,6 +129,7 @@ VAR_WRF = {
             'var_name': 'SWDOWN', 
         },
         }
+
 
 
 PLOT_EXTENT = {
@@ -147,6 +166,16 @@ LIKELIHOODS = {
     'humidity': 'cnp-spikes-beta',
     '10m_u_component_of_wind': 'cnp',
     '10m_v_component_of_wind': 'cnp',
+}
+
+NORMALISATION = {
+    'temperature': 'mean_std',
+    'precipitation': 'positive_semidefinite',
+    'surface_pressure': 'positive_semidefinite',
+    'humidity': 'min_max',
+    '10m_u_component_of_wind': 'mean_std',
+    '10m_v_component_of_wind': 'mean_std',
+    'surface_solar_radiation_downwards': 'mean_std',
 }
 
 LOCATION_LATLON = {

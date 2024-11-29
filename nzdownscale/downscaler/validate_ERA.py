@@ -1,6 +1,7 @@
 from nzdownscale.dataprocess import era5, wrf, stations, topography, utils, config
 from nzdownscale.downscaler.preprocess import PreprocessForDownscaling
 from nzdownscale.downscaler.train import Train
+from nzdownscale.dataprocess.config import VAR_TO_STD
 
 from deepsensor.model.convnp import ConvNP
 from deepsensor.data import construct_circ_time_ds
@@ -30,6 +31,8 @@ class ValidateERA:
         self.task_loader = self.unpickle(task_loader_path)
         print('Unpickling train_metadata')
         self.meta = self.unpickle(train_metadata_path)
+        if 'transform_params' in self.data_processor_dict.keys():
+            self.transform_params = self.data_processor_dict['transform_params']
 
         # Instantiate classes
         self.top = topography.ProcessTopography()
@@ -66,7 +69,7 @@ class ValidateERA:
                 remove_stations: list = [],
                 context_sampling: str = 'all',
                 subdirs=None,
-                float32: bool = True,
+                float32: bool = False,
                 kwargs: dict = {}):
         self.load_data(time, remove_stations, subdirs=subdirs)
         self.task_loader = self.create_task_loader()
@@ -76,9 +79,16 @@ class ValidateERA:
         task = self.task_loader(time, context_sampling=context_sampling)
         if float32:
             task = [t.cast_to_float32() for t in task]
+
+        if hasattr(self, 'transform_params'):
+            transform_params = self.transform_params
+        else:
+            transform_params = None
+            
         pred = self.model.predict(task, 
                                   X_t=self.ds_elev, 
                                   progress_bar=True,
+                                  transform_params=transform_params,
                                   **kwargs)
 
         for key in pred.keys():
@@ -94,7 +104,9 @@ class ValidateERA:
                        self.task_loader,
                        **convnp_kwargs)
         
-        model.model.load_state_dict(torch.load(self.model_path))
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        model.model.load_state_dict(torch.load(self.model_path, map_location=device))
 
         return model
     
@@ -108,16 +120,18 @@ class ValidateERA:
         self.task_loader.context = (self.base_ds, 
                                     context[1], 
                                     context[2], 
-                                    self.stations_df)
+                                    self.station_df)
         
         # Update target set to loaded stations
-        self.task_loader.target = tuple(self.stations_df)
+        self.task_loader.target = tuple(self.station_df)
         return self.task_loader
 
     def load_data(self, time, remove_stations, subdirs=None):
         self.aux_ds = self.data_processor_dict['aux_ds']
         self.highres_aux_ds = self.data_processor_dict['highres_aux_ds']
         self.landmask_ds = self.data_processor_dict['landmask_ds']
+        if 'transform_params' in self.data_processor_dict.keys():
+            self.transform_params = self.data_processor_dict['transform_params']
 
         self.base_ds_raw = self.load_ds(time, subdirs=subdirs)
 
@@ -136,21 +150,41 @@ class ValidateERA:
             if 'VAR_2U' in base_ds:
                 self.base_ds_raw = self.base_ds_raw.rename({'VAR_2U': 'u2m'})
                 
-        for var in self.base_ds_raw:
-            method = self.data_processor.config[var]['method']
-            base_ds[var] = self.data_processor(self.base_ds_raw[var], 
-                                               method=method,
-                                               assert_computed=True)
+        # Copied from PreprocessForDownscaling.run_processing_sequence
+        for var in self.base_ds_raw.data_vars:
+            var_name = VAR_TO_STD[self.base][var]
+            var_method = self.data_processor.config[var]['method']
+
+            base_ds[var] = self.data_processor(self.base_ds_raw[var],
+                                                method=var_method,
+                                                assert_computed=True)
+
+            if var_name == 'surface_pressure' and hasattr(self, 'transform_params'):
+                # Transform from skewnorm to normal
+                skewnorm_params = self.transform_params['skewnorm_grid']
+                base_ds[var] = self.transform_skewnorm_to_normal(base_ds[var], skewnorm_params)
+
+            elif var_name == 'humidity':
+                # Transform from [-1, 1] to [0, 1] range
+                base_ds[var] = (base_ds[var] + 1) / 2
+
         self.base_ds = base_ds
         self.base_ds = self.add_time_of_year(self.base_ds)
 
         print('Pre-processing station data')
         method = self.data_processor.config[f"{self.var}_station"]['method']
-        self.stations_df = self.data_processor(self.stations_df_raw, 
-                                               method=method,
-                                               assert_computed=True)
-        if self.var == 'humidity':
-            self.stations_df = (self.stations_df + 1) / 2
+        # Copied from PreprocessForDownscaling.run_processing_sequence
+        self.station_df = self.data_processor(stations_df_raw,
+                                                method=method)
+
+        if self.var == 'surface_pressure' and hasattr(self, 'transform_params'):
+            # Transform from skewnorm to normal
+            skewnorm_params = self.transform_params['skewnorm_station']
+            self.station_df = self.transform_skewnorm_to_normal(self.station_df, skewnorm_params)
+
+        elif self.var == 'humidity':
+            # Transform from [-1, 1] to [0, 1] range
+            self.station_df = (self.station_df + 1) / 2
 
     def load_stations(self, time, remove_stations=[], keep_stations=[]):
         stations_df = self.station.load_stations_time(self.var, 
@@ -222,6 +256,57 @@ class ValidateERA:
         ds[f"cos_{freq}"] = doy_ds[f"cos_{freq}"]
         ds[f"sin_{freq}"] = doy_ds[f"sin_{freq}"]
         return ds
+
+    def transform_skewnorm_to_normal(self, data, skewnorm_params):
+        """ 
+        Transform skewnorm data to normal using skewnorm parameters. 
+        Data can be a pandas DataFrame or an xarray DataArray.
+
+        Parameters
+        ----------
+        data : pd.DataFrame or xr.DataArray
+            Data to be transformed.
+        skewnorm_params : dict
+            Skewnorm parameters (calculated in calculate_data_processor).
+
+        Returns
+        -------
+        pd.DataFrame or xr.DataArray
+            Transformed data.
+
+        """
+
+        a, loc, scale = skewnorm_params['a'], skewnorm_params['loc'], skewnorm_params['scale']
+
+        if type(data) == pd.DataFrame:
+            # Remove NaNs
+            station_df = data.dropna().reset_index()
+            values = station_df['surface_pressure_station']
+
+            # Transform from skewnorm to normal
+            uniform_data = skewnorm.cdf(values, a, loc, scale)
+            station_df[f'{self.var}_station'] = norm.ppf(uniform_data)
+
+            # Reset index 
+            station_df = station_df.set_index(['time', 'x1', 'x2'])
+
+            return station_df
+            
+        elif type(data) == xr.DataArray:
+            # Create mask for missing values
+            values = data.values
+            mask = np.isnan(values)
+
+            # Copy the original values to preserve NaNs in the final output
+            values_filled = np.copy(values)
+
+            # Transform from skew-normal to normal using the inverse CDF
+            values_filled[~mask] = skewnorm.cdf(values[~mask], a, loc, scale)
+            norm_values = norm.ppf(values_filled)
+
+            # Create new DataArray with the transformed values
+            norm_values = xr.DataArray(norm_values, coords=data.coords, dims=data.dims)
+            return norm_values
 
     # def plot_timeseries()
 

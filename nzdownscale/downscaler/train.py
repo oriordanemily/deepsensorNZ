@@ -250,9 +250,12 @@ class Train:
             else:
                 model.model.load_state_dict(torch.load(pretrained_model_path, map_location=torch.device('cpu')))
 
-            # Freeze encoder weights
-            for param in model.model.encoder.parameters():
-                param.requires_grad = False
+            # Freeze encoder weights if not training surface pressure
+            # ERA5 surface pressure is quite different to WRF surface pressure 
+            # so we want to retrain encoder weights
+            if self.variable != 'surface_pressure':
+                for param in model.model.encoder.parameters():
+                    param.requires_grad = False
 
         # Print number of parameters to check model is not too large for GPU memory
         # _ = model(self.val_tasks[0])
