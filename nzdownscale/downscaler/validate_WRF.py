@@ -142,12 +142,12 @@ class ValidateWRF:
                                                 method=var_method,
                                                 assert_computed=True)
 
-            if var_name == 'surface_pressure' and hasattr(self, 'transform_params'):
-                # Transform from skewnorm to normal
-                skewnorm_params = self.transform_params['skewnorm_grid']
-                base_ds[var] = self.transform_skewnorm_to_normal(base_ds[var], skewnorm_params)
+            # if var_name == 'surface_pressure' and hasattr(self, 'transform_params'):
+            #     # Transform from skewnorm to normal
+            #     skewnorm_params = self.transform_params['skewnorm_grid']
+            #     base_ds[var] = self.transform_skewnorm_to_normal(base_ds[var], skewnorm_params)
 
-            elif var_name == 'humidity':
+            if var_name == 'humidity':
                 # Transform from [-1, 1] to [0, 1] range
                 base_ds[var] = (base_ds[var] + 1) / 2
 
@@ -170,12 +170,12 @@ class ValidateWRF:
         original_values = reset_index_stations[f"{self.variable}_station"].values
         
         station_df = self.data_processor(stations_df, method=processing_method)
-        if self.variable == 'surface_pressure' and hasattr(self, 'transform_params'):
-            # Transform from skewnorm to normal
-            skewnorm_params = self.transform_params['skewnorm_station']
-            station_df = self.transform_skewnorm_to_normal(station_df, skewnorm_params)
+        # if self.variable == 'surface_pressure' and hasattr(self, 'transform_params'):
+        #     # Transform from skewnorm to normal
+        #     skewnorm_params = self.transform_params['skewnorm_station']
+        #     station_df = self.transform_skewnorm_to_normal(station_df, skewnorm_params)
 
-        elif self.variable == 'humidity':
+        if self.variable == 'humidity':
             # Transform from [-1, 1] to [0, 1] range
             station_df = (station_df + 1) / 2
 
@@ -372,53 +372,53 @@ class ValidateWRF:
         return context_variables
 
 
-    def transform_skewnorm_to_normal(self, data, skewnorm_params):
-        """ 
-        Transform skewnorm data to normal using skewnorm parameters. 
-        Data can be a pandas DataFrame or an xarray DataArray.
+    # def transform_skewnorm_to_normal(self, data, skewnorm_params):
+    #     """ 
+    #     Transform skewnorm data to normal using skewnorm parameters. 
+    #     Data can be a pandas DataFrame or an xarray DataArray.
 
-        Parameters
-        ----------
-        data : pd.DataFrame or xr.DataArray
-            Data to be transformed.
-        skewnorm_params : dict
-            Skewnorm parameters (calculated in calculate_data_processor).
+    #     Parameters
+    #     ----------
+    #     data : pd.DataFrame or xr.DataArray
+    #         Data to be transformed.
+    #     skewnorm_params : dict
+    #         Skewnorm parameters (calculated in calculate_data_processor).
 
-        Returns
-        -------
-        pd.DataFrame or xr.DataArray
-            Transformed data.
+    #     Returns
+    #     -------
+    #     pd.DataFrame or xr.DataArray
+    #         Transformed data.
 
-        """
+    #     """
 
-        a, loc, scale = skewnorm_params['a'], skewnorm_params['loc'], skewnorm_params['scale']
+    #     a, loc, scale = skewnorm_params['a'], skewnorm_params['loc'], skewnorm_params['scale']
 
-        if type(data) == pd.DataFrame:
-            # Remove NaNs
-            station_df = data.dropna().reset_index()
-            values = station_df['surface_pressure_station']
+    #     if type(data) == pd.DataFrame:
+    #         # Remove NaNs
+    #         station_df = data.dropna().reset_index()
+    #         values = station_df['surface_pressure_station']
 
-            # Transform from skewnorm to normal
-            uniform_data = skewnorm.cdf(values, a, loc, scale)
-            station_df[f'{self.var}_station'] = norm.ppf(uniform_data)
+    #         # Transform from skewnorm to normal
+    #         uniform_data = skewnorm.cdf(values, a, loc, scale)
+    #         station_df[f'{self.var}_station'] = norm.ppf(uniform_data)
 
-            # Reset index 
-            station_df = station_df.set_index(['time', 'x1', 'x2'])
+    #         # Reset index 
+    #         station_df = station_df.set_index(['time', 'x1', 'x2'])
 
-            return station_df
+    #         return station_df
             
-        elif type(data) == xr.DataArray:
-            # Create mask for missing values
-            values = data.values
-            mask = np.isnan(values)
+    #     elif type(data) == xr.DataArray:
+    #         # Create mask for missing values
+    #         values = data.values
+    #         mask = np.isnan(values)
 
-            # Copy the original values to preserve NaNs in the final output
-            values_filled = np.copy(values)
+    #         # Copy the original values to preserve NaNs in the final output
+    #         values_filled = np.copy(values)
 
-            # Transform from skew-normal to normal using the inverse CDF
-            values_filled[~mask] = skewnorm.cdf(values[~mask], a, loc, scale)
-            norm_values = norm.ppf(values_filled)
+    #         # Transform from skew-normal to normal using the inverse CDF
+    #         values_filled[~mask] = skewnorm.cdf(values[~mask], a, loc, scale)
+    #         norm_values = norm.ppf(values_filled)
 
-            # Create new DataArray with the transformed values
-            norm_values = xr.DataArray(norm_values, coords=data.coords, dims=data.dims)
-            return norm_values
+    #         # Create new DataArray with the transformed values
+    #         norm_values = xr.DataArray(norm_values, coords=data.coords, dims=data.dims)
+    #         return norm_values
