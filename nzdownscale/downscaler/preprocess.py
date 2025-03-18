@@ -201,12 +201,12 @@ class PreprocessForDownscaling:
                                                 method=var_method,
                                                 assert_computed=True)
 
-            if var_name == 'surface_pressure' and 'skewnorm_grid' in self.transform_params.keys():
-                # Transform from skewnorm to normal
-                skewnorm_params = self.transform_params['skewnorm_grid']
-                base_ds[var] = self.transform_skewnorm_to_normal(base_ds[var], skewnorm_params)
+            # if var_name == 'surface_pressure' and 'skewnorm_grid' in self.transform_params.keys():
+            #     # Transform from skewnorm to normal
+            #     skewnorm_params = self.transform_params['skewnorm_grid']
+            #     base_ds[var] = self.transform_skewnorm_to_normal(base_ds[var], skewnorm_params)
 
-            elif var_name == 'humidity':
+            if var_name == 'humidity':
                 # Transform from [-1, 1] to [0, 1] range
                 base_ds[var] = (base_ds[var] + 1) / 2
 
@@ -225,12 +225,12 @@ class PreprocessForDownscaling:
         self.station_df = self.data_processor(station_raw_df,
                                                 method=station_method)
 
-        if self.var == 'surface_pressure' and 'skewnorm_station' in self.transform_params.keys():
-            # Transform from skewnorm to normal
-            skewnorm_params = self.transform_params['skewnorm_station']
-            self.station_df = self.transform_skewnorm_to_normal(self.station_df, skewnorm_params)
+        # if self.var == 'surface_pressure' and 'skewnorm_station' in self.transform_params.keys():
+        #     # Transform from skewnorm to normal
+        #     skewnorm_params = self.transform_params['skewnorm_station']
+        #     self.station_df = self.transform_skewnorm_to_normal(self.station_df, skewnorm_params)
 
-        elif self.var == 'humidity':
+        if self.var == 'humidity':
             # Transform from [-1, 1] to [0, 1] range
             self.station_df = (self.station_df + 1) / 2
 
@@ -722,31 +722,31 @@ class PreprocessForDownscaling:
         ds[f"sin_{freq}"] = doy_ds[f"sin_{freq}"]
         return ds
 
-    def calculate_skewnorm_params(self, data,):
-        """
-        Calcuate skewnorm parameters for normalisation
+    # def calculate_skewnorm_params(self, data,):
+    #     """
+    #     Calcuate skewnorm parameters for normalisation
 
-        Parameters
-        ----------
-        data : xr.DataArray or pd.DataFrame
-            Data to be processed.
+    #     Parameters
+    #     ----------
+    #     data : xr.DataArray or pd.DataFrame
+    #         Data to be processed.
         
-        Returns
-        -------
-        dict : skewnorm parameters
+    #     Returns
+    #     -------
+    #     dict : skewnorm parameters
         
-        """
+    #     """
 
-        # SURFACE PRESSURE: transform from skewnorm to normal
-        # if var == 'surface_pressure':
-        if type(data) == pd.DataFrame:
-            data = data.dropna() # drop nan values in df
-        elif type(data) == xr.DataArray:
-            data = data.values # fill nan values with mean in xr
-            data = data[~np.isnan(data)]
+    #     # SURFACE PRESSURE: transform from skewnorm to normal
+    #     # if var == 'surface_pressure':
+    #     if type(data) == pd.DataFrame:
+    #         data = data.dropna() # drop nan values in df
+    #     elif type(data) == xr.DataArray:
+    #         data = data.values # fill nan values with mean in xr
+    #         data = data[~np.isnan(data)]
 
-        a, loc, scale = skewnorm.fit(data)
-        return {'a': a, 'loc': loc, 'scale': scale}
+    #     a, loc, scale = skewnorm.fit(data)
+    #     return {'a': a, 'loc': loc, 'scale': scale}
 
     def calculate_data_processor(self,
                     base_raw_ds,
@@ -796,10 +796,10 @@ class PreprocessForDownscaling:
             # Compute normalisation parameters
             subset_base_raw_ds[var] = data_processor(subset_base_raw_ds[var], method=var_method)
 
-            if var_name == 'surface_pressure':
-                # if skewnorm parameters haven't already been calculated, calculate them
-                if not(hasattr(self, 'transform_params') and 'skewnorm_grid' in self.transform_params.keys()):
-                    self.transform_params['skewnorm_grid'] = self.calculate_skewnorm_params(subset_base_raw_ds[var])
+            # if var_name == 'surface_pressure':
+            #     # if skewnorm parameters haven't already been calculated, calculate them
+            #     if not(hasattr(self, 'transform_params') and 'skewnorm_grid' in self.transform_params.keys()):
+            #         self.transform_params['skewnorm_grid'] = self.calculate_skewnorm_params(subset_base_raw_ds[var])
 
         # STATION DF NORMALISATION
         station_raw_df = station_raw_df.rename({station_raw_df.columns[0]: f'{self.var}_station'}, axis=1)
@@ -808,10 +808,10 @@ class PreprocessForDownscaling:
         method = NORMALISATION[self.var]
         station_df = data_processor(station_raw_df, method=method)
         
-        if self.var == 'surface_pressure':
-            # if skewnorm parameters haven't already been calculated, calculate them
-            if not(hasattr(self, 'transform_params') and 'skewnorm_station' in self.transform_params.keys()):
-                self.transform_params['skewnorm_station'] = self.calculate_skewnorm_params(station_df)
+        # if self.var == 'surface_pressure':
+        #     # if skewnorm parameters haven't already been calculated, calculate them
+        #     if not(hasattr(self, 'transform_params') and 'skewnorm_station' in self.transform_params.keys()):
+        #         self.transform_params['skewnorm_station'] = self.calculate_skewnorm_params(station_df)
 
         # ANCILLARY NORMALISATION
         aux_ds, highres_aux_ds = data_processor([aux_raw_ds, highres_aux_raw_ds], method="min_max") #minmax
@@ -848,56 +848,56 @@ class PreprocessForDownscaling:
          
         return data_processor_dict
 
-    def transform_skewnorm_to_normal(self, data, skewnorm_params):
-        """ 
-        Transform skewnorm data to normal using skewnorm parameters. 
-        Data can be a pandas DataFrame or an xarray DataArray.
+    # def transform_skewnorm_to_normal(self, data, skewnorm_params):
+    #     """ 
+    #     Transform skewnorm data to normal using skewnorm parameters. 
+    #     Data can be a pandas DataFrame or an xarray DataArray.
 
-        Parameters
-        ----------
-        data : pd.DataFrame or xr.DataArray
-            Data to be transformed.
-        skewnorm_params : dict
-            Skewnorm parameters (calculated in calculate_data_processor).
+    #     Parameters
+    #     ----------
+    #     data : pd.DataFrame or xr.DataArray
+    #         Data to be transformed.
+    #     skewnorm_params : dict
+    #         Skewnorm parameters (calculated in calculate_data_processor).
 
-        Returns
-        -------
-        pd.DataFrame or xr.DataArray
-            Transformed data.
+    #     Returns
+    #     -------
+    #     pd.DataFrame or xr.DataArray
+    #         Transformed data.
 
-        """
+    #     """
 
-        a, loc, scale = skewnorm_params['a'], skewnorm_params['loc'], skewnorm_params['scale']
+    #     a, loc, scale = skewnorm_params['a'], skewnorm_params['loc'], skewnorm_params['scale']
 
-        if type(data) == pd.DataFrame:
-            # Remove NaNs
-            station_df = data.dropna().reset_index()
-            values = station_df['surface_pressure_station']
+    #     if type(data) == pd.DataFrame:
+    #         # Remove NaNs
+    #         station_df = data.dropna().reset_index()
+    #         values = station_df['surface_pressure_station']
 
-            # Transform from skewnorm to normal
-            uniform_data = skewnorm.cdf(values, a, loc, scale)
-            station_df[f'{self.var}_station'] = norm.ppf(uniform_data)
+    #         # Transform from skewnorm to normal
+    #         uniform_data = skewnorm.cdf(values, a, loc, scale)
+    #         station_df[f'{self.var}_station'] = norm.ppf(uniform_data)
 
-            # Reset index 
-            station_df = station_df.set_index(['time', 'x1', 'x2'])
+    #         # Reset index 
+    #         station_df = station_df.set_index(['time', 'x1', 'x2'])
 
-            return station_df
+    #         return station_df
             
-        elif type(data) == xr.DataArray:
-            # Create mask for missing values
-            values = data.values
-            mask = np.isnan(values)
+        # elif type(data) == xr.DataArray:
+        #     # Create mask for missing values
+        #     values = data.values
+        #     mask = np.isnan(values)
 
-            # Copy the original values to preserve NaNs in the final output
-            values_filled = np.copy(values)
+        #     # Copy the original values to preserve NaNs in the final output
+        #     values_filled = np.copy(values)
 
-            # Transform from skew-normal to normal using the inverse CDF
-            values_filled[~mask] = skewnorm.cdf(values[~mask], a, loc, scale)
-            norm_values = norm.ppf(values_filled)
+        #     # Transform from skew-normal to normal using the inverse CDF
+        #     values_filled[~mask] = skewnorm.cdf(values[~mask], a, loc, scale)
+        #     norm_values = norm.ppf(values_filled)
 
-            # Create new DataArray with the transformed values
-            norm_values = xr.DataArray(norm_values, coords=data.coords, dims=data.dims)
-            return norm_values
+        #     # Create new DataArray with the transformed values
+        #     norm_values = xr.DataArray(norm_values, coords=data.coords, dims=data.dims)
+        #     return norm_values
 
 
     def test_normalisation(self, data_processor, base_ds, aux_ds, highres_aux_ds, station_df, base_raw_ds, aux_raw_ds, highres_aux_raw_ds, station_raw_df):
